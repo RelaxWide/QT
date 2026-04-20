@@ -85,7 +85,7 @@ def append_trade(record: dict) -> None:
 
 
 def get_trade_summary() -> dict:
-    if not TRADES_FILE.exists():
+    if not TRADES_FILE.exists() or TRADES_FILE.stat().st_size == 0:
         return {"total_trades": 0}
     df = pd.read_csv(TRADES_FILE)
     if df.empty:
