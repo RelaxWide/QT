@@ -109,12 +109,29 @@ QT/
 
 ---
 
+## 전략 로드맵
+
+Phase 별로 진행하며, 각 Phase의 게이트(승률 ≥ 45%, PF ≥ 1.3, MDD ≤ 15%, Sharpe ≥ 0.8 등)를 통과해야 다음 Phase로 진행. 상세는 [STRATEGY.md](STRATEGY.md), Phase 1 실행 스펙은 [docs/PHASE1.md](docs/PHASE1.md) 참조.
+
+1. **Phase 1** — Breakout Pullback 베이스라인 백테스트
+2. **Phase 2** — 박스권 + 상승 구름 상단 지지 셋업 백테스트
+3. **Phase 3** — Phase 1·2 통계 비교 기반 Hybrid 설계
+4. **Phase 4** — 모멘텀·변동성 수축·상대강도 Factor Stacking
+
+---
+
 ## 현재 상태
 
-- [x] 전략 기본 설계 완료
-- [ ] 데이터 수집 모듈
-- [ ] 지표 계산 모듈
-- [ ] 백테스트 엔진
-- [ ] 전략 파라미터 정의 및 튜닝
+- [x] 전략 방향성 합의 (2026-04-18)
+- [x] Phase 로드맵 및 리스크 프레임워크 확정
+- [ ] 데이터 수집 모듈 (`src/fetch/`)
+- [ ] 지표 계산 모듈 (`src/indicators/`)
+- [ ] 백테스트 엔진 (`src/backtest/`)
+- [ ] Phase 1 백테스트 실행
+- [ ] Phase 2 백테스트 실행
+- [ ] Phase 3 Hybrid 설계
+- [ ] Phase 4 Factor Stacking
+- [ ] 페이퍼 트레이딩
+- [ ] 실전 (소액)
 - [ ] 반자동 알림 시스템
 - [ ] 실전 매매 연동

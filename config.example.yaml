@@ -1,0 +1,83 @@
+# QT 전략 파라미터 — 이 파일을 config.yaml로 복사 후 사용
+# cp config.example.yaml config.yaml
+
+data:
+  universe: "sp500"
+  start_date: "2015-01-01"
+  end_date: null
+  cache_dir: "data/raw"
+  source: "yfinance"
+
+risk:
+  risk_per_trade_pct: 0.7
+  max_positions: 10
+  max_sector_pct: 30
+  max_correlation: 0.7
+  slippage_pct: 0.1
+  commission_usd: 0.0
+
+circuit_breaker:
+  daily_loss_pct: 1.5
+  weekly_loss_pct: 3.0
+  monthly_drawdown_pct: 5.0
+  cumulative_drawdown_pct: 10.0
+
+regime_filter:
+  spy_ma_short: 50
+  spy_ma_long: 200
+  vix_threshold: 30
+  vix_cooldown_days: 5
+
+phase1_breakout_pullback:
+  donchian_period: 20
+  atr_period: 20
+  pullback_atr_mult: 0.5
+  pullback_max_bars: 5
+  stop_atr_mult: 1.5
+  target_r_multiple: 3.0
+  trail_donchian_period: 10
+  min_price_usd: 10
+  min_avg_volume: 500000
+
+phase2_cloud_support:
+  tenkan_period: 9
+  kijun_period: 26
+  senkou_b_period: 52
+  chikou_offset: 26
+  cloud_thickness_min_pct: 3.0
+  box_width_max_pct: 8.0
+  cloud_top_touch_tolerance: 0.005
+  stop_atr_mult_below_senkou_a: 0.5
+  min_rr_to_box_top: 1.0
+  split_entry_weights: [0.6, 0.4]
+  partial_exit_r_multiples: [1.5, 3.0]
+  partial_exit_weights: [0.5, 0.3]
+  move_stop_to_breakeven_at_target1: true
+  trail_indicator: "tenkan"
+
+phase3_hybrid:
+  cloud_filter_thickness_min_pct: 2.5
+  cloud_filter_use_chikou: false
+
+phase4_factor_stack:
+  use_momentum:         false
+  use_bbwidth:          false
+  use_spy_rs:           true
+  min_factors_required: 1
+  momentum_period:      63
+  momentum_top_pct:     30
+  bbwidth_period:       20
+  bbwidth_bottom_pct:   20
+
+telegram:
+  # 환경변수 TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID 사용 권장
+  # GitHub Actions: Settings → Secrets에 등록
+  bot_token: ""
+  chat_id:   ""
+
+backtest:
+  initial_capital_usd: 100000
+  results_dir: "backtest_results"
+  monte_carlo_runs: 1000
+  wfo_train_years: 3
+  wfo_test_years: 1

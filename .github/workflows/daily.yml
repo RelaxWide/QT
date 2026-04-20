@@ -1,0 +1,39 @@
+name: Daily Paper Trading
+
+on:
+  schedule:
+    - cron: "30 21 * * 1-5"   # 평일 21:30 UTC = 미국 동부 17:30 (장 마감 1.5시간 후)
+  workflow_dispatch:            # 수동 실행 버튼
+
+jobs:
+  run-daily:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run daily script
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python run_daily.py --force
+
+      - name: Commit updated state files
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add paper_trading/positions.json paper_trading/pending.json paper_trading/trades.csv
+          git diff --staged --quiet || git commit -m "chore: daily state update $(date -u +%Y-%m-%d)"
+          git push

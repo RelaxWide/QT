@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.vscode/
+.idea/
+data/raw/
+data/cache/
+backtest_results/
+*.parquet
+.pytest_cache/
+.DS_Store
+.claude/
+config.yaml
