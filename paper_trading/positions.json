@@ -1,1 +1,172 @@
-{}
+{
+  "AME": {
+    "symbol": "AME",
+    "entry_date": "2026-04-21T00:00:00",
+    "entry_price": 236.5663318328857,
+    "stop_initial": 212.47000122070312,
+    "stop_current": 212.47000122070312,
+    "targets": [
+      308.85532366943346
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 29.050066222368937,
+    "shares_remaining": 29.050066222368937,
+    "realized_pnl": 0.0
+  },
+  "CAT": {
+    "symbol": "CAT",
+    "entry_date": "2026-04-21T00:00:00",
+    "entry_price": 805.6848848876953,
+    "stop_initial": 704.27001953125,
+    "stop_current": 704.27001953125,
+    "targets": [
+      1109.929480957031
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 6.902341166057787,
+    "shares_remaining": 6.902341166057787,
+    "realized_pnl": 0.0
+  },
+  "EQIX": {
+    "symbol": "EQIX",
+    "entry_date": "2026-04-21T00:00:00",
+    "entry_price": 1105.7045755615234,
+    "stop_initial": 984.1099853515625,
+    "stop_current": 984.1099853515625,
+    "targets": [
+      1470.488346191406
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 5.756835059777658,
+    "shares_remaining": 5.756835059777658,
+    "realized_pnl": 0.0
+  },
+  "GRMN": {
+    "symbol": "GRMN",
+    "entry_date": "2026-04-21T00:00:00",
+    "entry_price": 267.7675,
+    "stop_initial": 232.83999633789062,
+    "stop_current": 232.83999633789062,
+    "targets": [
+      372.55001098632806
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 20.04151246455628,
+    "shares_remaining": 20.04151246455628,
+    "realized_pnl": 0.0
+  },
+  "GEV": {
+    "symbol": "GEV",
+    "entry_date": "2026-04-21T00:00:00",
+    "entry_price": 994.9939999999999,
+    "stop_initial": 865.9500122070312,
+    "stop_current": 865.9500122070312,
+    "targets": [
+      1382.125963378906
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 5.424506883056363,
+    "shares_remaining": 5.424506883056363,
+    "realized_pnl": 0.0
+  },
+  "HIG": {
+    "symbol": "HIG",
+    "entry_date": "2026-04-21T00:00:00",
+    "entry_price": 139.43930305480956,
+    "stop_initial": 134.3300018310547,
+    "stop_current": 134.3300018310547,
+    "targets": [
+      154.76720672607416
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 137.00503637277504,
+    "shares_remaining": 137.00503637277504,
+    "realized_pnl": 0.0
+  },
+  "IEX": {
+    "symbol": "IEX",
+    "entry_date": "2026-04-21T00:00:00",
+    "entry_price": 207.02682733154293,
+    "stop_initial": 187.3800048828125,
+    "stop_current": 187.3800048828125,
+    "targets": [
+      265.96729467773423
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 35.62917117140403,
+    "shares_remaining": 35.62917117140403,
+    "realized_pnl": 0.0
+  },
+  "KIM": {
+    "symbol": "KIM",
+    "entry_date": "2026-04-21T00:00:00",
+    "entry_price": 24.104079923629758,
+    "stop_initial": 22.299999237060547,
+    "stop_current": 22.299999237060547,
+    "targets": [
+      29.51632198333739
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 388.0092532508497,
+    "shares_remaining": 388.0092532508497,
+    "realized_pnl": 0.0
+  },
+  "ODFL": {
+    "symbol": "ODFL",
+    "entry_date": "2026-04-21T00:00:00",
+    "entry_price": 224.153922668457,
+    "stop_initial": 195.3300018310547,
+    "stop_current": 195.3300018310547,
+    "targets": [
+      310.62568518066394
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 24.28538448841666,
+    "shares_remaining": 24.28538448841666,
+    "realized_pnl": 0.0
+  },
+  "PNW": {
+    "symbol": "PNW",
+    "entry_date": "2026-04-21T00:00:00",
+    "entry_price": 103.2131106109619,
+    "stop_initial": 100.87000274658203,
+    "stop_current": 100.87000274658203,
+    "targets": [
+      110.24243420410153
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 298.74851714744324,
+    "shares_remaining": 298.74851714744324,
+    "realized_pnl": 0.0
+  }
+}
