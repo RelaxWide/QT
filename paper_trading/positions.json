@@ -151,22 +151,5 @@
     "shares_total": 24.28538448841666,
     "shares_remaining": 24.28538448841666,
     "realized_pnl": 0.0
-  },
-  "PNW": {
-    "symbol": "PNW",
-    "entry_date": "2026-04-21T00:00:00",
-    "entry_price": 103.2131106109619,
-    "stop_initial": 100.87000274658203,
-    "stop_current": 100.87000274658203,
-    "targets": [
-      110.24243420410153
-    ],
-    "partial_weights": [
-      0.5
-    ],
-    "targets_hit": 0,
-    "shares_total": 298.74851714744324,
-    "shares_remaining": 298.74851714744324,
-    "realized_pnl": 0.0
   }
 }
