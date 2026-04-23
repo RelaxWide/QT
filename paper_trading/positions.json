@@ -151,5 +151,22 @@
     "shares_total": 24.28538448841666,
     "shares_remaining": 24.28538448841666,
     "realized_pnl": 0.0
+  },
+  "TGT": {
+    "symbol": "TGT",
+    "entry_date": "2026-04-23T00:00:00",
+    "entry_price": 130.67053327941892,
+    "stop_initial": 116.83000183105469,
+    "stop_current": 116.83000183105469,
+    "targets": [
+      172.1921276245116
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 50.57609258802925,
+    "shares_remaining": 50.57609258802925,
+    "realized_pnl": 0.0
   }
 }
