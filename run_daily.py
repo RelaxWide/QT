@@ -1,13 +1,11 @@
 """
-Paper Trading 일일 실행 스크립트
+Paper Trading 일일 실행 스크립트 (3전략 통합)
 장 마감 후 실행: python run_daily.py
 
-동작 순서:
-  1. 최신 가격 데이터 다운로드
-  2. 어제 생성된 대기 진입 신호 → 오늘 시가 기준으로 포지션 오픈
-  3. 보유 포지션 청산 조건 확인 (스톱 / 목표가 / 트레일)
-  4. 오늘 신호 생성 → 내일 진입 대기 목록 저장
-  5. 텔레그램 알림 발송
+전략별 동작:
+  [Phase 4]   매일: 진입 신호 생성 + 청산 조건 확인
+  [Clenow]    매일: MA100 이탈 청산 / 수요일: 스코어 리밸런싱
+  [Weinstein] 매일: MA30 이탈 청산  / 수요일: Stage 2 진입 스캔
 """
 import sys
 from pathlib import Path
@@ -26,6 +24,11 @@ from src.indicators.factors import build_factor_matrices
 from src.indicators.ichimoku import ichimoku
 from src.strategy.factor_stack import generate_factor_signals
 from src.notify import telegram
+from paper_trading.live_signals import get_clenow_signals, get_weinstein_signals
+from paper_trading.simple_tracker import (
+    load_simple_positions, save_simple_positions,
+    append_simple_trade, SimplePosition,
+)
 from paper_trading.tracker import (
     load_positions, save_positions,
     load_pending, save_pending,
@@ -278,7 +281,106 @@ def main():
 
     messages.append("\n".join(status_lines))
 
-    # ── 6. 텔레그램 발송 ──────────────────────────────────────────────────
+    # ── 6. Clenow 신호 ────────────────────────────────────────────────────
+    is_wednesday = today.weekday() == 2
+    cap          = initial_capital
+    cl_cfg       = cfg.get("clenow_strategy", {})
+    cl_pos       = load_simple_positions("clenow")
+    cl_sigs      = get_clenow_signals(price_data, set(cl_pos.keys()), cfg, today, is_wednesday)
+    cl_msgs      = []
+
+    slippage_r = 1 - slippage
+
+    # Clenow 청산
+    for sym in cl_sigs["sell_ma100"] + cl_sigs["sell_ranked"]:
+        if sym not in cl_pos or sym not in price_data:
+            continue
+        if today not in price_data[sym].index:
+            continue
+        exit_px  = price_data[sym].loc[today, "close"] * slippage_r
+        pos      = cl_pos.pop(sym)
+        pnl      = (exit_px - pos.entry_price) * pos.shares
+        reason   = "ma100_exit" if sym in cl_sigs["sell_ma100"] else "rank_exit"
+        icon     = "✅" if pnl > 0 else "❌"
+        cl_msgs.append(f"{icon} [Clenow 청산] {sym} ({reason}) PnL: ${pnl:+.2f}")
+        append_simple_trade("clenow", {
+            "date": today.isoformat(), "symbol": sym,
+            "entry_price": pos.entry_price, "exit_price": round(exit_px, 4),
+            "shares": pos.shares, "pnl": round(pnl, 2), "reason": reason,
+        })
+    # Clenow 진입 (수요일)
+    n_slots = cl_cfg.get("max_positions", 20)
+    alloc   = cap / n_slots
+    for sym in cl_sigs["buy"][:n_slots - len(cl_pos)]:
+        if sym not in price_data or today not in price_data[sym].index:
+            continue
+        entry_px = price_data[sym].loc[today, "close"]
+        shares   = alloc / entry_px
+        cl_pos[sym] = SimplePosition(
+            symbol=sym,
+            entry_date=today.isoformat(),
+            entry_price=entry_px,
+            shares=shares,
+            strategy="clenow",
+        )
+        cl_msgs.append(
+            f"🔔 [Clenow 매수] {sym} | 예상가 ${entry_px:.2f} | {shares:.1f}주 (${alloc:.0f})")
+
+    save_simple_positions("clenow", cl_pos)
+
+    if cl_msgs:
+        messages.append("\n".join(cl_msgs))
+    elif is_wednesday:
+        messages.append(f"📊 [Clenow] 수요일 스캔 완료 — 변동 없음 (보유 {len(cl_pos)}종목)")
+
+    # ── 7. Weinstein 신호 ─────────────────────────────────────────────────
+    w_cfg   = cfg.get("weinstein_strategy", {})
+    w_pos   = load_simple_positions("weinstein")
+    w_sigs  = get_weinstein_signals(price_data, set(w_pos.keys()), cfg, today, is_wednesday)
+    w_msgs  = []
+
+    # Weinstein 청산
+    for sym in w_sigs["sell_ma30"]:
+        if sym not in w_pos or sym not in price_data:
+            continue
+        if today not in price_data[sym].index:
+            continue
+        exit_px = price_data[sym].loc[today, "close"] * slippage_r
+        pos     = w_pos.pop(sym)
+        pnl     = (exit_px - pos.entry_price) * pos.shares
+        icon    = "✅" if pnl > 0 else "❌"
+        w_msgs.append(f"{icon} [Weinstein 청산] {sym} (ma30_exit) PnL: ${pnl:+.2f}")
+        append_simple_trade("weinstein", {
+            "date": today.isoformat(), "symbol": sym,
+            "entry_price": pos.entry_price, "exit_price": round(exit_px, 4),
+            "shares": pos.shares, "pnl": round(pnl, 2), "reason": "ma30_exit",
+        })
+    # Weinstein 진입 (수요일)
+    max_w   = w_cfg.get("max_positions", 15)
+    alloc_w = cap / max_w
+    for sym in w_sigs["buy"][:max_w - len(w_pos)]:
+        if sym not in price_data or today not in price_data[sym].index:
+            continue
+        entry_px = price_data[sym].loc[today, "close"]
+        shares   = alloc_w / entry_px
+        w_pos[sym] = SimplePosition(
+            symbol=sym,
+            entry_date=today.isoformat(),
+            entry_price=entry_px,
+            shares=shares,
+            strategy="weinstein",
+        )
+        w_msgs.append(
+            f"🔔 [Weinstein 진입] {sym} | 예상가 ${entry_px:.2f} | {shares:.1f}주 (${alloc_w:.0f})")
+
+    save_simple_positions("weinstein", w_pos)
+
+    if w_msgs:
+        messages.append("\n".join(w_msgs))
+    elif is_wednesday:
+        messages.append(f"📊 [Weinstein] 수요일 스캔 완료 — 변동 없음 (보유 {len(w_pos)}종목)")
+
+    # ── 8. 텔레그램 발송 ──────────────────────────────────────────────────
     full_msg = "\n\n".join(messages) if messages else "\n".join(status_lines)
     telegram.send(full_msg, token=tg.get("bot_token", ""), chat_id=tg.get("chat_id", ""))
 
