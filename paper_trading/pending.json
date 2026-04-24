@@ -1,1 +1,132 @@
-[]
+[
+  {
+    "symbol": "CASY",
+    "signal_date": "2026-04-24T00:00:00",
+    "entry_price_est": 791.010009765625,
+    "stop": 729.1900024414062,
+    "r": 61.82000732421875,
+    "targets": [
+      976.4700317382812
+    ],
+    "partial_weights": [
+      0.5
+    ]
+  },
+  {
+    "symbol": "GNRC",
+    "signal_date": "2026-04-24T00:00:00",
+    "entry_price_est": 220.64999389648438,
+    "stop": 201.0,
+    "r": 19.649993896484375,
+    "targets": [
+      279.5999755859375
+    ],
+    "partial_weights": [
+      0.5
+    ]
+  },
+  {
+    "symbol": "KEYS",
+    "signal_date": "2026-04-24T00:00:00",
+    "entry_price_est": 350.0,
+    "stop": 317.0,
+    "r": 33.0,
+    "targets": [
+      449.0
+    ],
+    "partial_weights": [
+      0.5
+    ]
+  },
+  {
+    "symbol": "KIM",
+    "signal_date": "2026-04-24T00:00:00",
+    "entry_price_est": 23.790000915527344,
+    "stop": 22.600000381469727,
+    "r": 1.1900005340576172,
+    "targets": [
+      27.360002517700195
+    ],
+    "partial_weights": [
+      0.5
+    ]
+  },
+  {
+    "symbol": "PSA",
+    "signal_date": "2026-04-24T00:00:00",
+    "entry_price_est": 310.6199951171875,
+    "stop": 287.3699951171875,
+    "r": 23.25,
+    "targets": [
+      380.3699951171875
+    ],
+    "partial_weights": [
+      0.5
+    ]
+  },
+  {
+    "symbol": "PWR",
+    "signal_date": "2026-04-24T00:00:00",
+    "entry_price_est": 638.0,
+    "stop": 576.0,
+    "r": 62.0,
+    "targets": [
+      824.0
+    ],
+    "partial_weights": [
+      0.5
+    ]
+  },
+  {
+    "symbol": "REG",
+    "signal_date": "2026-04-24T00:00:00",
+    "entry_price_est": 80.68000030517578,
+    "stop": 77.55999755859375,
+    "r": 3.1200027465820312,
+    "targets": [
+      90.04000854492188
+    ],
+    "partial_weights": [
+      0.5
+    ]
+  },
+  {
+    "symbol": "TT",
+    "signal_date": "2026-04-24T00:00:00",
+    "entry_price_est": 485.5299987792969,
+    "stop": 448.4200134277344,
+    "r": 37.1099853515625,
+    "targets": [
+      596.8599548339844
+    ],
+    "partial_weights": [
+      0.5
+    ]
+  },
+  {
+    "symbol": "VRT",
+    "signal_date": "2026-04-24T00:00:00",
+    "entry_price_est": 328.0,
+    "stop": 280.9700012207031,
+    "r": 47.029998779296875,
+    "targets": [
+      469.0899963378906
+    ],
+    "partial_weights": [
+      0.5
+    ]
+  },
+  {
+    "symbol": "WMT",
+    "signal_date": "2026-04-24T00:00:00",
+    "entry_price_est": 131.92999267578125,
+    "stop": 122.55000305175781,
+    "r": 9.379989624023438,
+    "targets": [
+      160.06996154785156
+    ],
+    "partial_weights": [
+      0.5
+    ]
+  }
+]
