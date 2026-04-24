@@ -104,7 +104,15 @@ def main():
             sym, df, p1, p2_filter, p4, mom_rank, bbw_rank, spy_mom
         )
         all_signals.extend(sigs)
-    all_signals.sort(key=lambda s: s.entry_date)
+
+    # mom_rank 점수 부여 → 같은 날 신호 중 상위 모멘텀 우선 처리
+    for sig in all_signals:
+        if sig.entry_date in mom_rank.index and sig.symbol in mom_rank.columns:
+            val = mom_rank.at[sig.entry_date, sig.symbol]
+            sig.score = float(val) if pd.notna(val) else 0.0
+
+    # 날짜 오름차순, 같은 날이면 score 내림차순
+    all_signals.sort(key=lambda s: (s.entry_date, -s.score))
     print(f"  {len(all_signals)} signals in {time.time()-t0:.1f}s")
 
     if not all_signals:
@@ -112,9 +120,13 @@ def main():
         return
 
     # ── 5. Backtest ───────────────────────────────────────────────────────
+    # Phase 4: ATR 사이징이 리스크를 자체 제어 → target_invested_pct 캡 제거
+    import copy
+    cfg4 = copy.deepcopy(cfg)
+    cfg4.setdefault("capital_mgmt", {})["target_invested_pct"] = 100
     print("Running backtest...")
     t0 = time.time()
-    result = run_backtest(all_signals, price_data, regime, cfg)
+    result = run_backtest(all_signals, price_data, regime, cfg4)
     print(f"  Done in {time.time()-t0:.1f}s | {len(result.trades)} trades closed")
 
     # ── 6. Metrics ────────────────────────────────────────────────────────

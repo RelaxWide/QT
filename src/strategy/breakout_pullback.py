@@ -15,6 +15,7 @@ class Signal:
     targets: list           # 달러 기준 부분 청산 목표가 리스트
     partial_weights: list   # 각 목표 도달 시 청산 비중 (나머지는 트레일)
     trail_period: int
+    score: float = 0.0      # 랭킹 점수 (mom_rank percentile, 높을수록 우선)
 
 
 def generate_signals(symbol: str, df: pd.DataFrame, params: dict) -> list[Signal]:
