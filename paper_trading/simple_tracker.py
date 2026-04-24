@@ -54,3 +54,25 @@ def append_simple_trade(strategy: str, record: dict) -> None:
         if is_new:
             writer.writeheader()
         writer.writerow(record)
+
+
+def get_simple_trade_summary(strategy: str) -> dict:
+    f = _trades_file(strategy)
+    if not f.exists():
+        return {"total_trades": 0, "win_rate": 0.0, "profit_factor": 0.0, "total_pnl": 0.0}
+    with f.open(encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+    if not rows:
+        return {"total_trades": 0, "win_rate": 0.0, "profit_factor": 0.0, "total_pnl": 0.0}
+    total        = len(rows)
+    wins         = sum(1 for r in rows if float(r["pnl"]) > 0)
+    total_pnl    = sum(float(r["pnl"]) for r in rows)
+    gross_profit = sum(float(r["pnl"]) for r in rows if float(r["pnl"]) > 0)
+    gross_loss   = abs(sum(float(r["pnl"]) for r in rows if float(r["pnl"]) < 0))
+    pf = gross_profit / gross_loss if gross_loss > 0 else (float("inf") if gross_profit > 0 else 0.0)
+    return {
+        "total_trades":  total,
+        "win_rate":      wins / total,
+        "profit_factor": round(pf, 2),
+        "total_pnl":     round(total_pnl, 2),
+    }
