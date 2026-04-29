@@ -1,1 +1,142 @@
-{}
+{
+  "LITE": {
+    "symbol": "LITE",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 858.3200073242188,
+    "shares": 5.825333159350808,
+    "strategy": "clenow"
+  },
+  "LYB": {
+    "symbol": "LYB",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 73.29000091552734,
+    "shares": 68.22213040716024,
+    "strategy": "clenow"
+  },
+  "EQIX": {
+    "symbol": "EQIX",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 1089.0699462890625,
+    "shares": 4.591073343853796,
+    "strategy": "clenow"
+  },
+  "CIEN": {
+    "symbol": "CIEN",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 475.3900146484375,
+    "shares": 10.517679896363877,
+    "strategy": "clenow"
+  },
+  "OXY": {
+    "symbol": "OXY",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 60.7599983215332,
+    "shares": 82.29098318174265,
+    "strategy": "clenow"
+  },
+  "STX": {
+    "symbol": "STX",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 643.2999877929688,
+    "shares": 7.772423589115837,
+    "strategy": "clenow"
+  },
+  "GEV": {
+    "symbol": "GEV",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 1063.1099853515625,
+    "shares": 4.703182237862753,
+    "strategy": "clenow"
+  },
+  "SNDK": {
+    "symbol": "SNDK",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 1064.2099609375,
+    "shares": 4.698320992593721,
+    "strategy": "clenow"
+  },
+  "CF": {
+    "symbol": "CF",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 126.77999877929688,
+    "shares": 39.43839760327003,
+    "strategy": "clenow"
+  },
+  "VRT": {
+    "symbol": "VRT",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 306.17999267578125,
+    "shares": 16.330263634484364,
+    "strategy": "clenow"
+  },
+  "KEYS": {
+    "symbol": "KEYS",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 335.4599914550781,
+    "shares": 14.904907074945646,
+    "strategy": "clenow"
+  },
+  "APA": {
+    "symbol": "APA",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 40.31999969482422,
+    "shares": 124.00793744653322,
+    "strategy": "clenow"
+  },
+  "FIX": {
+    "symbol": "FIX",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 1724.1400146484375,
+    "shares": 2.8999964953655635,
+    "strategy": "clenow"
+  },
+  "GLW": {
+    "symbol": "GLW",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 151.89999389648438,
+    "shares": 32.9163936860153,
+    "strategy": "clenow"
+  },
+  "DELL": {
+    "symbol": "DELL",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 205.66000366210938,
+    "shares": 24.311970781712066,
+    "strategy": "clenow"
+  },
+  "WDC": {
+    "symbol": "WDC",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 412.760009765625,
+    "shares": 12.113576610387037,
+    "strategy": "clenow"
+  },
+  "COHR": {
+    "symbol": "COHR",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 304.92999267578125,
+    "shares": 16.397206309962044,
+    "strategy": "clenow"
+  },
+  "TER": {
+    "symbol": "TER",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 306.3299865722656,
+    "shares": 16.32226755189199,
+    "strategy": "clenow"
+  },
+  "DOW": {
+    "symbol": "DOW",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 39.54999923706055,
+    "shares": 126.42225275480466,
+    "strategy": "clenow"
+  },
+  "VLO": {
+    "symbol": "VLO",
+    "entry_date": "2026-04-29T00:00:00",
+    "entry_price": 251.3000030517578,
+    "shares": 19.896537760766357,
+    "strategy": "clenow"
+  }
+}

@@ -1,5 +1,5 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-04-28
+날짜: 2026-04-29
 
 ## 전략별 현황
 
@@ -9,7 +9,7 @@
 누적 거래: 없음
 
 ### Clenow (모멘텀)
-보유 0종목
+보유 20종목: APA, CF, CIEN, COHR, DELL, DOW, EQIX, FIX, GEV, GLW, KEYS, LITE, LYB, OXY, SNDK, STX, TER, VLO, VRT, WDC
 
 누적 거래: 없음
 
