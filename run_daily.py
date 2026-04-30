@@ -202,8 +202,9 @@ def build_telegram_message(
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--force", action="store_true", help="장 중에도 강제 실행")
-    parser.add_argument("--reset", action="store_true", help="paper trading 상태 전체 초기화")
+    parser.add_argument("--force",   action="store_true", help="장 중에도 강제 실행")
+    parser.add_argument("--reset",   action="store_true", help="paper trading 상태 전체 초기화")
+    parser.add_argument("--refresh", action="store_true", help="가격 데이터 캐시 무시하고 재다운로드")
     args = parser.parse_args()
 
     if args.reset:
@@ -234,7 +235,7 @@ def main():
     # ── 1. 데이터 로드 ─────────────────────────────────────────────────────
     print(f"[{today_str}] 데이터 다운로드...")
     tickers    = get_sp500_tickers()
-    price_data = fetch_all(tickers, "2015-01-01", None, min_bars=300)
+    price_data = fetch_all(tickers, "2015-01-01", None, min_bars=300, refresh=args.refresh)
     print(f"  {len(price_data)} 종목 로드")
 
     end_date = max(df.index[-1] for df in price_data.values())

@@ -143,6 +143,54 @@ weinstein_strategy:
   min_price_usd:      10
   max_positions:      15
 
+tps_strategy:
+  universe: ["SPY", "QQQ", "IWM", "EFA", "EEM", "GLD", "IYR", "XLF", "XLE", "XLK"]
+  rsi_period:      2
+  rsi_entry_max:  25     # 2일 연속 RSI<25 → 1차 진입
+  rsi_exit_min:   70     # RSI>70 → 전 레이어 청산
+  ma_period:     200     # 트렌드 필터
+
+connors_rsi_strategy:
+  entry_threshold:    5      # CRSI < 5 일 때 진입
+  exit_threshold:    70      # CRSI > 70 일 때 청산
+  short_ma_period:    5      # 종가 > 5MA 청산
+  ma200_period:     200      # 트렌드 필터
+  vol_avg_period:    50
+  min_price_usd:     10
+  min_avg_volume: 500000
+  position_size_pct: 10      # 자본의 10%
+  max_positions:      5
+  stop_pct:        0.05      # 진입가 -5% 손절
+
+vcp_strategy:
+  ma50_period:               50
+  ma150_period:             150
+  ma200_period:             200
+  high52_within_pct:       0.25
+  low52_above_pct:         0.30
+  rs_rank_min:               70
+  vcp_window:                60
+  min_contractions:           2
+  last_contraction_max_pct: 0.10
+  volume_breakout_mult:     1.4
+  volume_avg_period:         50
+  stop_loss_pct:           0.07
+  trail_ma_period:           20
+  spy_ma200_period:         200
+  max_positions:             10
+
+residual_strategy:
+  beta_window:       252   # beta 추정 기간 (1년 일별 수익)
+  lookback:          252   # 잔차 누적 기간 (12개월)
+  skip:               21   # 단기 반전 제거 (1개월)
+  ma100_period:      100
+  atr_period:         20
+  atr_pct_max:      0.12
+  min_price_usd:      10
+  min_score:         0.05
+  spy_ma200_period:  200
+  max_positions:      20
+
 backtest:
   initial_capital_usd: 100000
   results_dir: "backtest_results"

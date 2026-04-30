@@ -13,8 +13,7 @@ from src.fetch.universe import get_sp500_tickers
 from src.fetch.prices import fetch_all
 from src.strategy.weinstein_stage2 import generate_weinstein_signals
 from src.backtest.weinstein_engine import run_weinstein_backtest
-from src.backtest.metrics import compute_metrics, save_report
-from src.backtest.etf_rotation_engine import compute_rotation_metrics
+from src.backtest.metrics import compute_metrics, save_report, compute_rotation_metrics
 
 
 def main():

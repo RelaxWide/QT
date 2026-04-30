@@ -1,6 +1,6 @@
 # QT 프로젝트 전략 문서 (통합본)
 
-> **최종 업데이트**: 2026-04-24
+> **최종 업데이트**: 2026-04-29
 > **상태**: 수수료 적용 완료 (키움증권 0.25% 매수/매도 각각) — 양도소득세 미적용 (전략 우수성 측정 기준)
 
 ---
@@ -37,7 +37,7 @@
 
 **포트폴리오 구조**:
 - 주력: Phase 4 (추세추종, 개별주)
-- 보완: 평균회귀·로테이션 전략 (Phase 4와 상관관계 낮은 독립 수익원)
+- 보완: Clenow (주봉 모멘텀), Weinstein (추세 Stage 2)
 
 ---
 
@@ -103,16 +103,16 @@ position_size  = risk_per_trade / (entry_price − stop_price)
 | Phase 3 | 레짐 필터 (SPY 200MA + VIX) | Phase 2 대비 MDD 개선, 트레이드 수 감소 허용 |
 | Phase 4 | RS 필터 (SPY 대비 상대강도) | Phase 3 대비 WR/PF 개선 |
 
-**평균회귀(MR) 전략 게이트** (별도 기준):
+**추세추종 전략 게이트** (배치 전략 공통):
 | 기준 | 통과선 |
 |---|---|
-| 트레이드 수 | ≥ 50 |
-| Win rate | ≥ 70% |
-| Profit Factor | ≥ 1.8 |
-| MDD | ≥ -12% |
-| Sharpe | ≥ 1.0 |
+| CAGR | ≥ 12% |
+| MDD | ≥ -20% |
+| Sharpe | ≥ 0.85 |
+| Win Rate | ≥ 45% |
+| Profit Factor | ≥ 1.5 |
 
-**자산 로테이션 전략 게이트** (별도 기준):
+**자산 로테이션 전략 게이트**:
 | 기준 | 통과선 |
 |---|---|
 | CAGR | ≥ 7% |
@@ -126,20 +126,43 @@ position_size  = risk_per_trade / (entry_price − stop_price)
 
 수수료 적용 기준. 백테스트 기간: 2015-2026.
 
-| 전략 | 유형 | CAGR | MDD | Sharpe | PF | WR | 게이트 | 스크립트 |
+### 운용중 (게이트 통과)
+
+| 전략 | 유형 | CAGR | MDD | Sharpe | PF | WR | 상태 | 스크립트 |
 |---|---|---|---|---|---|---|---|---|
-| **Clenow Momentum** | 모멘텀 | **16.92%** | -19.6% | **1.10** | — | 55.6%¹ | ✅ | run_clenow.py |
-| **Weinstein Stage 2** | 추세 | **8.0%** | **-14.0%** | **0.88** | **2.00** | 31.1% | ✅ | run_weinstein.py |
-| Phase 4 (추세+구름+RS) | 추세 | ~8% | -11.92% | 0.74 | 1.62 | 35.9% | ❌ Sharpe | run_phase4.py |
-| 52W High | 돌파 | ~11% | -25.4% | 0.87 | 2.46 | 25.7% | ❌ MDD·WR·연속손절 | run_high52.py |
-| High WR | 스윙 | ~7% | -25.2% | 0.56 | 1.23 | 45.9% | ❌ | run_highwr.py |
-| Alvarez MR | 평균회귀 | — | **-75.1%** | -0.66 | 1.15 | 65.0% | ❌❌ 영구 폐기 | run_alvarez.py |
-| Double Seven | 평균회귀 | — | **-45.4%** | -0.44 | 1.07 | 63.6% | ❌❌ 영구 폐기 | run_double7.py |
-| IBS | 평균회귀 | — | **-90.1%** | -0.92 | 0.98 | 55.2% | ❌❌ 영구 폐기 | run_ibs.py |
-| RSI2 SPY | 평균회귀 | — | — | — | — | — | ⚠️ 코드 오류 | run_rsi2_spy.py |
-| VIX Mean Reversion | 평균회귀 | — | — | — | — | — | ⚠️ 코드 오류 | run_vix_mr.py |
-| Faber TAA | 로테이션 | — | — | — | — | — | 미실행 | run_faber.py |
-| ETF Rotation | 로테이션 | — | — | — | — | — | 미실행 | run_etf_rotation.py |
+| **Clenow Momentum** | 주봉 모멘텀 | **16.92%** | -19.6% | **1.10** | — | 55.6%¹ | ✅ 페이퍼 트레이딩 | run_clenow.py |
+| **Weinstein Stage 2** | 주봉 추세 | **8.0%** | **-14.0%** | **0.88** | **2.00** | 31.1% | ✅ 페이퍼 트레이딩 | run_weinstein.py |
+
+### 개발중 / 보류
+
+| 전략 | 유형 | CAGR | MDD | Sharpe | PF | WR | 상태 | 스크립트 |
+|---|---|---|---|---|---|---|---|---|
+| Phase 4 (추세+구름+RS) | 일봉 추세 | ~8% | -11.92% | 0.74 | 1.62 | 35.9% | ⚠️ Sharpe 미달 (페이퍼 병행) | run_phase4.py |
+| 52W High | 일봉 돌파 | ~11% | -25.4% | 0.87 | 2.46 | 25.7% | ❌ MDD·WR·연속손절 25회 | run_high52.py |
+
+### 폐기 — 수수료 파괴
+
+| 전략 | 거래/년 | MDD | Sharpe | 폐기 이유 |
+|---|---|---|---|---|
+| Alvarez MR | ~394 | -75.1% | -0.66 | 수수료 파괴 |
+| IBS | ~225 | -90.1% | -0.92 | 수수료 파괴 |
+| Double Seven | ~35 | -45.4% | -0.44 | PF 1.07 — 수익성 없음 |
+| TOM SPY | ~123 | — | — | 수수료 파괴 (-2.17% CAGR) |
+
+### 폐기 — 게이트 미달 (배치 탐색)
+
+| 전략 | 카테고리 | 비고 |
+|---|---|---|
+| Phase 3 | 일봉 추세 | PF·MDD·Sharpe 모두 미달 |
+| HighWR MA Bounce | 스윙 | PF·WR·MDD 미달 |
+| VIX Mean Reversion | 이벤트 | 샘플 36회 — 구조적 부족 |
+| RSI2 SPY | ETF MR | Sharpe -0.53 |
+| 225MA QQQ | 시장 타이밍 | B&H 하회 |
+| Connors 3-Day / BB+RSI / Z-score MR | 단기 MR | 강세장 MR 불리 |
+| Coppock Curve | 장기 모멘텀 | 11년 강세장에서 1회 거래만 |
+| ADM / VAA-G4 / VIX Term / Lev200MA | TAA | B&H 하회, VAA MDD -40% |
+| Pocket Pivot / Darvas / ADX Don / BB Squeeze | 스윙 돌파 | CAGR < 12% |
+| OBV New High | 스윙 돌파 | CAGR 9.3% (근소 미달) |
 
 > ¹ 월별 승률
 
@@ -186,7 +209,7 @@ S&P 500, 2015~현재. Donchian 기간 × 손절 ATR 배수 그리드.
 
 **유니버스**: S&P500 편입 종목
 
-**현재 상태**: Sharpe 0.74 (게이트 0.80 ❌), MDD -11.92% (게이트 -15% ✅). Sharpe만 0.06 차이. 레짐 필터 강화 또는 min_factors 조정으로 개선 가능.
+**현재 상태**: Sharpe 0.74 (게이트 0.80 ❌), MDD -11.92% (게이트 -15% ✅). Sharpe만 0.06 차이. 페이퍼 트레이딩 병행 중.
 
 ---
 
@@ -206,8 +229,6 @@ S&P 500, 2015~현재. Donchian 기간 × 손절 ATR 배수 그리드.
 ```
 stop = 선행스팬_A(진입일 고정값) − 0.5 × ATR20
 ```
-- 종가 기준 A 이탈 → 다음날 시가 청산 (구름 상단 지지 가설 소멸)
-- 진입일 값으로 고정 (단일 가격 원칙)
 
 **익절**:
 ```
@@ -216,15 +237,6 @@ R = 평균 진입가 − stop
 목표 2: 평균 진입가 + 3.0R  → 추가 30% 청산
 잔여 20%: 전환선(9일) 종가 이탈 시 청산
 ```
-
-**분할 매집**:
-| 회차 | 조건 | 비중 |
-|---|---|---|
-| 1차 | 첫 구름 상단 터치 시 | 60% |
-| 2차 | 1차 이후 양봉 확인 + 박스 중간 회복 | 40% |
-
-- 손절가 아래 추가 매수 절대 금지 (물타기 금지)
-- 박스 상단 돌파 후는 익절 영역 — 추가 매수 없음
 
 ---
 
@@ -241,8 +253,6 @@ R = 평균 진입가 − stop
 - Profit Factor ≥ 1.5 ✅
 - MDD ≥ -25% ✅
 - Sharpe ≥ 0.70 ✅
-
-**참고**: WR 게이트 없음 — 추세추종은 구조적으로 WR이 낮음 (30-40% 정상).
 
 ---
 
@@ -274,74 +284,9 @@ R = 평균 진입가 − stop
 - 청산: 25% 트레일링 or close < MA200
 - 1월 진입 금지 (역사적 부진)
 
-**문헌 성과**: 31일간 평균 +11.4% (Journal of Financial Markets 2023)
-
----
-
-### 5.5 Double Seven — Connors 평균회귀
-
-**컨셉**: Larry Connors Double Seven. MA200 위 종목의 단기 과매도 반등.
-
-**규칙**:
-- 진입: close > MA200 AND close = min(close[-7:]) (7일 최저)
-- 청산: close = max(close[-7:]) (7일 최고)
-
-**문헌 성과**: WR 82.5%, PF 2.58, Sharpe 1.4 (1993년 이후, SPY)
-
-**유니버스**: SPY / QQQ / IWM (ETF 한정 — 개별주 확장 금지)
-
----
-
-### 5.6 IBS — Internal Bar Strength
-
-**컨셉**: 일봉 내 강도(IBS = (close-low)/(high-low)) 과매도 반등.
-
-**규칙**:
-- 진입: IBS < 0.20, close > MA200, 5일 저점 갱신, SPY > MA50
-- 청산: 다음날 시가 (close-based)
-
-**유니버스**: ETF 한정
-
----
-
-### 5.7 RSI2 SPY — Connors RSI(2) 전략
-
-**컨셉**: Larry Connors. SPY의 RSI(2) 과매도 진입, 단기 반등 청산.
-
-**규칙**:
-- 진입: SPY > MA200 AND RSI(2) < 10
-- 청산: RSI(2) > 70
-
----
-
-### 5.8 VIX Mean Reversion — VIX 스파이크 역행
-
-**컨셉**: VIX 급등(공포 극대화) 이후 정상화 복귀 수익.
-
----
-
-### 5.9 Faber TAA — 10개월 이동평균 자산배분
-
-**컨셉**: Meb Faber "A Quantitative Approach to Tactical Asset Allocation" (2006). 자산별 10개월 이동평균 위이면 보유, 아래이면 현금.
-
-**규칙**:
-- 유니버스: SPY / EFA / GLD / IEF / VNQ (5자산)
-- 매월 말: close > SMA(10개월) → 보유 (1/5 비중), 아니면 현금(SHY)
-- 연 거래 ~1.5회
-
-**문헌 성과**: CAGR 9-11% / MDD -15% / Sharpe 0.8
-
----
-
-### 5.10 ETF Rotation — 월간 모멘텀 로테이션
-
-**컨셉**: SPY / EEM / TLT 중 1개월 수익률 최고 자산에 100% 집중.
-
-**규칙**:
-- 매월 말 1개월 수익률 랭킹
-- 1위 자산 100% 보유
-
-**문헌 성과**: CAGR 11% (1995년 이후), 2024 +15.22%, 2025 YTD +3.20%
+**백테스트 결과** (2015-2026):
+- 272 trades, WR 25.7%, PF 2.46, MDD -25.42%, Sharpe 0.87
+- 최대 연속 손절 **25회** — 멘탈 보호 원칙 위배로 보류
 
 ---
 
@@ -355,58 +300,81 @@ R = 평균 진입가 − stop
 ### 6.2 Alvarez MR on S&P500 개별주 — 실패 (영구 폐기)
 
 - 결과: WR 65.0%, PF 1.15, MDD -75.1%, Sharpe -0.66 (4,338회)
-- 실패 원인: avg_win_r 0.43 vs avg_loss_r -0.69 (R:R 역전). 4,338회 × 0.5% 수수료가 수익 전부 잠식. 원전략(Russell 1000 대상) 자체가 고빈도 구조.
+- 실패 원인: avg_win_r 0.43 vs avg_loss_r -0.69 (R:R 역전). 4,338회 × 0.5% 수수료가 수익 전부 잠식.
 
 ### 6.3 Double Seven (Connors) — 실패 (영구 폐기)
 
 - 결과: WR 63.6%, PF 1.07, MDD -45.4%, Sharpe -0.44 (382회)
 - 실패 원인: 비용 이전에도 PF 1.07로 수익성 미미. ETF 3개 유니버스의 분산 효과 한계.
 
-### 6.4 구조적 교훈
+### 6.4 소매 전략 배치 2 — 5종 실패 (2026-04)
+
+**225MA QQQ**: QQQ 225일선 위/아래 시장타이밍 → B&H 대비 초과수익 없음. 강세장에서 현금 보유 구간이 손실.
+
+**TOM SPY (Turn-of-Month)**: 월말 매수 → 월초 청산 계절 효과 → 135회 × 0.5% = 수수료 파괴. CAGR -2.17%. 원전략(zero-cost 가정)을 이식 불가.
+
+**Connors 3-Day / BB+RSI / Z-score MR**: 일봉 단기 평균회귀 전략군. 강세장에서 평균회귀 기대값 자체가 낮고, 수수료까지 차감 시 구조적으로 작동 불가.
+
+### 6.5 TAA 배치 3 — 5종 실패 (2026-04)
+
+**Coppock Curve**: 2015-2026 11년 강세장에서 지표가 음수로 전환된 적이 없어 1회 거래만 발생. 샘플 부족으로 통계적 의미 없음. 2000-2010 기간 포함 시 유효할 수 있으나 우리 데이터 범위에서 작동 안 함.
+
+**ADM (Accelerating Dual Momentum)**: 1M+3M+6M 합산 모멘텀으로 SPY/SCZ/BND 선택. 월 리밸런싱 ~12회/년. B&H 하회.
+
+**VAA-G4 (Keller)**: canary 자산(VWO, BND) 모멘텀으로 공격/방어 전환. MDD -40% — 2022년 채권 급락 시 방어자산(SHY, IEF, LQD)도 급락. canary whipsaw로 11년간 78회 거래 발생. 수수료 + MDD로 이중 타격.
+
+**VIX Term Structure**: VIX9D/VIX 비율 EMA(5)로 SPY/IEF 스위치. 비율 노이즈가 많아 잦은 전환 → B&H 하회.
+
+**Leveraged 200MA (UPRO/TQQQ)**: SPY 200일선 위/아래로 UPRO/현금 전환. 2022 급락 시 레버리지 붕괴. 게이트 미달.
+
+### 6.6 거래량·기술 스윙 배치 4 — 5종 실패 (2026-04)
+
+**Pocket Pivot, Darvas Box, ADX Donchian, BB Squeeze**: 거래량 확인 + 기술 지표 조합 스윙 전략들. 수수료 부담은 적(연 30-80회)으나 S&P500 개별주 유니버스에서 CAGR 12% 게이트 미달.
+
+**OBV New High**: 가격·OBV 동시 20일 신고가 확인. CAGR 9.3%, Sharpe 0.81, WR 35.4%. 가장 근접한 전략. 파라미터 튜닝(hi_period 30, stop_atr_mult 1.5) 시도 → CAGR 7.5% / WR 29.1%로 악화. 현재 기준 최종 폐기.
+
+### 6.7 구조적 교훈
 
 1. **ETF 검증 전략을 개별주로 확장하지 않는다.** 분산 구조가 완전히 다르다.
 2. **원전략 실측이 게이트를 충족하는지 먼저 확인한다.** 원본이 이미 게이트 초과면 구현해도 통과 불가.
 3. **파라미터 조정 3회 이상 실패 시 즉시 중단.** 구조 문제는 튜닝으로 해결되지 않는다.
-4. **WR보다 Sharpe·PF가 총 성과 지표로 신뢰성 높다.** WR은 멘탈 보호 지표일 뿐.
+4. **2015-2026 강세장에서 시장타이밍·MR은 구조적으로 불리하다.** 이 기간의 테스트는 추세추종 전략을 편향적으로 선호함을 인식.
+5. **수수료 0.5% 왕복 × 거래 수 = CAGR 드래그.** 연 50회 이상 전략은 거래당 충분한 alpha 필요 (트레이드당 최소 1% 순수익 기대).
+6. **WR보다 Sharpe·PF가 총 성과 지표로 신뢰성 높다.** WR은 멘탈 보호 지표일 뿐.
 
 ---
 
 ## 7. 신규 후보 연구 백로그
 
-### 7.1 우선순위 매트릭스 (2026-04-24 기준)
+### 7.1 탐색 완료 전략 (2026-04 기준)
 
-| 후보 | 상태 | Phase 4 독립성 | 구현 비용 | 종합 |
-|---|---|---|---|---|
-| **Clenow Momentum** | ✅ **게이트 통과** | 중간 | — | 운용 가능 |
-| **Weinstein Stage 2** | ✅ **게이트 통과** | 낮음 (Phase 4 유사) | — | 운용 가능 |
-| **Monthly ETF Rotation** (SPY/EEM/TLT) | 미실행 | 최고 | 낮음 | ★★★★★ |
-| Dual Momentum GEM (Antonacci) | 미실행 | 높음 | 매우 낮음 | ★★★★ |
-| Connors RSI(2) SPY | ⚠️ 코드 오류 | 최고 | 낮음 | ★★★★ |
-| Keller DAA/BAA | 미실행 | 높음 | 중간 | ★★★ |
-| Minervini VCP | 미실행 | 낮음 | 높음 | ★★ |
-| Risk Parity Dow 30 | 미실행 | 높음 | 중간 | ★★★ |
-| **Connors Double Seven** (SPY/QQQ/IWM) | ❌❌ **영구 폐기** | — | — | — |
-| VRP (옵션 매도) | — | 최고 | 매우 높음 | 유예 |
-| ML/Sentiment Hybrid | 불확실 | 높음 | 매우 높음 | 유예 |
+총 26개 전략 테스트 완료. 게이트 통과: 2개 (Clenow, Weinstein). 모든 카테고리 탐색 완료:
 
-### 7.2 후보별 핵심 요약
+| 카테고리 | 시도한 전략 수 | 통과 | 비고 |
+|---|---|---|---|
+| 일봉 추세추종 | 4 (Phase1~4) | 0 (Phase4 보류) | Sharpe 게이트 근소 미달 |
+| 주봉 모멘텀 | 1 (Clenow) | 1 | ✅ |
+| 주봉 추세 | 1 (Weinstein) | 1 | ✅ |
+| 일봉 돌파 | 2 (High52, HighWR) | 0 | |
+| 단기 MR | 8 (IBS, Alvarez, Double7, Connors3D, BB+RSI, Z-score, RSI2, TOM) | 0 | 수수료 구조적 불가 |
+| TAA | 6 (GEM², ADM, VAA, Coppock, VIX Term, Lev200) | 0 | B&H 하회 |
+| 시장 타이밍 | 2 (VIX MR, 225MA) | 0 | |
+| 거래량 스윙 | 5 (PocketPivot, Darvas, ADXDon, OBV, BBSqueeze) | 0 | 근접: OBV 9.3% |
 
-**Dual Momentum GEM (Antonacci)**
-- 규칙: SPY/VEU/AGG 중 12개월 성과 기준 절대·상대모멘텀
-- 문헌: CAGR 15% / MDD -17% (1974-현재), 연 거래 ~1.5회
-- 판단: Phase 4 완전 독립. 최근 10년 둔화(CAGR ~8%) 주의.
+> ² GEM은 run_gem.py 생성 후 run_all_backtests.py 미등록 → 미실행
 
-**Keller DAA/BAA**
-- 규칙: 카나리아 자산(VWO·BND) 모멘텀으로 공격/방어 전환
-- 판단: Crash protection 명시 설계. 파라미터 다수로 오버피팅 경계.
+### 7.2 추가 탐색 여부
 
-**Minervini VCP**
-- 규칙: 변동성 수축 패턴 + 거래량 확인 돌파. Stage 2 확인.
-- 판단: 정량화 어려움(시각 패턴). Phase 4와 잠재적 중복.
+현재까지 탐색 결과로 볼 때:
+- **추세추종 개별주 스윙** 카테고리에서만 게이트 통과 가능성 확인
+- **평균회귀, TAA, 시장타이밍** 카테고리는 키움 수수료 + 2015-2026 환경에서 구조적으로 불리
+- 신규 후보 탐색 전에 Phase 4 Sharpe 개선 (0.74 → 0.80) 집중 권장
 
-**Risk Parity Dow 30**
-- 규칙: Dow 30 종목, 20일 변동성 역가중 매월 리밸런싱
-- 문헌: Sharpe 1.57, 변동성 9.9% (2024)
+| 잠재 후보 | 카테고리 | 우선순위 | 비고 |
+|---|---|---|---|
+| Phase 4 파라미터 튜닝 | 일봉 추세 | ★★★★★ | Sharpe 0.06 차이 — 가장 가까운 통과선 |
+| OBV New High 개선 | 거래량 스윙 | ★★★ | CAGR 9.3%, Sharpe 0.81 — 근사 통과 |
+| Weinstein + RS 결합 | 주봉 추세+필터 | ★★★ | Weinstein에 RS 필터 추가 시 CAGR 개선 가능성 |
 
 ---
 
@@ -416,12 +384,13 @@ R = 평균 진입가 − stop
 
 ```bash
 # 전략 전체 일괄 실행 (Anaconda 환경에서)
-python run_all_backtests.py
+python run_all_backtests.py   # Phase4, Clenow, Weinstein, High52
 
 # 개별 실행
 python run_phase4.py
 python run_weinstein.py
-# ...
+python run_clenow.py
+python run_high52.py
 ```
 
 **주의**: Claude Code 터미널에서 Python 실행 불가 (Windows Anaconda DLL 문제). Anaconda Prompt에서 실행.
@@ -436,9 +405,6 @@ python run_weinstein.py
    - 진입가 = 시가 × (1 + 0.1% 슬리피지)
    - 수량 = (자본 × 0.7%) ÷ R
 4. **보유 포지션 청산 확인** — 스톱 → 목표가 → 트레일 순서
-   - Stop: 저가(low) ≤ 스톱가
-   - Target: 종가 ≥ 목표가 → 50% 부분청산, 스톱 → 본전
-   - Trail: Donchian 10일 하한
 5. **신규 신호 생성** — Phase 4 조건 스캔, pending.json 저장
 6. **텔레그램 알림** — 진입·청산·현황 요약
 
@@ -456,11 +422,6 @@ python run_daily.py --force  # 장 중 강제 실행 (테스트)
 | `paper_trading/trades.csv` | 청산 거래 누적 기록 |
 | `config.yaml` | 전략 파라미터 + 텔레그램 토큰 |
 
-**주의사항**:
-- 매일 실행 필수 — 하루 빠지면 스톱/목표가 체크 누락
-- 장 마감 후 실행 — 미국 ET 16:00 이후 (한국 새벽 5시 이후)
-- `positions.json` 직접 편집 금지
-
 ### 8.3 데이터 캐시
 
 가격 데이터는 `data/raw/{SYMBOL}.parquet`에 캐시. **5 거래일 이내** 캐시는 재다운로드 안 함.
@@ -470,14 +431,13 @@ python run_daily.py --force  # 장 중 강제 실행 (테스트)
 fetch_prices(ticker, start, refresh=True)
 ```
 
-### 8.4 결과 파일
+### 8.4 폐기 전략 파일 위치
 
-| 파일 | 내용 |
+| 폴더 | 내용 |
 |---|---|
-| `backtest_results/*_report.md` | 전략별 백테스트 결과 |
-| `backtest_results/SUMMARY.md` | 전략 비교 요약표 |
-
----
+| `backup/run/` | 폐기된 run_*.py 스크립트 38개 |
+| `backup/src/strategy/` | 폐기된 전략 구현 파일 29개 |
+| `backup/src/backtest/` | 폐기된 백테스트 엔진 파일 22개 |
 
 ---
 

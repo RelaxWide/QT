@@ -75,6 +75,46 @@ def compute_metrics(result: BacktestResult) -> dict:
     }
 
 
+def compute_rotation_metrics(equity: pd.Series, initial_capital: float) -> dict:
+    daily_ret = equity.pct_change().dropna()
+    n_years = len(equity) / 252
+    cagr = (equity.iloc[-1] / initial_capital) ** (1 / n_years) - 1 if n_years > 0 else 0
+
+    running_max = equity.cummax()
+    drawdown = (equity - running_max) / running_max
+    max_dd = drawdown.min()
+
+    dd_dur = max_dd_dur = 0
+    peak = equity.iloc[0]
+    for val in equity:
+        if val >= peak:
+            peak = val
+            dd_dur = 0
+        else:
+            dd_dur += 1
+            max_dd_dur = max(max_dd_dur, dd_dur)
+
+    sharpe = daily_ret.mean() / daily_ret.std() * np.sqrt(252) if daily_ret.std() > 0 else 0
+    down_r = daily_ret[daily_ret < 0].std()
+    sortino = daily_ret.mean() / down_r * np.sqrt(252) if down_r > 0 else 0
+    calmar = cagr / abs(max_dd) if max_dd != 0 else 0
+
+    monthly_ret = equity.resample("ME").last().pct_change().dropna()
+    monthly_wr = (monthly_ret > 0).sum() / len(monthly_ret) if len(monthly_ret) > 0 else 0
+
+    return {
+        "total_return_pct":     round((equity.iloc[-1] - initial_capital) / initial_capital * 100, 2),
+        "cagr_pct":             round(cagr * 100, 2),
+        "max_drawdown_pct":     round(max_dd * 100, 2),
+        "max_drawdown_days":    max_dd_dur,
+        "sharpe":               round(sharpe, 4),
+        "sortino":              round(sortino, 4),
+        "calmar":               round(calmar, 4),
+        "monthly_win_rate":     round(monthly_wr, 4),
+        "monthly_observations": len(monthly_ret),
+    }
+
+
 def save_report(metrics: dict, result: BacktestResult, output_dir: str = "backtest_results", prefix: str = "phase1") -> None:
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
