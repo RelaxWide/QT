@@ -83,15 +83,15 @@ def get_weinstein_signals(
         if not ma30_val.empty and pd.notna(ma30_val.iloc[0]) and c < ma30_val.iloc[0]:
             sell_ma30.append(sym)
 
-    # 수요일: Stage 2 돌파 스캔
+    # 수요일: Stage 2 돌파 스캔 (이번 주 수요일 종가 기준 신호)
     new_buys = []
     if is_wednesday:
         for sym, df in price_data.items():
             if sym == "SPY" or sym in holdings:
                 continue
             sigs = generate_weinstein_signals(sym, df, w_p)
-            # 오늘 또는 어제(수요일)가 entry_date인 신호
-            recent = [s for s in sigs if s.entry_date >= today]
+            # signal_week == today (W-WED 리샘플 기준 이번 주 수요일)
+            recent = [s for s in sigs if s.signal_week >= today - pd.Timedelta(days=6)]
             if recent:
                 new_buys.append(sym)
 

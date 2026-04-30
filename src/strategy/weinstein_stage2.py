@@ -77,12 +77,10 @@ def generate_weinstein_signals(
         if c < h52 * (1 - high52_pct):
             continue
 
-        # 진입일: 다음 거래일
+        # 진입일: 다음 거래일 (라이브 실행 시 당일이 마지막 데이터면 +1일 추정)
         signal_week = wdf.index[i]
         daily_after = df.index[df.index > signal_week]
-        if len(daily_after) == 0:
-            continue
-        entry_date = daily_after[0]
+        entry_date = daily_after[0] if len(daily_after) > 0 else signal_week + pd.Timedelta(days=1)
 
         signals.append(WeinsteinSignal(
             symbol=symbol,
