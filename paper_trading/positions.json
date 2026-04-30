@@ -101,23 +101,6 @@
     "shares_remaining": 11.175324882659101,
     "realized_pnl": 0.0
   },
-  "REG": {
-    "symbol": "REG",
-    "entry_date": "2026-04-24T00:00:00",
-    "entry_price": 80.76068030548095,
-    "stop_initial": 77.55999755859375,
-    "stop_current": 77.55999755859375,
-    "targets": [
-      90.36272854614253
-    ],
-    "partial_weights": [
-      0.5
-    ],
-    "targets_hit": 0,
-    "shares_total": 218.70333780527935,
-    "shares_remaining": 218.70333780527935,
-    "realized_pnl": 0.0
-  },
   "TT": {
     "symbol": "TT",
     "entry_date": "2026-04-24T00:00:00",
