@@ -575,7 +575,53 @@ def main():
 
     save_simple_positions("weinstein", w_pos)
 
-    # ── 7. 텔레그램 발송 ──────────────────────────────────────────────────
+    # ── 7. 일별 NAV 기록 ─────────────────────────────────────────────────
+    def _nav_calc(pos_dict, price_data, today, is_simple, initial, realized_pnl):
+        cost = sum(
+            p.entry_price * (p.shares if is_simple else p.shares_remaining)
+            for p in pos_dict.values()
+        )
+        unreal = sum(
+            (_get_cur(sym, today, price_data, p.entry_price) - p.entry_price)
+            * (p.shares if is_simple else p.shares_remaining)
+            for sym, p in pos_dict.items()
+        )
+        cash    = initial - cost + realized_pnl
+        invested = cost + unreal
+        total   = cash + invested
+        return round(total, 2), round(cash, 2), round(invested, 2)
+
+    p4_realized_csv  = float((get_trade_summary().get("total_pnl") or 0))
+    p4_partial_open  = sum(pos.realized_pnl for pos in positions.values())
+    p4_realized_nav  = p4_realized_csv + p4_partial_open
+    cl_realized_nav  = float((get_simple_trade_summary("clenow").get("total_pnl") or 0))
+    w_realized_nav   = float((get_simple_trade_summary("weinstein").get("total_pnl") or 0))
+
+    p4_t, p4_c, p4_i = _nav_calc(positions, price_data, today, False, initial_capital, p4_realized_nav)
+    cl_t, cl_c, cl_i = _nav_calc(cl_pos,    price_data, today, True,  initial_capital, cl_realized_nav)
+    w_t,  w_c,  w_i  = _nav_calc(w_pos,     price_data, today, True,  initial_capital, w_realized_nav)
+    combined = round(p4_t + cl_t + w_t, 2)
+
+    nav_file = Path("paper_trading/daily_nav.csv")
+    nav_file.parent.mkdir(exist_ok=True)
+    write_header = not nav_file.exists() or nav_file.stat().st_size == 0
+    import csv as _csv
+    with nav_file.open("a", newline="", encoding="utf-8") as fh:
+        fields = ["date", "p4_total", "p4_cash", "p4_invested",
+                  "cl_total", "cl_cash", "cl_invested",
+                  "w_total",  "w_cash",  "w_invested", "combined"]
+        writer = _csv.DictWriter(fh, fieldnames=fields)
+        if write_header:
+            writer.writeheader()
+        writer.writerow({
+            "date": today.isoformat(),
+            "p4_total": p4_t, "p4_cash": p4_c, "p4_invested": p4_i,
+            "cl_total": cl_t, "cl_cash": cl_c, "cl_invested": cl_i,
+            "w_total":  w_t,  "w_cash":  w_c,  "w_invested":  w_i,
+            "combined": combined,
+        })
+
+    # ── 8. 텔레그램 발송 ──────────────────────────────────────────────────
     msg = build_telegram_message(
         today, regime_ok,
         positions, p4_entries, p4_partial_hits, p4_exits, p4_signals,

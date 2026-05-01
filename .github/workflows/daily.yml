@@ -44,11 +44,11 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          touch paper_trading/trades.csv paper_trading/trades_clenow.csv paper_trading/trades_weinstein.csv
+          touch paper_trading/trades.csv paper_trading/trades_clenow.csv paper_trading/trades_weinstein.csv paper_trading/daily_nav.csv
           git add paper_trading/positions.json paper_trading/pending.json paper_trading/trades.csv \
                   paper_trading/positions_clenow.json paper_trading/trades_clenow.csv \
                   paper_trading/positions_weinstein.json paper_trading/trades_weinstein.csv \
-                  paper_trading/daily_report.md
+                  paper_trading/daily_nav.csv paper_trading/daily_report.md
           git diff --staged --quiet || git commit -m "chore: daily state update $(date -u +%Y-%m-%d)"
           git pull --rebase origin master
           git push origin master
