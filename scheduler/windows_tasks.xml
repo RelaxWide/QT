@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<!--
+  QT Live Trading — Windows Task Scheduler 일괄 등록
+  등록 명령 (PowerShell 관리자 권한):
+      schtasks /Create /XML "C:\Users\Quiruri\Projects\QT\scheduler\windows_tasks.xml" /TN "QT_Live_MorningEntry"
+  또는 scheduler/register_tasks.ps1 실행
+-->
+<Tasks>
+  <!-- 22:29 평일 — Phase 4 MOO 진입 주문 -->
+  <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+    <RegistrationInfo>
+      <Description>QT Live: Phase 4 장개시 MOO 진입 주문</Description>
+    </RegistrationInfo>
+    <Triggers>
+      <CalendarTrigger>
+        <StartBoundary>2026-01-01T22:29:00</StartBoundary>
+        <ScheduleByWeek>
+          <WeeksInterval>1</WeeksInterval>
+          <DaysOfWeek>
+            <Monday/><Tuesday/><Wednesday/><Thursday/><Friday/>
+          </DaysOfWeek>
+        </ScheduleByWeek>
+      </CalendarTrigger>
+    </Triggers>
+    <Actions>
+      <Exec>
+        <Command>C:\Users\Quiruri\Anaconda3\envs\qt\python.exe</Command>
+        <Arguments>scheduler\morning_entry.py</Arguments>
+        <WorkingDirectory>C:\Users\Quiruri\Projects\QT</WorkingDirectory>
+      </Exec>
+    </Actions>
+    <Settings>
+      <ExecutionTimeLimit>PT5M</ExecutionTimeLimit>
+      <RunOnlyIfNetworkAvailable>true</RunOnlyIfNetworkAvailable>
+      <StartWhenAvailable>true</StartWhenAvailable>
+    </Settings>
+  </Task>
+</Tasks>

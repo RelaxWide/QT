@@ -14,3 +14,13 @@ backtest_results/
 .DS_Store
 .claude/
 config.yaml
+
+# Live trading - 민감정보 절대 커밋 금지
+config_live.yaml
+live_trading/.kis_token.json
+live_trading/positions_live_*.json
+live_trading/trades_live_*.csv
+live_trading/order_map.json
+live_trading/slippage_log.csv
+live_trading/KILL_SWITCH
+logs/
