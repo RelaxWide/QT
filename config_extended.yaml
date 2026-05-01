@@ -1,0 +1,410 @@
+# QT 전략 파라미터
+# 값은 초기 후보 — 백테스트로 확정한다.
+
+data:
+  universe: "sp500"
+  start_date: "2000-01-01"
+  end_date: null           # null = 실행일
+  cache_dir: "data/raw_extended"
+  source: "yfinance"
+
+risk:
+  risk_per_trade_pct: 0.7        # 총자본 대비 %
+  max_positions: 10
+  max_sector_pct: 30
+  max_correlation: 0.7
+  slippage_pct: 0.1
+  commission_usd: 0.0            # deprecated → cost.commission_pct 사용
+
+cost:
+  commission_pct: 0.25           # 키움증권 미국 주식 수수료 (매수/매도 각각)
+  capital_gains_tax_pct: 22.0    # 해외 양도소득세 (소득세 20% + 지방소득세 2%)
+  annual_deduction_usd: 1818     # 250만원 기본공제 (1,375원/달러 기준)
+
+circuit_breaker:
+  daily_loss_pct: 1.5
+  weekly_loss_pct: 3.0
+  monthly_drawdown_pct: 5.0
+  cumulative_drawdown_pct: 10.0
+
+regime_filter:
+  spy_ma_short: 50
+  spy_ma_long: 200
+  vix_threshold: 30
+  vix_cooldown_days: 5
+
+phase1_breakout_pullback:
+  # 민감도 분석 확정값 (2026-04-20): don=20/stop=1.5 → Sharpe 0.837, PF 1.88, MDD -13.6%
+  # 대안: don=10/stop=2.5 → PF 1.97, MDD -11.1%, Sharpe 0.829 (MDD 우선 시 선택)
+  donchian_period: 20
+  atr_period: 20
+  pullback_atr_mult: 0.5
+  pullback_max_bars: 5
+  stop_atr_mult: 1.5
+  target_r_multiple: 3.0
+  trail_donchian_period: 10
+  min_price_usd: 10
+  min_avg_volume: 500000
+
+phase2_cloud_support:
+  tenkan_period: 9
+  kijun_period: 26
+  senkou_b_period: 52
+  chikou_offset: 26
+  cloud_thickness_min_pct: 3.0         # TBD
+  box_width_max_pct: 8.0               # TBD
+  cloud_top_touch_tolerance: 0.005     # TBD (선행스팬 A × (1 + N))
+  stop_atr_mult_below_senkou_a: 0.5    # 진입일 선행스팬 A - N×ATR20
+  min_rr_to_box_top: 1.0               # R:R 최소 필터
+  split_entry_weights: [0.6, 0.4]      # 분할 매집 비중 (1/2차, Phase 2는 피라미딩 없음)
+  partial_exit_r_multiples: [1.5, 3.0] # 부분 청산 R-배수 트리거
+  partial_exit_weights: [0.5, 0.3]     # 각 목표 도달 시 청산 비중 (잔여 20%는 트레일링)
+  move_stop_to_breakeven_at_target1: true
+  trail_indicator: "tenkan"            # 잔여 포지션 트레일링 기준
+
+phase3_hybrid:
+  # Phase 1 파라미터 그대로 사용 + 아래 구름 필터 추가
+  cloud_filter_thickness_min_pct: 2.5   # 민감도 분석 확정값 (2026-04-20): Sharpe 0.872, PF 1.79, MDD -10.6%
+  cloud_filter_use_chikou: false         # 후행스팬 추가 필터 (true 시 신호 감소)
+  # 나머지 파라미터는 phase1_breakout_pullback, phase2_cloud_support에서 참조
+
+phase4_factor_stack:
+  # 팩터 필터 (Phase 3 신호 위에 추가)
+  # 민감도 분석 확정값 (2026-04-20): RS only → Sharpe 0.890, PF 1.83, MDD -11.2%
+  # BB폭 필터는 돌파-풀백 전략과 역방향 (돌파 후 BB폭 확대) → 비활성화
+  use_momentum:          false
+  use_bbwidth:           false
+  use_spy_rs:            true   # SPY 3개월 초과수익 종목만 (시장 주도주 필터)
+  min_factors_required:  1
+  momentum_period:       63     # 63 거래일 ≈ 3개월
+  momentum_top_pct:      20
+  bbwidth_period:        20
+  bbwidth_bottom_pct:    20
+
+highwr_ma_bounce:
+  ma20_period:            20
+  ma50_period:            50
+  ma200_period:           200
+  rsi_period:             14
+  rsi_low:                35    # 이 이상이어야 진입 (너무 과매도 제외)
+  rsi_high:               58    # 이 이하여야 진입 (과매수 제외)
+  pullback_max_bars:      8     # 최근 N봉 안에 MA20 터치 확인
+  ma20_touch_tolerance:   0.01  # MA20 ± 1% 이내를 터치로 인정
+  pullback_volume_ratio:  1.0   # 눌림 기간 평균 거래량 < avg × ratio
+  bounce_volume_mult:     1.0   # 반등봉 거래량 >= avg × mult
+  target_r_multiple:      1.5   # 50% 부분 청산 목표
+  trail_ma_period:        50    # MA50 하향 이탈 시 잔여 청산
+  min_price_usd:          10
+  min_avg_volume:         500000
+
+telegram:
+  # 설정: run_daily.py 실행 전에 아래 값 입력
+  # 또는 환경변수: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+  bot_token: "8722764320:AAFbE3WacydrpkLpTTpJEIrVmLR1-8XVdyc"   # @BotFather에서 발급
+  chat_id:   "8717210516"   # 봇에게 메시지 보낸 후 getUpdates API로 확인
+
+high52_strategy:
+  period_52week:      252     # 52주 = 252 거래일
+  volume_mult:        1.5     # 돌파일 거래량 >= 20일 평균 × 1.5
+  ma200_period:       200     # 상승추세 필터
+  atr_period:         20
+  stop_atr_mult:      2.0     # 초기 손절 = entry - 2×ATR
+  trail_pct:          0.25    # 최고 종가 × (1 - 0.25) 25% 트레일
+  min_price_usd:      10
+  min_avg_volume:     500000
+  no_january_entry:   true    # 1월 효과 역방향 회피
+
+high52_backtest:
+  max_positions:      10      # risk 사이징은 risk_per_trade_pct 공용
+
+faber_taa:
+  universe: ["SPY", "EFA", "GLD", "IEF", "VNQ"]  # Faber 원전략 5자산
+  sma_months: 10                                    # 10개월 SMA
+  cash_proxy: "SHY"                                 # 현금 대용 단기국채 ETF
+
+faber_backtest:
+  # position sizing은 자동 동일비중 (1/N 자산)
+  # 현금 보유 자산: 무이자 (보수적 가정)
+
+alvarez_strategy:
+  trend_ma_period:    100     # 종가 > MA100 (상승추세 필터)
+  lower_lows_n:       3       # 연속 N일 lower lows
+  atr_period:         10      # ATR 계산 기간
+  rsi_period:         2       # RSI 기간 (Connors RSI2)
+  rsi_entry_max:      20      # 진입 조건: RSI(2) < 이 값
+  rsi_exit_min:       70      # 청산 조건: RSI(2) > 이 값
+  limit_atr_mult:     0.5     # 지정가 = prev_close - N×ATR
+  stop_atr_mult:      2.5     # 재앙 손절 = entry - N×ATR
+  min_price_usd:      10
+  min_avg_volume:     500000
+
+alvarez_backtest:
+  position_size_pct:  10.0    # 1포지션 = 자본의 10% (최대 10개 = 100%)
+  max_positions:      10
+  max_hold_days:      10
+
+ibs_strategy:
+  ibs_threshold:       0.20   # IBS < 이 값이면 진입 후보 (엄격)
+  ma200_period:        200
+  atr_period:          14
+  stop_atr_mult:       3.0    # 재앙 방지용 손절 (넓게 — 드물게 발동)
+  five_day_low_bars:   5      # 최근 N일 저가 갱신 확인
+  min_price_usd:       10
+  min_avg_volume:      500000
+
+ibs_backtest:
+  position_size_pct:   15.0   # 1포지션 = 자본의 15% (최대 5개 = 75% 투입)
+  max_positions:       5
+  max_hold_days:       5
+
+weinstein_strategy:
+  ma30_period:       30      # 30주 이동평균
+  volume_mult:       1.5     # 돌파 주의 거래량 > 10주 평균 × 1.5
+  high52_within_pct: 0.25    # 52주 고가 25% 이내
+  ma50_period:       50      # 50주 MA 추가 필터 (장기 상승추세)
+  min_price_usd:     10
+  spy_ma200_period:  200
+
+weinstein_backtest:
+  max_positions: 15
+
+gem_strategy:
+  lookback_months: 12
+  bond_proxy: "AGG"
+
+vix_mr_strategy:
+  vix_entry_threshold: 25
+  vix_exit_threshold:  18
+  stop_pct:            0.05
+  max_hold_days:       20
+  spy_ma200_period:    200
+
+vix_mr_backtest:
+  position_size_pct: 50.0
+
+mom_abs_rotation:
+  universe: ["SPY", "QQQ", "GLD", "IEF"]
+  lookback_months: 3
+  top_n: 1
+  cash_proxy: "SHY"
+
+sector_rotation:
+  universe: ["XLK", "XLF", "XLE", "XLV", "XLI", "XLY", "XLP", "XLU", "XLB", "XLRE", "XLC"]
+  lookback_months: 3
+  top_n: 3
+
+rsi2_strategy:
+  ma200_period:  200
+  rsi_period:    2
+  rsi_entry_max: 10
+  rsi_exit_min:  70
+  atr_period:    20
+  stop_atr_mult: 3.0
+
+rsi2_backtest:
+  position_size_pct: 50.0   # SPY 단독 전략 — 자본의 50%
+
+clenow_strategy:
+  reg_lookback:     90      # 지수회귀 기간 (거래일)
+  ma100_period:     100     # 개별주 상승추세 필터
+  ma50_period:      50      # MA50 > MA100 추가 필터 (단기 강세)
+  spy_ma200_period: 200     # SPY 레짐 필터
+  atr_period:       20
+  atr_pct_max:      0.12    # ATR/close < 12% (강화: 과변동 제외)
+  min_score:        0.15    # 최소 모멘텀 스코어 (저모멘텀 제외)
+  min_price_usd:    10
+  max_positions:    20      # 상위 20종목
+
+double7_strategy:
+  ma200_period:   200
+  low7_period:    7
+  high7_period:   7
+  atr_period:     20
+  stop_atr_mult:  3.0    # 재앙 방지용 손절 (넓게 — 드물게 발동)
+
+double7_backtest:
+  max_positions:    3    # ETF 3개 (SPY/QQQ/IWM)
+  position_size_pct: 33.0
+
+capital_mgmt:
+  max_new_entries_day:  5    # 하루 최대 신규 진입 종목 수
+  max_daily_invest_pct: 20   # 하루 최대 투자 = 총자산의 20%
+  target_invested_pct:  70   # 목표 투자 비중 (이 이상이면 신규 진입 보류)
+
+backtest:
+  initial_capital_usd: 100000
+  results_dir: "backtest_results"
+  monte_carlo_runs: 1000
+  wfo_train_years: 3
+  wfo_test_years: 1
+
+vcp_strategy:
+    ma50_period:               50
+    ma150_period:             150
+    ma200_period:             200
+    high52_within_pct:       0.25
+    low52_above_pct:         0.30
+    rs_rank_min:               70
+    vcp_window:                60
+    min_contractions:           2
+    last_contraction_max_pct: 0.10
+    volume_breakout_mult:     1.4
+    volume_avg_period:         50
+    stop_loss_pct:           0.07
+    trail_ma_period:           20
+    spy_ma200_period:         200
+    max_positions:             10
+
+connors_rsi_strategy:
+    entry_threshold:    5
+    exit_threshold:    70
+    short_ma_period:    5
+    ma200_period:     200
+    vol_avg_period:    50
+    min_price_usd:     10
+    min_avg_volume: 500000
+    position_size_pct: 10
+    max_positions:      5
+    stop_pct:        0.05
+
+tps_strategy:
+    universe: ["SPY", "QQQ", "IWM", "EFA", "EEM", "GLD", "IYR", "XLF", "XLE", "XLK"]
+    rsi_period:      2
+    rsi_entry_max:  25
+    rsi_exit_min:   70
+    ma_period:     200
+
+# ── 신규 5개 (retail/blogger 클레임) ──
+
+qqq_225ma_strategy:
+    symbol:     "QQQ"
+    ma_period:  225
+
+tom_strategy:
+    symbol:           "SPY"
+    days_before_eom:  5      # 월말 N영업일 전 종가 매수
+    days_after_bom:   3      # 월초 M영업일째 종가 매도
+
+connors_3day_strategy:
+    symbol:            "SPY"
+    ma_long:           200
+    ma_exit:           5
+    position_size_pct: 100
+
+bb_rsi_strategy:
+    symbol:            "SPY"
+    bb_period:         200
+    bb_std:            2.0
+    rsi_period:        6
+    rsi_thresh:        50
+    position_size_pct: 100
+    max_hold_days:     60
+    stop_pct:          0.10
+
+zscore_mr_strategy:
+    symbol:            "SPY"
+    z_period:          20
+    z_entry:           -2.0
+    z_exit:            0.0
+    rsi_period:        14
+    rsi_max:           30
+    atr_period:        14
+    stop_atr_mult:     3.0
+    max_hold_days:     12
+    position_size_pct: 100
+
+# ── 신규 5개 (TAA / 장기 모멘텀 / 변동성 / 레버리지) ──
+
+coppock_strategy:
+    symbol:        "SPY"
+    roc1_months:   14
+    roc2_months:   11
+    wma_period:    10
+
+adm_strategy:
+    offensive: ["SPY", "SCZ"]
+    defensive: "BND"
+
+vaa_strategy:
+    offensive: ["SPY", "EFA", "EEM", "AGG"]
+    defensive: ["SHY", "IEF", "LQD"]
+    canary:    ["VWO", "BND"]
+
+vix_term_strategy:
+    symbol:      "SPY"
+    ema_period:  5
+
+leveraged_200ma_strategy:
+    signal_symbol:    "SPY"
+    leveraged_symbol: "UPRO"
+    ma_period:        200
+    buffer_pct:       0.0
+
+# ── 거래량·기술지표 스윙 전략 5종 ──
+
+pocket_pivot_strategy:
+    ma10_period:      10
+    ma50_period:      50
+    ma200_period:    200
+    vol_lookback:     10    # 직전 N 하락일 중 최대 거래량
+    atr_period:       14
+    stop_atr_mult:   1.5
+    trail_pct:       0.20
+    trail_ma_period:  50
+    spy_ma200_period: 200
+    max_positions:    10
+    min_price_usd:    10
+    min_avg_volume:   500000
+
+darvas_strategy:
+    box_period:       20    # 박스 형성 관찰 기간
+    confirm_bars:      3    # 고점 유지 필요 일수
+    volume_mult:      1.5
+    atr_period:       20
+    trail_pct:       0.20
+    trail_ma_period:  50
+    spy_ma200_period: 200
+    max_positions:    10
+    min_price_usd:    10
+    min_avg_volume:   500000
+
+adx_donchian_strategy:
+    donchian_period:  20
+    adx_min:          25
+    adx_period:       14
+    ma200_period:    200
+    atr_period:       20
+    stop_atr_mult:   2.0
+    trail_pct:       0.20
+    trail_ma_period:  50
+    spy_ma200_period: 200
+    max_positions:    10
+    min_price_usd:    10
+    min_avg_volume:   500000
+
+obv_newhi_strategy:
+    hi_period:        20
+    ma200_period:    200
+    atr_period:       14
+    stop_atr_mult:   2.0
+    trail_pct:       0.20
+    trail_ma_period:  50
+    spy_ma200_period: 200
+    max_positions:    10
+    min_price_usd:    10
+    min_avg_volume:   500000
+
+bb_squeeze_strategy:
+    bb_period:        20
+    bb_std:          2.0
+    squeeze_period:   60    # BB width 최저 관찰 기간
+    volume_mult:     1.5
+    ma200_period:    200
+    atr_period:       20
+    stop_atr_mult:   2.0
+    trail_pct:       0.20
+    trail_ma_period:  50
+    spy_ma200_period: 200
+    max_positions:    10
+    min_price_usd:    10
+    min_avg_volume:   500000

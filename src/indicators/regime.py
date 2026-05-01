@@ -20,10 +20,11 @@ def compute_regime(
         vix = fetch_prices("^VIX", start, end)
         vix_series = vix["close"].reindex(spy.index, method="ffill")
     except Exception:
-        # VIX unavailable — skip filter
         vix_series = pd.Series(0.0, index=spy.index)
 
     regime["vix"] = vix_series
     regime["trade_ok"] = regime["spy_above_50ma"] & (vix_series <= vix_threshold)
     regime["size_factor"] = regime["spy_above_200ma"].map({True: 1.0, False: 0.5})
     return regime
+
+

@@ -18,10 +18,12 @@ def fetch_prices(
     start: str,
     end: str | None = None,
     refresh: bool = False,
+    cache_dir: str | Path | None = None,
 ) -> pd.DataFrame:
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    _cache = Path(cache_dir) if cache_dir else CACHE_DIR
+    _cache.mkdir(parents=True, exist_ok=True)
     safe = ticker.replace("^", "_").replace("/", "_")
-    cache_path = CACHE_DIR / f"{safe}.parquet"
+    cache_path = _cache / f"{safe}.parquet"
 
     if cache_path.exists() and not refresh:
         cached = pd.read_parquet(cache_path)
@@ -48,11 +50,12 @@ def fetch_all(
     end: str | None = None,
     min_bars: int = 252,
     refresh: bool = False,
+    cache_dir: str | Path | None = None,
 ) -> dict[str, pd.DataFrame]:
     result: dict[str, pd.DataFrame] = {}
     for t in tqdm(tickers, desc="Downloading"):
         try:
-            df = fetch_prices(t, start, end, refresh)
+            df = fetch_prices(t, start, end, refresh, cache_dir=cache_dir)
             if not df.empty and len(df) >= min_bars:
                 result[t] = df
         except Exception:

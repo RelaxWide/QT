@@ -53,8 +53,10 @@ def compute_metrics(result: BacktestResult) -> dict:
     sortino = (daily_ret.mean() / sortino_denom * np.sqrt(252)) if sortino_denom > 0 else 0
 
     total_return = (eq.iloc[-1] - result.initial_capital) / result.initial_capital
+    n_years = len(eq) / 252
+    cagr = (eq.iloc[-1] / result.initial_capital) ** (1 / n_years) - 1 if n_years > 0 else 0
 
-    calmar = total_return / abs(max_dd) if max_dd != 0 else 0
+    calmar = cagr / abs(max_dd) if max_dd != 0 else 0
 
     exit_reasons = pd.Series([t.exit_reason for t in trades]).value_counts().to_dict()
 
@@ -66,6 +68,7 @@ def compute_metrics(result: BacktestResult) -> dict:
         "avg_loss_r": round(avg_loss, 4),
         "profit_factor": round(profit_factor, 4),
         "total_return_pct": round(total_return * 100, 2),
+        "cagr_pct": round(cagr * 100, 2),
         "max_drawdown_pct": round(max_dd * 100, 2),
         "max_drawdown_days": max_dd_dur,
         "sharpe": round(sharpe, 4),
