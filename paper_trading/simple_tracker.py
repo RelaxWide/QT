@@ -48,7 +48,7 @@ def save_simple_positions(strategy: str, positions: dict[str, SimplePosition]) -
 def append_simple_trade(strategy: str, record: dict) -> None:
     f = _trades_file(strategy)
     f.parent.mkdir(exist_ok=True)
-    is_new = not f.exists()
+    is_new = not f.exists() or f.stat().st_size == 0
     with f.open("a", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=record.keys())
         if is_new:

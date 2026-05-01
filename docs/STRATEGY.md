@@ -397,38 +397,70 @@ python run_high52.py
 
 ### 8.2 페이퍼 트레이딩 (run_daily.py)
 
-미국 장 마감 후 매일 1회 실행. 순서:
+#### 자동 실행 (GitHub Actions)
 
-1. **장 마감 확인** — ET 16:00 이후만 실행 (`--force` 옵션으로 우회 가능)
-2. **데이터 다운로드** — S&P500 약 500종목, 2015년 이후 일봉
-3. **대기 진입 처리** — 어제 pending.json → 오늘 시가 진입
-   - 진입가 = 시가 × (1 + 0.1% 슬리피지)
-   - 수량 = (자본 × 0.7%) ÷ R
-4. **보유 포지션 청산 확인** — 스톱 → 목표가 → 트레일 순서
-5. **신규 신호 생성** — Phase 4 조건 스캔, pending.json 저장
-6. **텔레그램 알림** — 진입·청산·현황 요약
+`.github/workflows/daily.yml` — 평일 21:30 UTC (ET 17:30, 장 마감 1.5시간 후) 자동 실행.
+결과는 텔레그램으로 전송되고, 포지션·거래 파일이 자동 커밋된다.
+
+#### 수동 실행 옵션
 
 ```bash
-python run_daily.py          # 장 마감 후 실행
-python run_daily.py --force  # 장 중 강제 실행 (테스트)
+python run_daily.py                        # 장 마감 후 일반 실행
+python run_daily.py --force                # 장 중 강제 실행 (테스트)
+python run_daily.py --refresh              # 캐시 무시, 최신 데이터 재다운로드
+python run_daily.py --force-wednesday      # 수요일 스캔 강제 실행 (비수요일에도)
+python run_daily.py --reset                # 모든 포지션·거래 기록 초기화
 ```
 
-**실행 파일 참조**:
+#### 실행 파이프라인 (6단계)
+
+| 단계 | 내용 | 세부 |
+|---|---|---|
+| 1 | 장 마감 확인 | ET 16:00 이후만 실행 (`--force` 우회 가능) |
+| 2 | 데이터 로드 | S&P500 약 500종목 일봉, 캐시 5거래일 TTL |
+| 3 | Phase 4 대기 진입 처리 | pending.json → 당일 시가 진입 (슬리피지 0.1%) |
+| 4 | Phase 4 보유 포지션 관리 | 스톱 → 목표가 부분청산 → Donchian 트레일 순서 |
+| 5 | Phase 4 신규 신호 생성 | 레짐OK + 여유슬롯 있을 때만 → pending.json 저장 |
+| 6 | Clenow 신호 처리 | 매일: MA100 이탈 청산 / **수요일**: 스코어 리밸런싱 |
+| 7 | Weinstein 신호 처리 | 매일: MA30(주봉) 이탈 청산 / **수요일**: Stage 2 돌파 스캔 |
+| 8 | 텔레그램 발송 | 종목별 손익·손절선 + 미실현/확정 손익 요약 |
+
+#### 전략별 수요일 로직
+
+- **Clenow**: `compute_scores()` → 상위 20종목 유지, 탈락 매도 + 신규 매수
+- **Weinstein**: `generate_weinstein_signals()` → Stage 2 돌파 종목 진입 (주봉 기준)
+- 비수요일에는 MA 이탈 청산만 실행
+
+#### 상태 파일 참조
+
+| 파일 | 전략 | 역할 |
+|---|---|---|
+| `paper_trading/positions.json` | Phase 4 | 현재 보유 포지션 (스톱·목표가 포함) |
+| `paper_trading/pending.json` | Phase 4 | 내일 진입 대기 목록 |
+| `paper_trading/trades.csv` | Phase 4 | 청산 거래 누적 기록 |
+| `paper_trading/positions_clenow.json` | Clenow | 현재 보유 포지션 |
+| `paper_trading/trades_clenow.csv` | Clenow | 청산 거래 누적 기록 |
+| `paper_trading/positions_weinstein.json` | Weinstein | 현재 보유 포지션 |
+| `paper_trading/trades_weinstein.csv` | Weinstein | 청산 거래 누적 기록 |
+| `config.yaml` | 공통 | 전략 파라미터 + 텔레그램 토큰 |
+
+#### 신호 생성 모듈
 
 | 파일 | 역할 |
 |---|---|
-| `paper_trading/positions.json` | 현재 보유 포지션 |
-| `paper_trading/pending.json` | 내일 진입 대기 목록 |
-| `paper_trading/trades.csv` | 청산 거래 누적 기록 |
-| `config.yaml` | 전략 파라미터 + 텔레그램 토큰 |
+| `paper_trading/live_signals.py` | Clenow·Weinstein 실시간 신호 함수 |
+| `paper_trading/simple_tracker.py` | Clenow·Weinstein 포지션 저장·조회·거래 기록 |
+| `paper_trading/tracker.py` | Phase 4 포지션·대기·거래 기록 |
+| `src/strategy/weinstein_stage2.py` | Weinstein Stage 2 돌파 로직 (`_resample_weekly` 포함) |
+| `src/strategy/clenow_momentum.py` | Clenow 모멘텀 스코어 계산 |
 
 ### 8.3 데이터 캐시
 
 가격 데이터는 `data/raw/{SYMBOL}.parquet`에 캐시. **5 거래일 이내** 캐시는 재다운로드 안 함.
 
 강제 갱신:
-```python
-fetch_prices(ticker, start, refresh=True)
+```bash
+python run_daily.py --refresh
 ```
 
 ### 8.4 폐기 전략 파일 위치

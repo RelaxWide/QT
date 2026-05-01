@@ -82,17 +82,46 @@ def reset_paper_trading() -> None:
     print("✅ Paper trading 초기화 완료.")
 
 
+def _get_cur(sym, today, price_data, fallback):
+    df = price_data.get(sym)
+    if df is not None and today in df.index:
+        return df.at[today, "close"]
+    return fallback
+
+
+def _cl_stop(sym, today, price_data, ma100_p):
+    df = price_data.get(sym)
+    if df is None or today not in df.index:
+        return None
+    ma = df["close"].rolling(ma100_p).mean()
+    return float(ma.at[today]) if today in ma.index and pd.notna(ma.at[today]) else None
+
+
+def _w_stop(sym, today, price_data, ma30_p):
+    from src.strategy.weinstein_stage2 import _resample_weekly
+    df = price_data.get(sym)
+    if df is None:
+        return None
+    wdf = _resample_weekly(df)
+    ma30 = wdf["close"].rolling(ma30_p).mean()
+    val = ma30.reindex([today], method="ffill")
+    return float(val.iloc[0]) if not val.empty and pd.notna(val.iloc[0]) else None
+
+
 def build_telegram_message(
     today, regime_ok,
     p4_positions, p4_entries, p4_partial_hits, p4_exits, p4_signals,
     cl_pos, cl_exits, cl_buys, is_wednesday,
     w_pos,  w_exits,  w_buys,
-    price_data,
+    price_data, cfg,
 ) -> str:
     L = []
 
     def line(s=""): L.append(s)
     def bold(s): return f"<b>{s}</b>"
+
+    ma100_p = cfg.get("clenow_strategy",   {}).get("ma100_period", 100)
+    ma30_p  = cfg.get("weinstein_strategy", {}).get("ma30_period",  30)
 
     line(f"📅 {bold(today.strftime('%Y-%m-%d') + ' Paper Trading')}")
     line(f"레짐: {'✅ 정상' if regime_ok else '⚠️ 진입 중단 (SPY/VIX)'}")
@@ -101,10 +130,12 @@ def build_telegram_message(
     line()
     line(bold("━━━ 📈 Phase 4 (추세추종) ━━━"))
 
+    p4_unreal = 0.0
     line(bold(f"보유 {len(p4_positions)}종목"))
     for sym, pos in p4_positions.items():
-        cur    = price_data[sym].at[today, "close"] if sym in price_data and today in price_data[sym].index else pos.entry_price
+        cur    = _get_cur(sym, today, price_data, pos.entry_price)
         unreal = (cur - pos.entry_price) * pos.shares_remaining
+        p4_unreal += unreal
         pct    = (cur / pos.entry_price - 1) * 100
         s      = "+" if unreal >= 0 else ""
         line(f"  {sym}: ${pos.entry_price:.2f}→${cur:.2f} ({s}{pct:.1f}%) | stop ${pos.stop_current:.2f}")
@@ -135,9 +166,18 @@ def build_telegram_message(
     line()
     line(bold("━━━ 📊 Clenow (모멘텀) ━━━"))
 
+    cl_unreal = 0.0
     line(bold(f"보유 {len(cl_pos)}종목"))
-    if cl_pos:
-        line(f"  {', '.join(sorted(cl_pos.keys()))}")
+    for sym in sorted(cl_pos.keys()):
+        pos    = cl_pos[sym]
+        cur    = _get_cur(sym, today, price_data, pos.entry_price)
+        unreal = (cur - pos.entry_price) * pos.shares
+        cl_unreal += unreal
+        pct    = (cur / pos.entry_price - 1) * 100
+        stop   = _cl_stop(sym, today, price_data, ma100_p)
+        s      = "+" if unreal >= 0 else ""
+        stop_s = f" | stop ${stop:.2f}" if stop is not None else ""
+        line(f"  {sym}: ${pos.entry_price:.2f}→${cur:.2f} ({s}{pct:.1f}%){stop_s}")
 
     line(bold(f"오늘 청산 {len(cl_exits)}건"))
     for sym, pnl, reason in cl_exits:
@@ -157,9 +197,18 @@ def build_telegram_message(
     line()
     line(bold("━━━ 🏭 Weinstein (Stage 2) ━━━"))
 
+    w_unreal = 0.0
     line(bold(f"보유 {len(w_pos)}종목"))
-    if w_pos:
-        line(f"  {', '.join(sorted(w_pos.keys()))}")
+    for sym in sorted(w_pos.keys()):
+        pos    = w_pos[sym]
+        cur    = _get_cur(sym, today, price_data, pos.entry_price)
+        unreal = (cur - pos.entry_price) * pos.shares
+        w_unreal += unreal
+        pct    = (cur / pos.entry_price - 1) * 100
+        stop   = _w_stop(sym, today, price_data, ma30_p)
+        s      = "+" if unreal >= 0 else ""
+        stop_s = f" | stop ${stop:.2f}" if stop is not None else ""
+        line(f"  {sym}: ${pos.entry_price:.2f}→${cur:.2f} ({s}{pct:.1f}%){stop_s}")
 
     line(bold(f"오늘 청산 {len(w_exits)}건"))
     for sym, pnl in w_exits:
@@ -179,9 +228,73 @@ def build_telegram_message(
     line()
     line(bold("━━━ 📋 전략 요약 ━━━"))
 
-    p4_sum = get_trade_summary()
-    cl_sum = get_simple_trade_summary("clenow")
-    w_sum  = get_simple_trade_summary("weinstein")
+    initial = float(cfg["backtest"]["initial_capital_usd"])
+    p4_sum  = get_trade_summary()
+    cl_sum  = get_simple_trade_summary("clenow")
+    w_sum   = get_simple_trade_summary("weinstein")
+
+    # 확정 손익 (CSV 청산 + Phase4 부분익절 미정산분)
+    p4_realized_csv = float(p4_sum.get("total_pnl", 0) or 0)
+    cl_realized     = float(cl_sum.get("total_pnl", 0) or 0)
+    w_realized      = float(w_sum.get("total_pnl", 0) or 0)
+    p4_partial_open = sum(pos.realized_pnl for pos in p4_positions.values())
+    p4_realized     = p4_realized_csv + p4_partial_open
+
+    # 투자중 (시가평가) = 보유 cost_basis + 미실현
+    p4_cost  = sum(pos.entry_price * pos.shares_remaining for pos in p4_positions.values())
+    cl_cost  = sum(pos.entry_price * pos.shares           for pos in cl_pos.values())
+    w_cost   = sum(pos.entry_price * pos.shares           for pos in w_pos.values())
+
+    p4_invested = p4_cost + p4_unreal
+    cl_invested = cl_cost + cl_unreal
+    w_invested  = w_cost  + w_unreal
+
+    # 예수금 = 초기자본 - 보유 cost + 확정손익
+    p4_cash = initial - p4_cost + p4_realized
+    cl_cash = initial - cl_cost + cl_realized
+    w_cash  = initial - w_cost  + w_realized
+
+    # 총자산 = 예수금 + 투자중
+    p4_total = p4_cash + p4_invested
+    cl_total = cl_cash + cl_invested
+    w_total  = w_cash  + w_invested
+
+    total_initial  = initial * 3
+    total_cash     = p4_cash + cl_cash + w_cash
+    total_invested = p4_invested + cl_invested + w_invested
+    total_total    = total_cash + total_invested
+    total_pct      = (total_total / total_initial - 1) * 100
+
+    sgn = "+" if total_pct >= 0 else ""
+    line(bold(f"총자산: ${total_total:,.0f} ({sgn}{total_pct:.2f}%)"))
+    line(f"  예수금:   ${total_cash:,.0f}")
+    line(f"  투자중:   ${total_invested:,.0f}")
+    line(f"  초기자본: ${total_initial:,.0f}")
+
+    line()
+    line(bold("전략별 자산:"))
+
+    def fmt_strat(name, total, cash, invested, init):
+        pct = (total / init - 1) * 100
+        s   = "+" if pct >= 0 else ""
+        return f"  {name:<10} ${total:>9,.0f} ({s}{pct:+.2f}%) | 예수금 ${cash:>8,.0f} | 투자중 ${invested:>8,.0f}"
+
+    line(fmt_strat("Phase 4",   p4_total, p4_cash, p4_invested, initial))
+    line(fmt_strat("Clenow",    cl_total, cl_cash, cl_invested, initial))
+    line(fmt_strat("Weinstein", w_total,  w_cash,  w_invested,  initial))
+
+    # 미실현 손익
+    line()
+    total_unreal = p4_unreal + cl_unreal + w_unreal
+    s = "+" if total_unreal >= 0 else ""
+    line(bold(f"미실현 손익: ${s}{total_unreal:,.0f}"))
+    line(f"  Phase 4    ${'+' if p4_unreal >= 0 else ''}{p4_unreal:,.0f}")
+    line(f"  Clenow     ${'+' if cl_unreal >= 0 else ''}{cl_unreal:,.0f}")
+    line(f"  Weinstein  ${'+' if w_unreal  >= 0 else ''}{w_unreal:,.0f}")
+
+    # 확정 손익 (거래 기록)
+    line()
+    line(bold("확정 손익 (청산 기준):"))
 
     def fmt_row(name: str, s: dict) -> str:
         n = s.get("total_trades", 0)
@@ -202,9 +315,10 @@ def build_telegram_message(
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--force",   action="store_true", help="장 중에도 강제 실행")
-    parser.add_argument("--reset",   action="store_true", help="paper trading 상태 전체 초기화")
-    parser.add_argument("--refresh", action="store_true", help="가격 데이터 캐시 무시하고 재다운로드")
+    parser.add_argument("--force",          action="store_true", help="장 중에도 강제 실행")
+    parser.add_argument("--reset",          action="store_true", help="paper trading 상태 전체 초기화")
+    parser.add_argument("--refresh",        action="store_true", help="가격 데이터 캐시 무시하고 재다운로드")
+    parser.add_argument("--force-wednesday", action="store_true", help="수요일 스캔 강제 실행 (비수요일에도)")
     args = parser.parse_args()
 
     if args.reset:
@@ -384,7 +498,7 @@ def main():
     save_pending(new_pending)
 
     # ── 5. Clenow 신호 ────────────────────────────────────────────────────
-    is_wednesday = today.weekday() == 2
+    is_wednesday = today.weekday() == 2 or args.force_wednesday
     cap          = initial_capital
     cl_cfg       = cfg.get("clenow_strategy", {})
     cl_pos       = load_simple_positions("clenow")
@@ -467,7 +581,7 @@ def main():
         positions, p4_entries, p4_partial_hits, p4_exits, p4_signals,
         cl_pos, cl_exits, cl_buys, is_wednesday,
         w_pos,  w_exits,  w_buys,
-        price_data,
+        price_data, cfg,
     )
     telegram.send(msg, token=tg.get("bot_token", ""), chat_id=tg.get("chat_id", ""))
     print(msg.replace("<b>", "").replace("</b>", ""))

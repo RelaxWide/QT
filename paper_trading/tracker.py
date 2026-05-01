@@ -76,7 +76,7 @@ def save_pending(pending: list[PendingEntry]) -> None:
 
 def append_trade(record: dict) -> None:
     TRADES_FILE.parent.mkdir(exist_ok=True)
-    write_header = not TRADES_FILE.exists()
+    write_header = not TRADES_FILE.exists() or TRADES_FILE.stat().st_size == 0
     with open(TRADES_FILE, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(record.keys()))
         if write_header:

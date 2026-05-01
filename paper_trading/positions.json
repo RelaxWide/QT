@@ -151,5 +151,22 @@
     "shares_total": 73.59187505864476,
     "shares_remaining": 73.59187505864476,
     "realized_pnl": 0.0
+  },
+  "KO": {
+    "symbol": "KO",
+    "entry_date": "2026-04-30T00:00:00",
+    "entry_price": 78.87379316711424,
+    "stop_initial": 74.55000305175781,
+    "stop_current": 74.55000305175781,
+    "targets": [
+      91.84516351318354
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 161.89499983217746,
+    "shares_remaining": 161.89499983217746,
+    "realized_pnl": 0.0
   }
 }
