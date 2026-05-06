@@ -7,10 +7,9 @@ import sys
 import time
 
 STRATEGIES = [
-    ("Phase 4",   "run_phase4.py"),
-    ("Weinstein", "run_weinstein.py"),
-    ("Clenow",    "run_clenow.py"),
-    ("High52",    "run_high52.py"),
+    ("Phase 4-v2 (Anticipatory)", "run_phase4_v2.py"),
+    ("Weinstein",                 "run_weinstein.py"),
+    ("Clenow",                    "run_clenow.py"),
 ]
 
 results = []

@@ -1,6 +1,6 @@
 # QT 프로젝트 전략 문서 (통합본)
 
-> **최종 업데이트**: 2026-04-29
+> **최종 업데이트**: 2026-05-06
 > **상태**: 수수료 적용 완료 (키움증권 0.25% 매수/매도 각각) — 양도소득세 미적용 (전략 우수성 측정 기준)
 
 ---
@@ -36,8 +36,9 @@
 **검증 절차**: 가설 → 백테스트 → 페이퍼 트레이딩 → 실전(소액) → 본격 운용
 
 **포트폴리오 구조**:
-- 주력: Phase 4 (추세추종, 개별주)
-- 보완: Clenow (주봉 모멘텀), Weinstein (추세 Stage 2)
+- 주력 (개발 중): Phase 4-v2 — 일목구름 선접근 (Anticipatory Cloud)
+- 보완 (운용 중): Clenow (주봉 모멘텀), Weinstein (추세 Stage 2)
+- 페이퍼 병행: Phase 4 (Donchian + Ichimoku + SPY RS)
 
 ---
 
@@ -120,6 +121,15 @@ position_size  = risk_per_trade / (entry_price − stop_price)
 | Sharpe | ≥ 0.7 |
 | 월별 WR | ≥ 55% |
 
+**Phase 4-v2 게이트** (일목구름 선접근 — 신규 구조):
+| 기준 | 통과선 |
+|---|---|
+| Trades | ≥ 50 |
+| Win Rate | ≥ 35% |
+| Profit Factor | ≥ 1.3 |
+| MDD | ≥ -20% |
+| Sharpe | ≥ 0.5 |
+
 ---
 
 ## 4. 검증된 전략 현황
@@ -137,8 +147,8 @@ position_size  = risk_per_trade / (entry_price − stop_price)
 
 | 전략 | 유형 | CAGR | MDD | Sharpe | PF | WR | 상태 | 스크립트 |
 |---|---|---|---|---|---|---|---|---|
-| Phase 4 (추세+구름+RS) | 일봉 추세 | ~8% | -11.92% | 0.74 | 1.62 | 35.9% | ⚠️ Sharpe 미달 (페이퍼 병행) | run_phase4.py |
-| 52W High | 일봉 돌파 | ~11% | -25.4% | 0.87 | 2.46 | 25.7% | ❌ MDD·WR·연속손절 25회 | run_high52.py |
+| **Phase 4-v2 (Anticipatory Cloud)** | 일봉 구름 선접근 | 개발중 | — | — | — | — | 🔧 핵심 개발 대상 | run_phase4_v2.py |
+| Phase 4 (Donchian+구름+RS) | 일봉 추세 | ~8% | -11.92% | 0.74 | 1.62 | 35.9% | ⚠️ Sharpe 미달 (페이퍼 병행) | run_daily.py |
 
 ### 폐기 — 수수료 파괴
 
@@ -154,6 +164,7 @@ position_size  = risk_per_trade / (entry_price − stop_price)
 | 전략 | 카테고리 | 비고 |
 |---|---|---|
 | Phase 3 | 일봉 추세 | PF·MDD·Sharpe 모두 미달 |
+| 52W High | 일봉 돌파 | MDD -25%, 연속손절 25회 |
 | HighWR MA Bounce | 스윙 | PF·WR·MDD 미달 |
 | VIX Mean Reversion | 이벤트 | 샘플 36회 — 구조적 부족 |
 | RSI2 SPY | ETF MR | Sharpe -0.53 |
@@ -182,16 +193,54 @@ S&P 500, 2015~현재. Donchian 기간 × 손절 ATR 배수 그리드.
 
 **채택 파라미터**: `donchian_period: 20`, `stop_atr_mult: 1.5` → config.yaml 반영 완료
 
-**WR 게이트 수정** (Phase 1 한정): 브레이크아웃 전략은 구조적으로 WR이 낮음.
+---
 
-| 지표 | 기존 기준 | 수정 기준 |
-|---|---|---|
-| 승률 | ≥ 45% | ≥ 33% |
-| Profit Factor | ≥ 1.3 | ≥ 1.5 (완화 보상) |
+### 5.1 Phase 4-v2 — 일목구름 선접근 (Anticipatory Cloud) 🔧
+
+**컨셉 (사용자 핵심 아이디어)**:
+두꺼운 상승 구름을 3~7 거래일 앞에서 미리 매수. 구름에 닿는 날 사는 게 아니라, 가격이 구름에 수평으로 접근해가는 도중에 미리 포지션 구축 후, 구름 상단에서 튀어오르는 반등을 대기. 매수 시점의 가격대보다 며칠 뒤의 구름대의 상단 가격대가 높아야 함.
+
+**구현 파일**:
+- `src/strategy/anticipatory_cloud.py` — 신호 생성기
+- `src/strategy/factor_stack_v2.py` — SPY RS 팩터 래퍼
+- `src/backtest/anticipatory_engine.py` — 전용 백테스트 엔진
+- `run_phase4_v2.py` — 백테스트 러너
+
+**진입 조건 (모두 충족)**:
+1. #### 조건 안 맞으니 다시 체크 `close > 현재 구름 상단` — 구름 옆에서 접근 중 
+2. `현재 구름 상단과 이격 3~12%` — 너무 가깝거나(squeeze) 너무 멀면(한참 위) 제외
+3. `eta_min(2) ~ eta_max(7)일 뒤 구름 전체 블록이 두꺼운 상승형` (두께 ≥ 4%)
+5. `기울기 > -1.5%/day` — 자유낙하 제외
+6. `미래 구름 상단까지 이격 ≤ 8%` (퍼센트 기준, ATR 3배 보조)
+7. `최근 20봉 내 2% 이상 고점` — 눌림 확인
+8. `40봉 중기 종가 추세 ≥ 0` — 하락 중 구름 터치 방지
+9. `최근 15봉 내 구름 터치 없음` — 두 번째 접근 방지
+10. `전환선 ≥ 기준선 (+ 1% 마진)` — 눌림이지 반전 아님
+11. `후행스팬 양수` — 중기 상승 유지
+12. `50MA 위 + 50MA 자체 상승 중` — 하락추세 종목 제외
+13. `저가 20봉 선형추세 상승` — 저점이 높아지고 있어야 함
+14. `다음날 시가 갭업 ≤ 2%` — 갭업 진입 시 구름 thesis 무의미화 방지
+
+**손절**: `senkou_b_future × (1 - 0.5%)` — 구름 하단 이탈 기준
+
+**청산**:
+- T1: +1.5R (50% 청산), stop → 본전
+- T2: +3.0R (30% 청산)
+- 잔여 20%: 구름 하단 이탈 시 다음날 시가 청산
+- 전체 타임아웃: 20봉 (구름 미도달 포함 안전망)
+
+**현재 상태**: 파라미터 정제 중. 진입 품질 개선 반복 중.
+
+**주요 개선 이력**:
+- 터치 후 3봉 강제청산 → 제거 (반등 중인 포지션 조기청산 방지)
+- ATR 거리 필터 → 퍼센트 기반으로 교체 (변동성 높은 종목에서 ATR 필터 느슨 문제)
+- 현재 구름 최대 이격 12% 추가 (FCX/CVNA형 "구름 위 한참 위" 차단)
+- 갭업 2% 초과 진입 방지 (TECH형 차단)
+- T1/T2 복원: [0.5, 1.5]R → [1.5, 3.0]R
 
 ---
 
-### 5.1 Phase 4 — 추세추종 + 일목균형표 + SPY RS
+### 5.2 Phase 4 — 추세추종 + 일목균형표 + SPY RS (페이퍼 병행)
 
 **컨셉**: 일목균형표 구름대 위의 박스권에서, 구름 상단 지지 터치 후 반등 시 진입. SPY 대비 상대강도 필터로 강한 종목만 선택.
 
@@ -207,40 +256,11 @@ S&P 500, 2015~현재. Donchian 기간 × 손절 ATR 배수 그리드.
 - Target: entry + 3R (50% 부분 청산 후 스톱 → 본전)
 - Trail: Donchian 10일 하한 (잔여 포지션)
 
-**유니버스**: S&P500 편입 종목
-
-**현재 상태**: Sharpe 0.74 (게이트 0.80 ❌), MDD -11.92% (게이트 -15% ✅). Sharpe만 0.06 차이. 페이퍼 트레이딩 병행 중.
+**현재 상태**: Sharpe 0.74 (게이트 0.80 ❌), MDD -11.92% (우수). 페이퍼 트레이딩 병행 중.
 
 ---
 
-### 5.1b Phase 2 — 박스권 + 구름 상단 지지 (상세 설계)
-
-**가설**: 두꺼운 상승 구름 위 박스권에서 구름 상단 터치 후 반등 빈발.
-
-**진입 조건 (모두 충족)**:
-- 가격 > 선행스팬 A > 선행스팬 B (상승 구름 위)
-- 후행스팬 > 26일 전 가격 (추세 확인)
-- 구름 두께: `(선행스팬 A − 선행스팬 B) / 가격 ≥ 2.5%`
-- 박스권: 최근 20봉 `(고가 − 저가) / 중간가 ≤ 8%`
-- 저가가 구름 상단 터치 (`저가 ≤ 선행스팬 A × 1.005`) + **종가는 구름 위 유지**
-- R:R 필터: `(박스 상단 − 평균 진입가) / R ≥ 1.0` (미달 시 패스)
-
-**손절**:
-```
-stop = 선행스팬_A(진입일 고정값) − 0.5 × ATR20
-```
-
-**익절**:
-```
-R = 평균 진입가 − stop
-목표 1: 평균 진입가 + 1.5R  → 50% 청산 + stop → 본전
-목표 2: 평균 진입가 + 3.0R  → 추가 30% 청산
-잔여 20%: 전환선(9일) 종가 이탈 시 청산
-```
-
----
-
-### 5.2 Weinstein Stage 2 — 주가 Stage 2 진입 ✅
+### 5.3 Weinstein Stage 2 — 주가 Stage 2 진입 ✅
 
 **컨셉**: Stan Weinstein의 Stage Analysis. 30주 이동평균 돌파 + 거래량 급증 = Stage 2 진입.
 
@@ -256,7 +276,7 @@ R = 평균 진입가 − stop
 
 ---
 
-### 5.3 Clenow Momentum — 주간 모멘텀 로테이션 ✅
+### 5.4 Clenow Momentum — 주간 모멘텀 로테이션 ✅
 
 **컨셉**: Andreas Clenow "Stocks on the Move". 지수 상승추세 시 모멘텀 상위 종목 동일비중 보유.
 
@@ -272,21 +292,6 @@ R = 평균 진입가 − stop
 - SPY B&H CAGR 13.52% 대비 +3.4%p 초과수익
 
 **문헌 성과**: CAGR 8.79% / MDD -24% (2009-2024)
-
----
-
-### 5.4 52W High — 52주 신고가 돌파
-
-**컨셉**: George & Hwang (2004). 52주 신고가 + 거래량 급증 돌파.
-
-**규칙**:
-- 진입: close = max(close[-252:]) AND volume > avg_volume(20) × 1.5
-- 청산: 25% 트레일링 or close < MA200
-- 1월 진입 금지 (역사적 부진)
-
-**백테스트 결과** (2015-2026):
-- 272 trades, WR 25.7%, PF 2.46, MDD -25.42%, Sharpe 0.87
-- 최대 연속 손절 **25회** — 멘탈 보호 원칙 위배로 보류
 
 ---
 
@@ -317,21 +322,21 @@ R = 평균 진입가 − stop
 
 ### 6.5 TAA 배치 3 — 5종 실패 (2026-04)
 
-**Coppock Curve**: 2015-2026 11년 강세장에서 지표가 음수로 전환된 적이 없어 1회 거래만 발생. 샘플 부족으로 통계적 의미 없음. 2000-2010 기간 포함 시 유효할 수 있으나 우리 데이터 범위에서 작동 안 함.
+**Coppock Curve**: 2015-2026 11년 강세장에서 지표가 음수로 전환된 적이 없어 1회 거래만 발생. 샘플 부족.
 
 **ADM (Accelerating Dual Momentum)**: 1M+3M+6M 합산 모멘텀으로 SPY/SCZ/BND 선택. 월 리밸런싱 ~12회/년. B&H 하회.
 
-**VAA-G4 (Keller)**: canary 자산(VWO, BND) 모멘텀으로 공격/방어 전환. MDD -40% — 2022년 채권 급락 시 방어자산(SHY, IEF, LQD)도 급락. canary whipsaw로 11년간 78회 거래 발생. 수수료 + MDD로 이중 타격.
+**VAA-G4 (Keller)**: canary 자산(VWO, BND) 모멘텀으로 공격/방어 전환. MDD -40% — 2022년 채권 급락 시 방어자산(SHY, IEF, LQD)도 급락.
 
 **VIX Term Structure**: VIX9D/VIX 비율 EMA(5)로 SPY/IEF 스위치. 비율 노이즈가 많아 잦은 전환 → B&H 하회.
 
-**Leveraged 200MA (UPRO/TQQQ)**: SPY 200일선 위/아래로 UPRO/현금 전환. 2022 급락 시 레버리지 붕괴. 게이트 미달.
+**Leveraged 200MA (UPRO/TQQQ)**: SPY 200일선 위/아래로 UPRO/현금 전환. 2022 급락 시 레버리지 붕괴.
 
 ### 6.6 거래량·기술 스윙 배치 4 — 5종 실패 (2026-04)
 
-**Pocket Pivot, Darvas Box, ADX Donchian, BB Squeeze**: 거래량 확인 + 기술 지표 조합 스윙 전략들. 수수료 부담은 적(연 30-80회)으나 S&P500 개별주 유니버스에서 CAGR 12% 게이트 미달.
+**Pocket Pivot, Darvas Box, ADX Donchian, BB Squeeze**: 수수료 부담은 적(연 30-80회)으나 S&P500 개별주 유니버스에서 CAGR 12% 게이트 미달.
 
-**OBV New High**: 가격·OBV 동시 20일 신고가 확인. CAGR 9.3%, Sharpe 0.81, WR 35.4%. 가장 근접한 전략. 파라미터 튜닝(hi_period 30, stop_atr_mult 1.5) 시도 → CAGR 7.5% / WR 29.1%로 악화. 현재 기준 최종 폐기.
+**OBV New High**: 가격·OBV 동시 20일 신고가 확인. CAGR 9.3%, Sharpe 0.81, WR 35.4%. 가장 근접한 전략. 파라미터 튜닝 시도 → CAGR 7.5% / WR 29.1%로 악화. 현재 기준 최종 폐기.
 
 ### 6.7 구조적 교훈
 
@@ -339,42 +344,35 @@ R = 평균 진입가 − stop
 2. **원전략 실측이 게이트를 충족하는지 먼저 확인한다.** 원본이 이미 게이트 초과면 구현해도 통과 불가.
 3. **파라미터 조정 3회 이상 실패 시 즉시 중단.** 구조 문제는 튜닝으로 해결되지 않는다.
 4. **2015-2026 강세장에서 시장타이밍·MR은 구조적으로 불리하다.** 이 기간의 테스트는 추세추종 전략을 편향적으로 선호함을 인식.
-5. **수수료 0.5% 왕복 × 거래 수 = CAGR 드래그.** 연 50회 이상 전략은 거래당 충분한 alpha 필요 (트레이드당 최소 1% 순수익 기대).
+5. **수수료 0.5% 왕복 × 거래 수 = CAGR 드래그.** 연 50회 이상 전략은 거래당 충분한 alpha 필요.
 6. **WR보다 Sharpe·PF가 총 성과 지표로 신뢰성 높다.** WR은 멘탈 보호 지표일 뿐.
 
 ---
 
 ## 7. 신규 후보 연구 백로그
 
-### 7.1 탐색 완료 전략 (2026-04 기준)
+### 7.1 탐색 완료 전략 (2026-05 기준)
 
-총 26개 전략 테스트 완료. 게이트 통과: 2개 (Clenow, Weinstein). 모든 카테고리 탐색 완료:
+총 27개 전략 테스트 완료. 게이트 통과: 2개 (Clenow, Weinstein). 모든 카테고리 탐색 완료:
 
 | 카테고리 | 시도한 전략 수 | 통과 | 비고 |
 |---|---|---|---|
-| 일봉 추세추종 | 4 (Phase1~4) | 0 (Phase4 보류) | Sharpe 게이트 근소 미달 |
+| 일봉 추세추종 | 5 (Phase1~4, Phase4-v2) | 0 (Phase4-v2 개발중) | Phase4-v2가 핵심 아이디어 |
 | 주봉 모멘텀 | 1 (Clenow) | 1 | ✅ |
 | 주봉 추세 | 1 (Weinstein) | 1 | ✅ |
 | 일봉 돌파 | 2 (High52, HighWR) | 0 | |
-| 단기 MR | 8 (IBS, Alvarez, Double7, Connors3D, BB+RSI, Z-score, RSI2, TOM) | 0 | 수수료 구조적 불가 |
-| TAA | 6 (GEM², ADM, VAA, Coppock, VIX Term, Lev200) | 0 | B&H 하회 |
-| 시장 타이밍 | 2 (VIX MR, 225MA) | 0 | |
-| 거래량 스윙 | 5 (PocketPivot, Darvas, ADXDon, OBV, BBSqueeze) | 0 | 근접: OBV 9.3% |
+| 단기 MR | 8종 | 0 | 수수료 구조적 불가 |
+| TAA | 6종 | 0 | B&H 하회 |
+| 시장 타이밍 | 2종 | 0 | |
+| 거래량 스윙 | 5종 | 0 | 근접: OBV 9.3% |
 
-> ² GEM은 run_gem.py 생성 후 run_all_backtests.py 미등록 → 미실행
+### 7.2 우선순위
 
-### 7.2 추가 탐색 여부
-
-현재까지 탐색 결과로 볼 때:
-- **추세추종 개별주 스윙** 카테고리에서만 게이트 통과 가능성 확인
-- **평균회귀, TAA, 시장타이밍** 카테고리는 키움 수수료 + 2015-2026 환경에서 구조적으로 불리
-- 신규 후보 탐색 전에 Phase 4 Sharpe 개선 (0.74 → 0.80) 집중 권장
-
-| 잠재 후보 | 카테고리 | 우선순위 | 비고 |
-|---|---|---|---|
-| Phase 4 파라미터 튜닝 | 일봉 추세 | ★★★★★ | Sharpe 0.06 차이 — 가장 가까운 통과선 |
-| OBV New High 개선 | 거래량 스윙 | ★★★ | CAGR 9.3%, Sharpe 0.81 — 근사 통과 |
-| Weinstein + RS 결합 | 주봉 추세+필터 | ★★★ | Weinstein에 RS 필터 추가 시 CAGR 개선 가능성 |
+| 항목 | 우선순위 | 비고 |
+|---|---|---|
+| Phase 4-v2 게이트 통과 | ★★★★★ | 핵심 아이디어 구현 — 현재 파라미터 정제 중 |
+| Phase 4 Sharpe 개선 (0.74 → 0.80) | ★★★ | 페이퍼 트레이딩 데이터 축적 후 재검토 |
+| OBV New High 개선 | ★★ | CAGR 9.3%, Sharpe 0.81 — 추후 재검토 가능 |
 
 ---
 
@@ -384,13 +382,12 @@ R = 평균 진입가 − stop
 
 ```bash
 # 전략 전체 일괄 실행 (Anaconda 환경에서)
-python run_all_backtests.py   # Phase4, Clenow, Weinstein, High52
+python run_all_backtests.py   # Phase4-v2, Clenow, Weinstein
 
 # 개별 실행
-python run_phase4.py
+python run_phase4_v2.py
 python run_weinstein.py
 python run_clenow.py
-python run_high52.py
 ```
 
 **주의**: Claude Code 터미널에서 Python 실행 불가 (Windows Anaconda DLL 문제). Anaconda Prompt에서 실행.
@@ -425,12 +422,6 @@ python run_daily.py --reset                # 모든 포지션·거래 기록 초
 | 7 | Weinstein 신호 처리 | 매일: MA30(주봉) 이탈 청산 / **수요일**: Stage 2 돌파 스캔 |
 | 8 | 텔레그램 발송 | 종목별 손익·손절선 + 미실현/확정 손익 요약 |
 
-#### 전략별 수요일 로직
-
-- **Clenow**: `compute_scores()` → 상위 20종목 유지, 탈락 매도 + 신규 매수
-- **Weinstein**: `generate_weinstein_signals()` → Stage 2 돌파 종목 진입 (주봉 기준)
-- 비수요일에는 MA 이탈 청산만 실행
-
 #### 상태 파일 참조
 
 | 파일 | 전략 | 역할 |
@@ -451,8 +442,10 @@ python run_daily.py --reset                # 모든 포지션·거래 기록 초
 | `paper_trading/live_signals.py` | Clenow·Weinstein 실시간 신호 함수 |
 | `paper_trading/simple_tracker.py` | Clenow·Weinstein 포지션 저장·조회·거래 기록 |
 | `paper_trading/tracker.py` | Phase 4 포지션·대기·거래 기록 |
-| `src/strategy/weinstein_stage2.py` | Weinstein Stage 2 돌파 로직 (`_resample_weekly` 포함) |
+| `src/strategy/weinstein_stage2.py` | Weinstein Stage 2 돌파 로직 |
 | `src/strategy/clenow_momentum.py` | Clenow 모멘텀 스코어 계산 |
+| `src/strategy/factor_stack.py` | Phase 4 신호 생성 (run_daily.py용) |
+| `src/strategy/anticipatory_cloud.py` | Phase 4-v2 신호 생성 (개발 중) |
 
 ### 8.3 데이터 캐시
 
@@ -467,26 +460,24 @@ python run_daily.py --refresh
 
 | 폴더 | 내용 |
 |---|---|
-| `backup/run/` | 폐기된 run_*.py 스크립트 38개 |
-| `backup/src/strategy/` | 폐기된 전략 구현 파일 29개 |
-| `backup/src/backtest/` | 폐기된 백테스트 엔진 파일 22개 |
+| `backup/run/` | 폐기된 run_*.py 스크립트 |
+| `backup/src/strategy/` | 폐기된 전략 구현 파일 |
+| `backup/src/backtest/` | 폐기된 백테스트 엔진 파일 |
+| `docs/backup/` | 폐기된 문서 이전 버전 |
 
 ---
 
-## 9. 미결 파라미터 (백테스트로 결정)
+## 9. 미결 파라미터 (Phase 4-v2 정제 중)
 
-| 파라미터 | 탐색 범위 | 확정 |
+| 파라미터 | 현재값 | 비고 |
 |---|---|---|
-| Donchian 기간 (Phase 1) | 10 / 20 / 40 | **20** |
-| ATR 배수 — 손절 | 1.5 / 2.0 / 2.5 | **1.5** |
-| ATR 배수 — 되돌림 허용 | 0.3 / 0.5 / 0.7 | TBD |
-| 구름 두께 기준 (Phase 2) | 2% / 3% / 5% | 2.5% (잠정) |
-| 박스권 폭 기준 (Phase 2) | 5% / 8% / 10% | 8% (잠정) |
-| 구름 상단 터치 허용 오차 | 0.3% / 0.5% / 1% | 0.5% (잠정) |
-| 분할 매수 비중 | 50/30/20, 40/30/30, 60/40 | 60/40 (잠정) |
-| VIX 체제 필터 임계 | 25 / 30 / 35 | 30 (잠정) |
-
-**원칙**: 튜닝 파라미터 수 ≤ 5개 유지. 그리드 서치로 과적합 금지.
+| eta_min / eta_max | 2 / 7 | 구름 만남 예측 윈도우 |
+| cloud_thickness_min_pct | 4.0% | 두꺼운 구름 최소 두께 |
+| max_current_cloud_gap_pct | 12.0% | 현재 구름과 최대 이격 |
+| max_future_cloud_gap_pct | 8.0% | 미래 구름과 최대 이격 |
+| max_slope_pct_per_day | 1.5% | 하루 최대 낙폭 |
+| max_total_bars | 20 | 전체 타임아웃 봉 수 |
+| partial_exit_r_multiples | [1.5, 3.0] | T1/T2 R 배수 |
 
 ---
 
@@ -506,11 +497,6 @@ python run_daily.py --refresh
 6. **실전 (소액)** — 총자본 5%로 4~8주
 
 WFO 성과 ≥ In-sample 성과 × 50% 일 때만 통과.
-
-### 과적합 방지
-- 파라미터 변경 시 로그 필수 (무엇을 왜 바꿨는지)
-- "좋은 결과 나올 때까지 튜닝" 금지
-- 파라미터 수 ≤ 5개 유지
 
 ---
 

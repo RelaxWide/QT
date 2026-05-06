@@ -32,3 +32,33 @@ def ichimoku(
         {"tenkan": tenkan, "kijun": kijun, "senkou_a": senkou_a, "senkou_b": senkou_b},
         index=df.index,
     )
+
+
+def future_cloud_at(
+    df: pd.DataFrame,
+    k_ahead: int,
+    tenkan_period: int = 9,
+    kijun_period: int = 26,
+    senkou_b_period: int = 52,
+    shift: int = 26,
+) -> pd.DataFrame:
+    """
+    bar t에서 t+k 시점에 그려질 구름 좌표 (lookahead 없음).
+
+    원리: senkou_a[t] = unshifted_a[t-26], 따라서
+          senkou_a[t+k] = unshifted_a[t+k-26] = unshifted_a.shift(26-k) at t.
+    k <= shift(=26) 필수. 실용 범위: k=1~10.
+    """
+    if k_ahead > shift:
+        raise ValueError(f"k_ahead ({k_ahead}) must be <= shift ({shift})")
+    hi, lo = df["high"], df["low"]
+    tenkan_raw   = (hi.rolling(tenkan_period).max() + lo.rolling(tenkan_period).min()) / 2
+    kijun_raw    = (hi.rolling(kijun_period).max()  + lo.rolling(kijun_period).min())  / 2
+    senkou_b_raw = (hi.rolling(senkou_b_period).max() + lo.rolling(senkou_b_period).min()) / 2
+    lag = shift - k_ahead
+    senkou_a_future = ((tenkan_raw + kijun_raw) / 2).shift(lag)
+    senkou_b_future = senkou_b_raw.shift(lag)
+    return pd.DataFrame(
+        {"senkou_a_future": senkou_a_future, "senkou_b_future": senkou_b_future},
+        index=df.index,
+    )
