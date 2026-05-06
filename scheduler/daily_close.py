@@ -107,8 +107,14 @@ def _update_phase4_pending(cfg, cfg_live, price_data, today):
     p2_filter["cloud_filter_use_chikou"]        = p3["cloud_filter_use_chikou"]
     p4["momentum_period"] = p4.get("momentum_period", 63)
 
-    regime_on = compute_regime(price_data.get("SPY"))
-    if regime_on is not None and today in regime_on.index and not regime_on.at[today]:
+    regime_on = compute_regime(
+        cfg["data"]["start_date"],
+        cfg["data"]["end_date"],
+        ma_short=cfg["regime_filter"]["spy_ma_short"],
+        ma_long=cfg["regime_filter"]["spy_ma_long"],
+        vix_threshold=cfg["regime_filter"]["vix_threshold"],
+    )
+    if today in regime_on.index and not bool(regime_on.at[today, "trade_ok"]):
         log.info("[phase4] 레짐 OFF — pending 업데이트 스킵")
         return
 
