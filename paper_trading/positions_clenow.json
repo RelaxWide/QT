@@ -132,11 +132,11 @@
     "shares": 126.42225275480466,
     "strategy": "clenow"
   },
-  "VLO": {
-    "symbol": "VLO",
-    "entry_date": "2026-04-29T00:00:00",
-    "entry_price": 251.3000030517578,
-    "shares": 19.896537760766357,
+  "PWR": {
+    "symbol": "PWR",
+    "entry_date": "2026-05-06T00:00:00",
+    "entry_price": 785.239990234375,
+    "shares": 6.367480085301848,
     "strategy": "clenow"
   }
 }

@@ -1,5 +1,5 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-05-05
+날짜: 2026-05-06
 
 ## 전략별 현황
 
@@ -12,9 +12,12 @@
 최근 10건: L
 
 ### Clenow (모멘텀)
-보유 20종목: APA, CF, CIEN, COHR, DELL, DOW, EQIX, FIX, GEV, GLW, KEYS, LITE, LYB, OXY, SNDK, STX, TER, VLO, VRT, WDC
+보유 20종목: APA, CF, CIEN, COHR, DELL, DOW, EQIX, FIX, GEV, GLW, KEYS, LITE, LYB, OXY, PWR, SNDK, STX, TER, VRT, WDC
 
-누적 거래: 없음
+누적: 1건 | WR 0.0% | PF 0.0 | PnL $-295
+낙폭: 현재 -0.3% | 최대 -0.3%
+스트릭: L 1연속
+최근 10건: L
 
 ### Weinstein (Stage 2)
 보유 2종목: CNC, QCOM
@@ -39,3 +42,4 @@
 | 날짜 | 전략 | 종목 | PnL | R | 사유 |
 |------|------|------|-----|---|------|
 | 2026-04-30T00:00:00 | Phase4 | REG | ❌ $-717 | -1.0242 | stop |
+| 2026-05-06T00:00:00 | Clenow | VLO | ❌ $-295 | - | rank_exit |
