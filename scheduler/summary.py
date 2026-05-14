@@ -158,16 +158,26 @@ def build_summary() -> str:
     total_unreal   = 0.0
     total_realized = 0.0
 
+    # 추적된 종목 모두 모아두기 (KIS 잔고 vs 로컬 비교용)
+    all_tracked = set()
+
     for strat in STRATEGIES:
         positions = load_live_positions(strat)
-        label = STRATEGY_LABELS[strat]
-
-        line()
-        line(bold(f"━━━ {label} ━━━"))
+        all_tracked.update(positions.keys())
         cap_usd = cap.get(f"{strat}_usd", 0)
         max_pos = cap.get(f"{strat}_max_positions", 0)
+
+        # 자본 0 + 보유 0 + 오늘 주문 0 → 섹션 완전 생략
+        if cap_usd <= 0 and not positions and not today_orders.get(strat):
+            continue
+
+        label = STRATEGY_LABELS[strat]
+        line()
+        line(bold(f"━━━ {label} ━━━"))
         if cap_usd > 0:
             line(f"배분: ${cap_usd:.0f} / {max_pos}종목")
+        else:
+            line("배분: 페이퍼 전용 (실전 자본 0)")
 
         line(bold(f"보유 {len(positions)}종목"))
         s_unreal = 0.0
@@ -213,6 +223,22 @@ def build_summary() -> str:
         line(f"누적: 확정 ${s_realized:+,.2f} / 미실현 ${s_unreal:+,.2f}")
         total_unreal   += s_unreal
         total_realized += s_realized
+
+    # 미할당 KIS 포지션 (전략에 등록되지 않은 보유)
+    untracked = [sym for sym in cur_map if sym not in all_tracked]
+    if untracked:
+        line()
+        line(bold("━━━ ⚠️  미할당 KIS 보유 ━━━"))
+        for sym in sorted(untracked):
+            info = cur_map[sym]
+            cur  = float(info.get("cur_price", 0))
+            avg  = float(info.get("avg_price", 0))
+            qty  = int(info.get("qty", 0))
+            ev   = float(info.get("eval_amt", 0))
+            pct  = (cur / avg - 1) * 100 if avg > 0 else 0.0
+            sign = "+" if cur >= avg else ""
+            line(f"  {sym}: {qty}주 ${avg:.2f}→${cur:.2f} ({sign}{pct:.1f}%) | 평가 ${ev:,.2f}")
+        line("→ positions_live_*.json 에 수동 등록 필요 (전략 자동 청산 대상에서 누락 중)")
 
     # 슬리피지
     line()
