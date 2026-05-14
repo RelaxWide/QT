@@ -58,12 +58,45 @@ class OrderManager:
         self.kis      = kis
         self.cap      = cfg_live.get("capital", {})
         self._map: dict = self._load_map()
+        self._balance_cache: dict | None = None   # auto_allocate 용 잔고 캐시
 
     @classmethod
     def from_config(cls, path: Path = CONFIG_PATH, allow_prod: bool = False) -> "OrderManager":
         cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
         kis = KISClient(cfg, allow_prod=allow_prod)
         return cls(kis, cfg)
+
+    # ── 자본 배분 (auto_allocate 또는 명시값) ─────────────────────────────
+    def _get_balance(self) -> dict:
+        if self._balance_cache is None:
+            try:
+                self._balance_cache = self.kis.get_balance()
+            except Exception as e:
+                log.warning(f"[orders] KIS 잔고 조회 실패: {e} - auto_allocate 비활성화")
+                self._balance_cache = {"cash_usd": 0, "positions": [], "_failed": True}
+        return self._balance_cache
+
+    def _strategy_budget(self, strategy: str) -> float:
+        """
+        전략별 매수 예산.
+        auto_allocate=true 면 KIS 총자산 × (1 - buffer_pct/100) × {strategy}_pct/100
+        false 면 cap[{strategy}_usd] 그대로.
+        """
+        if self.cap.get("auto_allocate"):
+            bal = self._get_balance()
+            if bal.get("_failed"):
+                return self.cap.get(f"{strategy}_usd", 0)
+            cash     = float(bal.get("cash_usd", 0) or 0)
+            eval_sum = sum(float(p.get("eval_amt", 0) or 0) for p in bal.get("positions", []))
+            total    = cash + eval_sum
+            buffer   = float(self.cap.get("buffer_pct", 1.0)) / 100.0
+            usable   = total * (1.0 - buffer)
+            pct      = float(self.cap.get(f"{strategy}_pct", 0)) / 100.0
+            return round(usable * pct, 2)
+        return float(self.cap.get(f"{strategy}_usd", 0) or 0)
+
+    def _strategy_max_positions(self, strategy: str) -> int:
+        return int(self.cap.get(f"{strategy}_max_positions", 5))
 
     # ── order_map 관리 ────────────────────────────────────────────────────
     def _load_map(self) -> dict:
@@ -193,12 +226,13 @@ class OrderManager:
         sell: 현재가 -0.5% LIMIT
         """
         results = []
-        max_pos  = self.cap.get("clenow_max_positions", 5)
-        total_usd = self.cap.get("clenow_usd", 3500)
+        max_pos   = self._strategy_max_positions("clenow")
+        total_usd = self._strategy_budget("clenow")
         if total_usd <= 0:
-            log.info(f"[clenow] clenow_usd={total_usd} — 실거래 자본 배분 없음")
+            log.info(f"[clenow] 예산 ${total_usd:.2f} - 실거래 자본 배분 없음")
             return []
         budget_per_pos = total_usd / max_pos
+        log.info(f"[clenow] 예산 ${total_usd:.2f} / {max_pos}종목 = ${budget_per_pos:.2f}/종목")
 
         today_str = str(today.date())
 
@@ -248,12 +282,13 @@ class OrderManager:
         dry_run: bool = False,
     ) -> list[OrderResult]:
         results = []
-        max_pos  = self.cap.get("weinstein_max_positions", 4)
-        total_usd = self.cap.get("weinstein_usd", 3000)
+        max_pos   = self._strategy_max_positions("weinstein")
+        total_usd = self._strategy_budget("weinstein")
         if total_usd <= 0:
-            log.info(f"[weinstein] weinstein_usd={total_usd} — 실거래 자본 배분 없음")
+            log.info(f"[weinstein] 예산 ${total_usd:.2f} - 실거래 자본 배분 없음")
             return []
         budget_per_pos = total_usd / max_pos
+        log.info(f"[weinstein] 예산 ${total_usd:.2f} / {max_pos}종목 = ${budget_per_pos:.2f}/종목")
 
         today_str = str(today.date())
 
@@ -306,14 +341,13 @@ class OrderManager:
         if strategy not in ("clenow", "weinstein"):
             raise ValueError(f"strategy must be clenow|weinstein, got {strategy}")
 
-        cap_key = f"{strategy}_usd"
-        max_key = f"{strategy}_max_positions"
-        total_usd = self.cap.get(cap_key, 0)
+        total_usd = self._strategy_budget(strategy)
         if total_usd <= 0:
-            log.info(f"[{strategy}] {cap_key}={total_usd} — 실거래 자본 배분 없음")
+            log.info(f"[{strategy}] 예산 ${total_usd:.2f} - 실거래 자본 배분 없음")
             return []
-        max_pos        = self.cap.get(max_key, 5)
+        max_pos        = self._strategy_max_positions(strategy)
         budget_per_pos = total_usd / max_pos
+        log.info(f"[{strategy}] 예산 ${total_usd:.2f} / {max_pos}종목 = ${budget_per_pos:.2f}/종목")
 
         results = []
         for sym in symbols[:max_pos]:

@@ -161,10 +161,24 @@ def build_summary() -> str:
     # 추적된 종목 모두 모아두기 (KIS 잔고 vs 로컬 비교용)
     all_tracked = set()
 
+    # auto_allocate 모드면 KIS 총자산 기준 동적 예산 계산
+    auto = bool(cap.get("auto_allocate"))
+    total_assets = 0.0
+    if auto and not err:
+        total_assets = cash + sum_eval
+        buffer = float(cap.get("buffer_pct", 1.0)) / 100.0
+        usable = total_assets * (1.0 - buffer)
+
+    def strategy_budget(s):
+        if auto and not err:
+            pct = float(cap.get(f"{s}_pct", 0)) / 100.0
+            return usable * pct
+        return float(cap.get(f"{s}_usd", 0) or 0)
+
     for strat in STRATEGIES:
         positions = load_live_positions(strat)
         all_tracked.update(positions.keys())
-        cap_usd = cap.get(f"{strat}_usd", 0)
+        cap_usd = strategy_budget(strat)
         max_pos = cap.get(f"{strat}_max_positions", 0)
 
         # 자본 0 + 보유 0 + 오늘 주문 0 → 섹션 완전 생략
@@ -175,7 +189,8 @@ def build_summary() -> str:
         line()
         line(bold(f"━━━ {label} ━━━"))
         if cap_usd > 0:
-            line(f"배분: ${cap_usd:.0f} / {max_pos}종목")
+            mode_tag = " (auto)" if auto else ""
+            line(f"배분{mode_tag}: ${cap_usd:.2f} / {max_pos}종목 = ${cap_usd/max(max_pos,1):.2f}/종목")
         else:
             line("배분: 페이퍼 전용 (실전 자본 0)")
 
