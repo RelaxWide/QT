@@ -109,20 +109,22 @@ def _write_last_issued(t: datetime) -> None:
 # 미국 주식: V*** = 모의(VTS), T*** = 실(prod)
 TR_IDS = {
     "mock": {
-        "buy":     "VTTT1002U",   # 미국 매수
-        "sell":    "VTTT1001U",   # 미국 매도
-        "balance": "VTTS3012R",   # 잔고
-        "ccnl":    "VTTS3035R",   # 체결내역
-        "cancel":  "VTTT1004U",   # 정정·취소
-        "price":   "HHDFS00000300",  # 현재가 (모의/실 동일)
+        "buy":      "VTTT1002U",   # 미국 매수
+        "sell":     "VTTT1001U",   # 미국 매도
+        "balance":  "VTTS3012R",   # 잔고
+        "psamount": "VTTS3007R",   # 매수가능금액
+        "ccnl":     "VTTS3035R",   # 체결내역
+        "cancel":   "VTTT1004U",   # 정정·취소
+        "price":    "HHDFS00000300",  # 현재가 (모의/실 동일)
     },
     "prod": {
-        "buy":     "TTTT1002U",
-        "sell":    "TTTT1001U",
-        "balance": "TTTS3012R",
-        "ccnl":    "TTTS3035R",
-        "cancel":  "TTTT1004U",
-        "price":   "HHDFS00000300",
+        "buy":      "TTTT1002U",
+        "sell":     "TTTT1001U",
+        "balance":  "TTTS3012R",
+        "psamount": "TTTS3007R",
+        "ccnl":     "TTTS3035R",
+        "cancel":   "TTTT1004U",
+        "price":    "HHDFS00000300",
     },
 }
 
@@ -284,7 +286,11 @@ class KISClient:
 
     # ── 잔고 조회 ───────────────────────────────────────────────────────
     def get_balance(self) -> dict:
-        """미국 주식 잔고. 반환: {cash_usd, positions: [{symbol, qty, avg_price, cur_price, eval_amt}]}"""
+        """
+        미국 주식 잔고 + 매수가능금액.
+        반환: {cash_usd, positions: [...], total_eval_usd, fx_rate}
+        cash_usd 는 inquire-psamount 의 ord_psbl_frcr_amt (실주문가능 USD).
+        """
         url    = f"{self.base_url}/uapi/overseas-stock/v1/trading/inquire-balance"
         params = {
             "CANO":          self.cano,
@@ -302,7 +308,7 @@ class KISClient:
         d = r.json()
         if d.get("rt_cd") != "0":
             log.error(f"[balance] 실패: {d.get('msg1')}")
-            return {"cash_usd": 0.0, "positions": []}
+            return {"cash_usd": 0.0, "positions": [], "total_eval_usd": 0.0, "fx_rate": 0.0}
 
         positions = []
         for it in d.get("output1", []):
@@ -317,11 +323,44 @@ class KISClient:
                 "eval_amt":  float(it.get("ovrs_stck_evlu_amt", 0) or 0),
             })
         out2 = d.get("output2", {})
+
+        # 매수가능금액 조회 (inquire-psamount): KIS 가 USD 잔고를
+        # frcr_dncl_amt_2 가 아니라 ord_psbl_frcr_amt 로 반환하는 경우 대응
+        cash_usd, fx = self._get_psamount()
+
         return {
-            "cash_usd":       float(out2.get("frcr_dncl_amt_2", 0) or 0),  # 외화예수금
+            "cash_usd":       cash_usd,
             "total_eval_usd": float(out2.get("tot_evlu_pfls_amt", 0) or 0),
+            "fx_rate":        fx,
             "positions":      positions,
         }
+
+    def _get_psamount(self) -> tuple[float, float]:
+        """해외주식 매수가능금액 조회. 반환: (orderable_usd, fx_rate)."""
+        url = f"{self.base_url}/uapi/overseas-stock/v1/trading/inquire-psamount"
+        params = {
+            "CANO":            self.cano,
+            "ACNT_PRDT_CD":    self.acnt_prdt,
+            "OVRS_EXCG_CD":    self.exchange,
+            "OVRS_ORD_UNPR":   "1",
+            "ITEM_CD":         "AAPL",   # 임의 종목 (매수가능액 계산용)
+        }
+        try:
+            r = requests.get(url, headers=self._headers(self.tr["psamount"]),
+                             params=params, timeout=10)
+            r.raise_for_status()
+            d = r.json()
+            if d.get("rt_cd") != "0":
+                log.warning(f"[psamount] 실패: {d.get('msg1')}")
+                return 0.0, 0.0
+            out = d.get("output", {}) or {}
+            return (
+                float(out.get("ord_psbl_frcr_amt", 0) or 0),
+                float(out.get("exrt", 0) or 0),
+            )
+        except Exception as e:
+            log.warning(f"[psamount] 조회 예외: {e}")
+            return 0.0, 0.0
 
     # ── 주문 ───────────────────────────────────────────────────────────
     def place_order(
