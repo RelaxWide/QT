@@ -39,7 +39,7 @@ def _safe_get_balance(kis):
         cur_map = {p["symbol"]: p for p in bal.get("positions", [])}
         return cur_map, bal, None
     except Exception as e:
-        return {}, {"cash_usd": 0, "total_eval_usd": 0, "positions": []}, str(e)
+        return {}, {"cash_usd": 0, "total_pnl_usd": 0, "positions": []}, str(e)
 
 
 def _ma_stop(sym, price_data, period_days, weekly=False):
@@ -134,7 +134,7 @@ def build_summary() -> str:
     else:
         cash     = bal.get("cash_usd", 0.0)
         sum_eval = sum(p["eval_amt"] for p in bal.get("positions", []))
-        pnl_amt  = bal.get("total_eval_usd", 0.0)
+        pnl_amt  = bal.get("total_pnl_usd", 0.0)
         line(f"잔고: 예수금 ${cash:,.2f} | 평가 ${sum_eval:,.2f} | 손익 ${pnl_amt:+,.2f}")
 
     # 보유 종목만 가격 데이터 로드 (stop 계산용)

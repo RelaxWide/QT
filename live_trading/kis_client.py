@@ -288,7 +288,7 @@ class KISClient:
     def get_balance(self) -> dict:
         """
         미국 주식 잔고 + 매수가능금액.
-        반환: {cash_usd, positions: [...], total_eval_usd, fx_rate}
+        반환: {cash_usd, positions: [...], total_pnl_usd, fx_rate}
         cash_usd 는 inquire-psamount 의 ord_psbl_frcr_amt (실주문가능 USD).
         """
         url    = f"{self.base_url}/uapi/overseas-stock/v1/trading/inquire-balance"
@@ -308,7 +308,7 @@ class KISClient:
         d = r.json()
         if d.get("rt_cd") != "0":
             log.error(f"[balance] 실패: {d.get('msg1')}")
-            return {"cash_usd": 0.0, "positions": [], "total_eval_usd": 0.0, "fx_rate": 0.0}
+            return {"cash_usd": 0.0, "positions": [], "total_pnl_usd": 0.0, "fx_rate": 0.0}
 
         positions = []
         for it in d.get("output1", []):
@@ -328,9 +328,13 @@ class KISClient:
         # frcr_dncl_amt_2 가 아니라 ord_psbl_frcr_amt 로 반환하는 경우 대응
         cash_usd, fx = self._get_psamount()
 
+        # KIS 응답 필드 의미:
+        #   ovrs_tot_pfls         = 해외총손익 (실제 P&L)
+        #   tot_evlu_pfls_amt     = 총평가금액 (이름은 'pfls' 지만 실제로는 평가금액)
+        #   frcr_pchs_amt1        = 외화매입금액 (cost basis)
         return {
             "cash_usd":       cash_usd,
-            "total_eval_usd": float(out2.get("tot_evlu_pfls_amt", 0) or 0),
+            "total_pnl_usd":  float(out2.get("ovrs_tot_pfls", 0) or 0),
             "fx_rate":        fx,
             "positions":      positions,
         }
@@ -442,7 +446,7 @@ def _cli():
     if args.test_balance:
         b = cli.get_balance()
         print(f"예수금(USD): ${b['cash_usd']:,.2f}")
-        print(f"평가손익:    ${b['total_eval_usd']:,.2f}")
+        print(f"평가손익:    ${b['total_pnl_usd']:,.2f}")
         print(f"보유 {len(b['positions'])}종목")
         for pos in b["positions"]:
             print(f"  {pos['symbol']:6s} {pos['qty']:>4d}주 @${pos['avg_price']:.2f} → ${pos['cur_price']:.2f}")
