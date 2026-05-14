@@ -326,6 +326,7 @@ class KISClient:
 
         # 매수가능금액 조회 (inquire-psamount): KIS 가 USD 잔고를
         # frcr_dncl_amt_2 가 아니라 ord_psbl_frcr_amt 로 반환하는 경우 대응
+        import time as _t; _t.sleep(0.5)   # 초당 호출 한도 회피
         cash_usd, fx = self._get_psamount()
 
         # KIS 응답 필드 의미:
@@ -340,7 +341,8 @@ class KISClient:
         }
 
     def _get_psamount(self) -> tuple[float, float]:
-        """해외주식 매수가능금액 조회. 반환: (orderable_usd, fx_rate)."""
+        """해외주식 매수가능금액 조회. 반환: (orderable_usd, fx_rate). 초당 한도 시 1회 재시도."""
+        import time as _t
         url = f"{self.base_url}/uapi/overseas-stock/v1/trading/inquire-psamount"
         params = {
             "CANO":            self.cano,
@@ -349,22 +351,34 @@ class KISClient:
             "OVRS_ORD_UNPR":   "1",
             "ITEM_CD":         "AAPL",   # 임의 종목 (매수가능액 계산용)
         }
-        try:
-            r = requests.get(url, headers=self._headers(self.tr["psamount"]),
-                             params=params, timeout=10)
-            r.raise_for_status()
-            d = r.json()
-            if d.get("rt_cd") != "0":
-                log.warning(f"[psamount] 실패: {d.get('msg1')}")
+        for attempt in (1, 2):
+            try:
+                r = requests.get(url, headers=self._headers(self.tr["psamount"]),
+                                 params=params, timeout=10)
+                d = r.json() if r.ok else {}
+                msg = d.get("msg1", "")
+                if r.status_code in (429, 500) or "초당 거래건수" in msg:
+                    if attempt == 1:
+                        log.warning("[psamount] 초당 한도 - 1초 후 재시도")
+                        _t.sleep(1.0)
+                        continue
+                r.raise_for_status()
+                if d.get("rt_cd") != "0":
+                    log.warning(f"[psamount] 실패: {msg}")
+                    return 0.0, 0.0
+                out = d.get("output", {}) or {}
+                return (
+                    float(out.get("ord_psbl_frcr_amt", 0) or 0),
+                    float(out.get("exrt", 0) or 0),
+                )
+            except Exception as e:
+                if attempt == 1:
+                    log.warning(f"[psamount] 예외 - 재시도: {e}")
+                    _t.sleep(1.0)
+                    continue
+                log.warning(f"[psamount] 최종 실패: {e}")
                 return 0.0, 0.0
-            out = d.get("output", {}) or {}
-            return (
-                float(out.get("ord_psbl_frcr_amt", 0) or 0),
-                float(out.get("exrt", 0) or 0),
-            )
-        except Exception as e:
-            log.warning(f"[psamount] 조회 예외: {e}")
-            return 0.0, 0.0
+        return 0.0, 0.0
 
     # ── 주문 ───────────────────────────────────────────────────────────
     def place_order(

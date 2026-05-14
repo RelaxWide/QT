@@ -7,6 +7,7 @@ USD 자산이 어떤 필드에 들어있는지 확인.
 """
 import json
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -54,6 +55,7 @@ def main():
                 print(f"  {k}: {v}")
 
     # ─── 2. 매수가능금액 (inquire-psamount) ───────────────────────────────
+    time.sleep(0.5)   # 초당 호출 한도 회피
     print()
     print("=" * 70)
     print("2. inquire-psamount (해외주식 매수가능금액 API)")
