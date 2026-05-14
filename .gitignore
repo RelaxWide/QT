@@ -22,5 +22,6 @@ live_trading/positions_live_*.json
 live_trading/trades_live_*.csv
 live_trading/order_map.json
 live_trading/slippage_log.csv
+live_trading/wed_buy_pending.json
 live_trading/KILL_SWITCH
 logs/

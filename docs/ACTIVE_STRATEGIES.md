@@ -331,6 +331,34 @@ Clenow 비중(%)을 0~100%로 5%씩 변화시킨 Sharpe 스윕 분석.
 
 Kill Switch: `type nul > live_trading/KILL_SWITCH` / 재개: `del live_trading/KILL_SWITCH`
 
+### 6.4-A KIS Live 스모크 테스트 ($100 prod)
+
+GitHub Actions 에서 수동으로 실 계좌 매수 파이프라인 전체를 검증한다.
+페이퍼 상태와 무관하게 `scripts/smoke_test_setup.py` 가 직접 매수 후보를 생성한다.
+
+**필요 Repository Secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | 값 |
+|---|---|
+| `KIS_PROD_APP_KEY`    | KIS 실전 AppKey |
+| `KIS_PROD_APP_SECRET` | KIS 실전 AppSecret |
+| `KIS_PROD_ACCOUNT`    | 실전 계좌번호 (예: `44474877-01`) |
+| `TELEGRAM_BOT_TOKEN`  | 텔레그램 봇 토큰 |
+| `TELEGRAM_CHAT_ID`    | 텔레그램 채팅 ID |
+
+**실행**: Actions 탭 → "KIS Live Smoke Test ($100)" → Run workflow → Clenow/Weinstein 예산 입력 (기본 60/40)
+
+**흐름**:
+1. Secrets 로 `config_live.yaml` 임시 생성 (`mode: prod`, max_positions 1, risk_guard 완화)
+2. `smoke_test_setup.py`: 현재 모멘텀 상위 + 가격 fit 후보 5개 추출 → `wed_buy_pending.json`
+3. `wednesday_morning_buy.py --no-wait`: KIS 실시간가 조회 → LIMIT +0.5% 매수 주문
+4. 텔레그램 시작/완료 메시지
+
+**주의**:
+- 매수된 종목은 MA100/MA30 이탈 전까지 보유 (수주~수개월). 수동 청산은 KIS 앱에서.
+- 같은 종목·같은 signal_date 재실행은 `live_trading/order_map.json` 로 차단됨 (로컬 파일이라 GHA 에선 매번 fresh).
+- 미국 장중 실행 권장 (LIMIT 주문 즉시 체결). 장 마감 후 실행 시 다음 세션 시초 체결 시도.
+
 ### 6.5 설정 파일
 
 ```bash
