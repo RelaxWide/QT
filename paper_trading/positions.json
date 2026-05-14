@@ -50,23 +50,6 @@
     "shares_remaining": 20.98950524737633,
     "realized_pnl": 0.0
   },
-  "KIM": {
-    "symbol": "KIM",
-    "entry_date": "2026-04-24T00:00:00",
-    "entry_price": 23.81379091644287,
-    "stop_initial": 22.600000381469727,
-    "stop_current": 23.190000534057617,
-    "targets": [
-      27.455162521362297
-    ],
-    "partial_weights": [
-      0.5
-    ],
-    "targets_hit": 0,
-    "shares_total": 576.7057658061971,
-    "shares_remaining": 576.7057658061971,
-    "realized_pnl": 0.0
-  },
   "PSA": {
     "symbol": "PSA",
     "entry_date": "2026-04-24T00:00:00",
@@ -99,23 +82,6 @@
     "targets_hit": 0,
     "shares_total": 11.175324882659101,
     "shares_remaining": 11.175324882659101,
-    "realized_pnl": 0.0
-  },
-  "TT": {
-    "symbol": "TT",
-    "entry_date": "2026-04-24T00:00:00",
-    "entry_price": 486.01552877807615,
-    "stop_initial": 448.4200134277344,
-    "stop_current": 472.3500061035156,
-    "targets": [
-      598.8020748291015
-    ],
-    "partial_weights": [
-      0.5
-    ],
-    "targets_hit": 0,
-    "shares_total": 18.61924204195372,
-    "shares_remaining": 18.61924204195372,
     "realized_pnl": 0.0
   },
   "VRT": {
