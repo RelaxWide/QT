@@ -30,6 +30,38 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--slope-method", choices=["reg10", "avg5"], default=None,
                         help="기울기 추정 방식 (config 기본값 덮어쓰기)")
+    parser.add_argument("--entry-mode", choices=["anticipatory", "confirmed_support"], default=None)
+    parser.add_argument("--max-total-bars", type=int, default=None)
+    parser.add_argument("--cloud-exit-level", choices=["top", "mid", "bottom"], default=None)
+    parser.add_argument("--targets", nargs=2, type=float, metavar=("T1_R", "T2_R"))
+    parser.add_argument("--fast-fail-bars", type=int, default=None)
+    parser.add_argument("--fast-fail-min-r", type=float, default=None)
+    parser.add_argument("--stop-method", choices=["cloud", "atr", "hybrid"], default=None)
+    parser.add_argument("--stop-atr-mult", type=float, default=None)
+    parser.add_argument("--eta-max", type=int, default=None)
+    parser.add_argument("--eta-min", type=int, default=None)
+    parser.add_argument("--cloud-thickness", type=float, default=None, metavar="PCT")
+    parser.add_argument("--no-rising-lows", action="store_true")
+    parser.add_argument("--max-current-gap", type=float, default=None,
+                        metavar="PCT", help="max_current_cloud_gap_pct override")
+    parser.add_argument("--max-future-gap", type=float, default=None,
+                        metavar="PCT", help="max_future_cloud_gap_pct override")
+    parser.add_argument("--no-rising-cloud", action="store_true",
+                        help="require_rising_cloud = False")
+    parser.add_argument("--max-upslope", type=float, default=None,
+                        metavar="PCT", help="max_upslope_pct_per_day override (박스권 상한)")
+    parser.add_argument("--box-range", type=float, default=None,
+                        metavar="PCT", help="box_range_max_pct override (박스권 최대 범위 %)")
+    parser.add_argument("--box-lookback", type=int, default=None,
+                        help="box_range_lookback override (박스권 판정 기간)")
+    parser.add_argument("--eta-reach", type=float, default=None,
+                        metavar="PCT", help="eta_reach_pct override (구름 도달 판정 %)")
+    parser.add_argument("--use-adx-filter", action="store_true")
+    parser.add_argument("--adx-min", type=float, default=None)
+    parser.add_argument("--adx-rising", action="store_true")
+    parser.add_argument("--use-52w-high-filter", action="store_true")
+    parser.add_argument("--high52-min-ratio", type=float, default=None)
+    parser.add_argument("--tag", default=None, help="output prefix suffix for experiments")
     parser.add_argument("--tickers", nargs="*")
     parser.add_argument("--refresh", action="store_true")
     args = parser.parse_args()
@@ -41,8 +73,57 @@ def main():
 
     if args.slope_method:
         p["slope_method"] = args.slope_method
+    if args.entry_mode:
+        p["entry_mode"] = args.entry_mode
+    if args.max_total_bars is not None:
+        p["max_total_bars"] = args.max_total_bars
+    if args.cloud_exit_level:
+        p["cloud_exit_level"] = args.cloud_exit_level
+    if args.targets:
+        p["partial_exit_r_multiples"] = list(args.targets)
+    if args.fast_fail_bars is not None:
+        p["max_touch_fail_bars"] = args.fast_fail_bars
+    if args.fast_fail_min_r is not None:
+        p["min_touch_bounce_r"] = args.fast_fail_min_r
+    if args.stop_method:
+        p["stop_method"] = args.stop_method
+    if args.stop_atr_mult is not None:
+        p["stop_atr_mult"] = args.stop_atr_mult
+    if args.eta_max is not None:
+        p["eta_max"] = args.eta_max
+    if args.eta_min is not None:
+        p["eta_min"] = args.eta_min
+    if args.cloud_thickness is not None:
+        p["cloud_thickness_min_pct"] = args.cloud_thickness
+    if args.no_rising_lows:
+        p["require_rising_lows"] = False
+    if args.max_current_gap is not None:
+        p["max_current_cloud_gap_pct"] = args.max_current_gap
+    if args.max_future_gap is not None:
+        p["max_future_cloud_gap_pct"] = args.max_future_gap
+    if args.no_rising_cloud:
+        p["require_rising_cloud"] = False
+    if args.max_upslope is not None:
+        p["max_upslope_pct_per_day"] = args.max_upslope
+    if args.box_range is not None:
+        p["box_range_max_pct"] = args.box_range
+    if args.box_lookback is not None:
+        p["box_range_lookback"] = args.box_lookback
+    if args.eta_reach is not None:
+        p["eta_reach_pct"] = args.eta_reach
+    if args.use_adx_filter:
+        p["use_adx_filter"] = True
+    if args.adx_min is not None:
+        p["adx_min"] = args.adx_min
+    if args.adx_rising:
+        p["adx_require_rising"] = True
+    if args.use_52w_high_filter:
+        p["use_52w_high_filter"] = True
+    if args.high52_min_ratio is not None:
+        p["high52_min_ratio"] = args.high52_min_ratio
 
     slope_label = p["slope_method"]
+    entry_label = p.get("entry_mode", "anticipatory")
     print(f"\n── Phase 4-v2 | slope_method={slope_label} ──────────────────────────")
 
     # ── 1. Data ───────────────────────────────────────────────────────────
@@ -102,18 +183,28 @@ def main():
     max_hold       = p.get("max_hold_bars", 3)    # 구름 터치 후
     max_total      = p.get("max_total_bars", 15)  # 전체 안전망
     exit_level     = p.get("cloud_exit_level", "bottom")
+    fast_fail_bars = p.get("max_touch_fail_bars", 0)
+    fast_fail_minr = p.get("min_touch_bounce_r", 0.0)
 
     print(f"Running backtest (touch_hold={max_hold}bars, total_timeout={max_total}bars, cloud_exit={exit_level})...")
     t0 = time.time()
     result = run_anticipatory_backtest(
         all_signals, price_data, cloud_data, regime, cfg_bt,
-        max_hold_bars=max_hold, max_total_bars=max_total, cloud_exit_level=exit_level,
+        max_hold_bars=max_hold,
+        max_total_bars=max_total,
+        cloud_exit_level=exit_level,
+        max_touch_fail_bars=fast_fail_bars,
+        min_touch_bounce_r=fast_fail_minr,
     )
     print(f"  Done in {time.time()-t0:.1f}s | {len(result.trades)} trades closed")
 
     # ── 7. Metrics ────────────────────────────────────────────────────────
     m = compute_metrics(result)
     prefix = f"phase4_v2_{slope_label}"
+    if entry_label != "anticipatory":
+        prefix += f"_{entry_label}"
+    if args.tag:
+        prefix += f"_{args.tag}"
     save_report(m, result, output_dir="backtest_results", prefix=prefix)
 
     print(f"\n── Phase 4-v2 ({slope_label}) Results ───────────────────────────")
@@ -136,7 +227,7 @@ def main():
         "Sharpe ≥ 0.5":         m["sharpe"]           >= 0.5,
     }
     for desc, passed in gates.items():
-        print(f"  {'✅' if passed else '❌'} {desc}")
+        print(f"  {'OK' if passed else 'NO'} {desc}")
 
     # ── 9. Phase 4 비교 ───────────────────────────────────────────────────
     p4_csv = Path("backtest_results/phase4_trades.csv")
@@ -146,8 +237,8 @@ def main():
         p4_pf_num = df_p4.loc[df_p4["r_multiple"] > 0, "r_multiple"].sum()
         p4_pf_den = df_p4.loc[df_p4["r_multiple"] <= 0, "r_multiple"].abs().sum()
         p4_pf = round(p4_pf_num / p4_pf_den, 4) if p4_pf_den > 0 else float("inf")
-        print(f"\n  비교 — Phase 4 (기존): WR={p4_wr:.1%}, PF={p4_pf}, trades={len(df_p4)}")
-        print(f"  비교 — Phase 4-v2   : WR={m['win_rate']:.1%}, PF={m['profit_factor']}, "
+        print(f"\n  Compare Phase 4 old : WR={p4_wr:.1%}, PF={p4_pf}, trades={len(df_p4)}")
+        print(f"  Compare Phase 4-v2  : WR={m['win_rate']:.1%}, PF={m['profit_factor']}, "
               f"trades={m['total_trades']}, CAGR={m['cagr_pct']}%")
 
 

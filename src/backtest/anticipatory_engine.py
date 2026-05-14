@@ -30,6 +30,7 @@ class AnticipPos:
     shares_remaining: float
     realized_pnl: float = 0.0
     targets_hit: int = 0
+    _pending_reason: str = "cloud_exit"
     cloud_mid_exit_pending: bool = False  # 전날 종가 이탈 → 오늘 시가 청산
     _stop_pending: bool = False           # True면 손절, False면 구름 이탈
     touch_bar: int = -1                   # 구름 상단 터치 확인된 봉 index (-1=미터치)
@@ -45,6 +46,8 @@ def run_anticipatory_backtest(
     max_hold_bars: int = 3,              # 구름 터치 후 최대 보유 봉 수
     max_total_bars: int = 15,            # 터치 없이 전체 타임아웃 (안전망)
     cloud_exit_level: str = "bottom",    # "mid" = cloud_mid, "bottom" = senkou_b
+    max_touch_fail_bars: int = 0,
+    min_touch_bounce_r: float = 0.0,
 ) -> BacktestResult:
     risk_cfg = config["risk"]
     initial_capital: float = config["backtest"]["initial_capital_usd"]
@@ -85,7 +88,9 @@ def run_anticipatory_backtest(
             # pending 청산 → 오늘 시가 청산 (종가 기반 손절 또는 구름 이탈)
             if pos.cloud_mid_exit_pending:
                 exit_px = bar["open"] * (1 - slippage)
-                reason  = ("stop" if getattr(pos, "_stop_pending", False) else "cloud_exit")
+                reason  = getattr(pos, "_pending_reason", None)
+                if not reason:
+                    reason = ("stop" if getattr(pos, "_stop_pending", False) else "cloud_exit")
                 if pos.targets_hit > 0:
                     reason += f"_t{pos.targets_hit}"
                 to_close.append((sym, exit_px, pos.shares_remaining, reason))
@@ -110,6 +115,7 @@ def run_anticipatory_backtest(
                 pos.cloud_mid_exit_pending = True
                 # exit reason은 나중에 구별하기 위해 별도 플래그로 처리
                 pos._stop_pending = True
+                pos._pending_reason = "stop"
 
             # 목표가 부분 청산
             if pos.targets_hit < len(pos.targets):
@@ -118,7 +124,7 @@ def run_anticipatory_backtest(
                             target_price if bar["high"] >= target_price else None)
                 if hit_price is not None:
                     partial_px     = hit_price * (1 - slippage)
-                    partial_shares = pos.shares_remaining * pos.partial_weights[pos.targets_hit]
+                    partial_shares = pos.shares_total * pos.partial_weights[pos.targets_hit]
                     gross_pnl      = (partial_px - pos.entry_price) * partial_shares
                     sell_comm      = cost.sell_cost(partial_px * partial_shares)
                     pos.realized_pnl     += gross_pnl
@@ -141,15 +147,25 @@ def run_anticipatory_backtest(
                     if pos.touch_bar < 0 and bar["close"] <= cloud_top * 1.005:
                         pos.touch_bar = loc
                         pos.bars_since_touch = 0
+                    if pos.touch_bar >= 0:
+                        pos.bars_since_touch = loc - pos.touch_bar
+                        if max_touch_fail_bars > 0 and pos.bars_since_touch >= max_touch_fail_bars:
+                            min_bounce_px = pos.entry_price + min_touch_bounce_r * (pos.entry_price - pos.stop_initial)
+                            if bar["close"] < min_bounce_px and not pos.cloud_mid_exit_pending:
+                                pos.cloud_mid_exit_pending = True
+                                pos._pending_reason = "touch_fail"
 
                     # 구름 하단 이탈 → 청산 (반등 실패)
                     # 터치 후 N봉 강제청산 제거 — 반등 중인 포지션 조기청산 방지
-                    if cloud_exit_level == "mid":
+                    if cloud_exit_level == "top":
+                        threshold = cloud_top
+                    elif cloud_exit_level == "mid":
                         threshold = (sa + sb) / 2
                     else:
-                        threshold = sb
-                    if bar["close"] < threshold:
+                        threshold = min(sa, sb)
+                    if bar["close"] < threshold and not pos.cloud_mid_exit_pending:
                         pos.cloud_mid_exit_pending = True
+                        pos._pending_reason = "cloud_exit"
 
         for sym, exit_px, exit_shares, reason in to_close:
             pos        = positions.pop(sym)

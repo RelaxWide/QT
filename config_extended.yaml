@@ -330,6 +330,13 @@ vaa_strategy:
     defensive: ["SHY", "IEF", "LQD"]
     canary:    ["VWO", "BND"]
 
+haa_strategy:
+    offensive: ["SPY", "IWM", "VWO", "VEA", "VNQ", "DBC", "IEF", "TLT", "QQQ"]
+    defensive: ["BIL", "IEF"]
+    canary:    "TIP"
+    top_n:     4
+    score_method: "equal"
+
 vix_term_strategy:
     symbol:      "SPY"
     ema_period:  5

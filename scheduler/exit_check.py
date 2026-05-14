@@ -32,7 +32,7 @@ def main(dry_run: bool = False):
         log.warning(f"[exit_check] 전면 정지: {reason}")
         return
 
-    om = OrderManager.from_config()
+    om = OrderManager.from_config(allow_prod=True)
     cfg = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
 
     from src.fetch.prices import fetch_all

@@ -88,6 +88,8 @@ def run_period_extension(refresh: bool = False):
     m_cl = compute_clenow_metrics(equity_cl, cap)
     results["clenow"] = m_cl
     _print_compare("Clenow", m_cl, _orig_metrics("clenow"))
+    equity_cl.to_frame("equity").to_csv(
+        Path("backtest_results") / "clenow_ext_equity.csv", index_label="date")
 
     # ── Weinstein ────────────────────────────────────────────────────────
     print("\n[Weinstein] 실행 중...")
@@ -105,6 +107,8 @@ def run_period_extension(refresh: bool = False):
     m_w = compute_metrics(result_w)
     results["weinstein"] = m_w
     _print_compare("Weinstein", m_w, _orig_metrics("weinstein"))
+    result_w.equity_curve.to_frame("equity").to_csv(
+        Path("backtest_results") / "weinstein_ext_equity.csv", index_label="date")
 
     # ── Phase 4 ──────────────────────────────────────────────────────────
     print("\n[Phase 4] 실행 중...")

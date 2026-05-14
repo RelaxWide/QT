@@ -69,6 +69,66 @@ phase4_factor_stack:
   bbwidth_period:       20
   bbwidth_bottom_pct:   20
 
+phase4_v3:
+  # Research-only switches. Keep disabled until an extended backtest candidate clears adoption criteria.
+  max_cloud_gap_pct: null
+  min_cloud_thickness_pct: null
+  require_support_touch: false
+  support_touch_tolerance: 0.005
+  require_bullish_reclaim: false
+  require_tenkan_reclaim: false
+  partial_exit_r_multiples: null
+  partial_exit_weights: null
+  trail_level: "donchian"
+  use_trend_template: false
+  trend_ma_short: 50
+  trend_ma_mid: 150
+  trend_ma_long: 200
+  trend_long_rising_lookback: 30
+  trend_high52_min_ratio: 0.75
+  trend_low52_min_ratio: 1.30
+  volume_avg_period: 20
+  breakout_volume_mult: null
+  pullback_volume_max_ratio: null
+  max_recent_atr_to_long_atr_ratio: null
+  contraction_atr_period: 20
+  contraction_recent_period: 10
+  contraction_long_period: 50
+  use_52w_high_rank: false
+  high52_rank_top_pct: 30
+  require_pocket_pivot: false
+  pocket_pivot_lookback: 10
+  pocket_pivot_ma_short: 10
+  pocket_pivot_ma_long: 50
+  atr_pct_period: 20
+  atr_pct_max: null
+  rsi_period: 14
+  rsi_min: null
+  rsi_max: null
+  adx_period: 14
+  adx_min: null
+  adx_require_plus_di: true
+
+haa_strategy:
+  offensive: ["SPY", "IWM", "VWO", "VEA", "VNQ", "DBC", "IEF", "TLT", "QQQ"]
+  defensive: ["BIL", "IEF"]
+  canary: "TIP"
+  top_n: 4
+  score_method: "equal"
+
+gem_strategy:
+  lookback_months: 12
+  bond_proxy: "AGG"
+
+monthly_momentum:
+  universe: ["SPY", "EEM", "TLT"]
+  lookback_months: 1
+
+gtaa_strategy:
+  assets: ["SPY", "EFA", "VNQ", "IEF", "DBC"]
+  cash_proxy: "BIL"
+  sma_months: 10
+
 telegram:
   # 환경변수 TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID 사용 권장
   # GitHub Actions: Settings → Secrets에 등록

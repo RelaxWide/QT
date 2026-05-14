@@ -157,8 +157,13 @@ class OrderManager:
             log.info("[phase4] pending 진입 신호 없음")
             return []
 
-        budget_per_pos = self.cap.get("phase4_usd", 3500) / max(len(pending), 1)
-        budget_per_pos = min(budget_per_pos, self.cap.get("phase4_usd", 3500))
+        phase4_cap = self.cap.get("phase4_usd", 3500)
+        if phase4_cap <= 0:
+            log.info(f"[phase4] phase4_usd={phase4_cap} — 실거래 자본 배분 없음 (페이퍼 전용)")
+            return []
+
+        budget_per_pos = phase4_cap / max(len(pending), 1)
+        budget_per_pos = min(budget_per_pos, phase4_cap)
 
         results = []
         for entry in pending:
@@ -190,6 +195,9 @@ class OrderManager:
         results = []
         max_pos  = self.cap.get("clenow_max_positions", 5)
         total_usd = self.cap.get("clenow_usd", 3500)
+        if total_usd <= 0:
+            log.info(f"[clenow] clenow_usd={total_usd} — 실거래 자본 배분 없음")
+            return []
         budget_per_pos = total_usd / max_pos
 
         today_str = str(today.date())
@@ -242,6 +250,9 @@ class OrderManager:
         results = []
         max_pos  = self.cap.get("weinstein_max_positions", 4)
         total_usd = self.cap.get("weinstein_usd", 3000)
+        if total_usd <= 0:
+            log.info(f"[weinstein] weinstein_usd={total_usd} — 실거래 자본 배분 없음")
+            return []
         budget_per_pos = total_usd / max_pos
 
         today_str = str(today.date())

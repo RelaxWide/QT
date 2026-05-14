@@ -49,6 +49,11 @@ def main():
 
     m = compute_clenow_metrics(equity, cap)
 
+    # equity curve 저장 (포트폴리오 합성 분석용)
+    out_dir = Path("backtest_results")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    equity.to_frame("equity").to_csv(out_dir / "clenow_equity.csv", index_label="date")
+
     print("\n── Clenow Stocks on the Move Results ────────────────")
     for k, v in m.items():
         print(f"  {k:30s}: {v}")

@@ -27,8 +27,9 @@ def fetch_prices(
 
     if cache_path.exists() and not refresh:
         cached = pd.read_parquet(cache_path)
-        # 5 거래일 이내 캐시는 유효 (백테스트에서 하루 차이는 무의미)
-        if not cached.empty and cached.index[-1] >= _last_trading_day() - pd.offsets.BDay(5):
+        # 30 거래일 이내 캐시는 유효 (백테스트 리서치 중에는 최신성 불필요)
+        # 실시간 페이퍼/실거래에서는 --refresh 명시
+        if not cached.empty and cached.index[-1] >= _last_trading_day() - pd.offsets.BDay(30):
             return cached
 
     raw = yf.download(ticker, start=start, end=end, auto_adjust=True, progress=False)

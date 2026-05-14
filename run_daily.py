@@ -283,6 +283,15 @@ def build_telegram_message(
     line(fmt_strat("Clenow",    cl_total, cl_cash, cl_invested, initial))
     line(fmt_strat("Weinstein", w_total,  w_cash,  w_invested,  initial))
 
+    # ── 합성 전략 60:40 (Clenow + Weinstein) ──────────────────────────
+    # $100k를 Clenow $60k / Weinstein $40k로 배분한 가상 포트폴리오
+    # 두 전략 모두 같은 $100k initial로 운영되므로 0.6*cl + 0.4*w 가 곧 합성가치
+    combo_total    = 0.6 * cl_total    + 0.4 * w_total
+    combo_cash     = 0.6 * cl_cash     + 0.4 * w_cash
+    combo_invested = 0.6 * cl_invested + 0.4 * w_invested
+    combo_unreal   = 0.6 * cl_unreal   + 0.4 * w_unreal
+    line(fmt_strat("합성 60:40", combo_total, combo_cash, combo_invested, initial))
+
     # 미실현 손익
     line()
     total_unreal = p4_unreal + cl_unreal + w_unreal
@@ -291,6 +300,7 @@ def build_telegram_message(
     line(f"  Phase 4    ${'+' if p4_unreal >= 0 else ''}{p4_unreal:,.0f}")
     line(f"  Clenow     ${'+' if cl_unreal >= 0 else ''}{cl_unreal:,.0f}")
     line(f"  Weinstein  ${'+' if w_unreal  >= 0 else ''}{w_unreal:,.0f}")
+    line(f"  합성60:40  ${'+' if combo_unreal >= 0 else ''}{combo_unreal:,.0f}")
 
     # 확정 손익 (거래 기록)
     line()
@@ -308,6 +318,12 @@ def build_telegram_message(
     line(fmt_row("Phase 4",   p4_sum))
     line(fmt_row("Clenow",    cl_sum))
     line(fmt_row("Weinstein", w_sum))
+
+    # 합성 60:40 — Clenow/Weinstein 청산 손익의 가중평균
+    cl_realized_total = float(cl_sum.get("total_pnl", 0) or 0)
+    w_realized_total  = float(w_sum.get("total_pnl", 0) or 0)
+    combo_realized    = 0.6 * cl_realized_total + 0.4 * w_realized_total
+    line(f"  {'합성 60:40':<12} ${combo_realized:+.0f}  (Clenow·Weinstein 가중평균)")
 
     return "\n".join(L)
 
@@ -601,6 +617,7 @@ def main():
     cl_t, cl_c, cl_i = _nav_calc(cl_pos,    price_data, today, True,  initial_capital, cl_realized_nav)
     w_t,  w_c,  w_i  = _nav_calc(w_pos,     price_data, today, True,  initial_capital, w_realized_nav)
     combined = round(p4_t + cl_t + w_t, 2)
+    combo_6040 = round(0.6 * cl_t + 0.4 * w_t, 2)  # Clenow 60% / Weinstein 40% 합성
 
     nav_file = Path("paper_trading/daily_nav.csv")
     nav_file.parent.mkdir(exist_ok=True)
@@ -609,7 +626,7 @@ def main():
     with nav_file.open("a", newline="", encoding="utf-8") as fh:
         fields = ["date", "p4_total", "p4_cash", "p4_invested",
                   "cl_total", "cl_cash", "cl_invested",
-                  "w_total",  "w_cash",  "w_invested", "combined"]
+                  "w_total",  "w_cash",  "w_invested", "combined", "combo_6040"]
         writer = _csv.DictWriter(fh, fieldnames=fields)
         if write_header:
             writer.writeheader()
@@ -618,7 +635,7 @@ def main():
             "p4_total": p4_t, "p4_cash": p4_c, "p4_invested": p4_i,
             "cl_total": cl_t, "cl_cash": cl_c, "cl_invested": cl_i,
             "w_total":  w_t,  "w_cash":  w_c,  "w_invested":  w_i,
-            "combined": combined,
+            "combined": combined, "combo_6040": combo_6040,
         })
 
     # ── 8. 텔레그램 발송 ──────────────────────────────────────────────────

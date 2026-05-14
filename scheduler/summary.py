@@ -30,7 +30,7 @@ def build_summary() -> str:
 
     # KIS 잔고
     try:
-        kis = KISClient.from_config()
+        kis = KISClient.from_config(allow_prod=True)
         bal = kis.get_balance()
         cash  = bal.get("cash_usd", 0)
         total = bal.get("total_eval_usd", 0)

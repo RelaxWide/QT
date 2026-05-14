@@ -19,7 +19,7 @@ from src.fetch.prices import fetch_all
 from src.indicators.ichimoku import ichimoku
 
 
-def plot_trade(ax, df, trade, cloud_df, pre_bars=25, post_bars=15):
+def plot_trade(ax, df, trade, cloud_df, pre_bars=25, post_bars=30):
     entry_dt = pd.Timestamp(trade["entry_date"])
     exit_dt  = pd.Timestamp(trade["exit_date"])
 
@@ -110,10 +110,37 @@ def plot_trade(ax, df, trade, cloud_df, pre_bars=25, post_bars=15):
 
 
 def main():
-    trades_csv = Path("backtest_results/phase4_v2_reg10_trades.csv")
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--tag", default=None,
+                        help="실험 태그 (예: t30_t1_thick3_gap15). 없으면 가장 최근 파일 사용")
+    parser.add_argument("--csv", default=None, help="직접 CSV 경로 지정")
+    parser.add_argument("--n", type=int, default=10, help="시각화할 트레이드 수 (기본 10)")
+    args = parser.parse_args()
+
+    results_dir = Path("backtest_results")
+    if args.csv:
+        trades_csv = Path(args.csv)
+    elif args.tag:
+        trades_csv = results_dir / f"phase4_v2_reg10_{args.tag}_trades.csv"
+    else:
+        # 가장 최근 trades CSV 자동 선택
+        candidates = sorted(results_dir.glob("phase4_v2_reg10_*_trades.csv"),
+                            key=lambda p: p.stat().st_mtime, reverse=True)
+        if not candidates:
+            print("trades CSV 없음 — 먼저 run_phase4_v2.py 실행 필요")
+            return
+        trades_csv = candidates[0]
+
     if not trades_csv.exists():
-        print("trades CSV 없음 — 먼저 run_phase4_v2.py 실행 필요")
+        print(f"파일 없음: {trades_csv}")
+        print("사용 가능한 파일:")
+        for f in sorted(results_dir.glob("phase4_v2_reg10_*_trades.csv")):
+            print(f"  --tag {f.stem.removeprefix('phase4_v2_reg10_').removesuffix('_trades')}")
         return
+
+    print(f"시각화 대상: {trades_csv.name}")
+    trades_df = pd.read_csv(trades_csv)
 
     trades_df = pd.read_csv(trades_csv)
 
@@ -124,11 +151,19 @@ def main():
     time_stops  = trades_df[trades_df["exit_reason"] == "time_stop"]
     target_hits = trades_df[trades_df["exit_reason"].str.contains("t1|t2")]
 
+    n_total = args.n
+    n_wins   = max(1, n_total // 3)
+    n_losses = max(1, n_total // 3)
+    n_cloud  = max(1, n_total // 5)
+    n_time   = max(1, n_total // 10)
+    n_target = max(1, n_total // 10)
+
     picks = []
-    for grp, n in [(wins, 3), (losses, 3), (cloud_exits, 2), (time_stops, 1), (target_hits, 1)]:
+    for grp, n in [(wins, n_wins), (losses, n_losses), (cloud_exits, n_cloud),
+                   (time_stops, n_time), (target_hits, n_target)]:
         sample = grp.sample(min(n, len(grp)), random_state=42)
         picks.append(sample)
-    selected = pd.concat(picks).drop_duplicates().head(10)
+    selected = pd.concat(picks).drop_duplicates().head(n_total)
 
     # 가격 데이터 로드
     cfg   = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))

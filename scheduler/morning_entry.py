@@ -30,7 +30,7 @@ def main(dry_run: bool = False):
         log.warning(f"[morning_entry] 주문 차단: {reason}")
         return
 
-    om = OrderManager.from_config()
+    om = OrderManager.from_config(allow_prod=True)
     results = om.place_phase4_entries(dry_run=dry_run)
 
     ok_count   = sum(1 for r in results if r.ok)

@@ -52,7 +52,7 @@ def main(dry_run: bool = False):
                            cfg["data"]["end_date"], min_bars=150)
     log.info(f"[daily_close] {len(price_data)} 종목 로드 완료")
 
-    om = OrderManager.from_config()
+    om = OrderManager.from_config(allow_prod=True)
 
     # ── 2. Clenow 신호 → 주문 ────────────────────────────────────────────
     from paper_trading.live_signals import get_clenow_signals
@@ -82,7 +82,7 @@ def main(dry_run: bool = False):
 
     # ── 5. KIS 잔고 동기화 ───────────────────────────────────────────────
     if not dry_run:
-        kis = KISClient.from_config()
+        kis = KISClient.from_config(allow_prod=True)
         report = sync_all(kis, notify_fn=lambda msg: _notify(msg, cfg_live))
         for strategy, r in report.items():
             if any(r.values()):

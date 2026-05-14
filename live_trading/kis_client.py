@@ -60,6 +60,7 @@ log = _build_logger()
 class Token:
     access_token: str
     expires_at:   str   # ISO datetime
+    mode:         str = "mock"
 
     def is_expired(self, margin_min: int = 60) -> bool:
         exp = datetime.fromisoformat(self.expires_at)
@@ -146,7 +147,7 @@ class KISClient:
 
     # ── 인증 ────────────────────────────────────────────────────────────
     def _ensure_token(self) -> str:
-        if self._token and not self._token.is_expired():
+        if self._token and not self._token.is_expired() and self._token.mode == self.mode:
             return self._token.access_token
         log.info(f"[auth] 새 토큰 발급 (mode={self.mode})")
         url = f"{self.base_url}/oauth2/tokenP"
@@ -169,7 +170,7 @@ class KISClient:
         d = r.json()
         # KIS는 expires_in 초 단위 반환 (보통 86400 = 24h)
         exp = datetime.now() + timedelta(seconds=int(d.get("expires_in", 86400)))
-        self._token = Token(access_token=d["access_token"], expires_at=exp.isoformat())
+        self._token = Token(access_token=d["access_token"], expires_at=exp.isoformat(), mode=self.mode)
         _save_token(self._token)
         log.info(f"[auth] 토큰 발급 완료, 만료 {exp:%Y-%m-%d %H:%M}")
         return self._token.access_token
@@ -237,6 +238,8 @@ class KISClient:
         }
         r = requests.get(url, headers=self._headers(self.tr["balance"]),
                          params=params, timeout=10)
+        if not r.ok:
+            log.error(f"[balance] HTTP {r.status_code}: {r.text}")
         r.raise_for_status()
         d = r.json()
         if d.get("rt_cd") != "0":
@@ -332,7 +335,7 @@ def _cli():
                    help="지정가 매수 테스트 (현재가 -5% LIMIT)")
     args = p.parse_args()
 
-    cli = KISClient.from_config()
+    cli = KISClient.from_config(allow_prod=True)
     print(f"mode={cli.mode}, exchange={cli.exchange}, account={cli.cano}-{cli.acnt_prdt}")
 
     if args.test_auth:
