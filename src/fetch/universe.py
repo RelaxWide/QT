@@ -5,6 +5,22 @@ import pandas as pd
 _HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; research-bot/1.0)"}
 
 
+def get_kospi200_tickers(refresh: bool = False) -> list[str]:
+    """KOSPI200 구성 종목 (PyKRX → FDR 폴백). src.fetch.universe_kr 위임."""
+    from src.fetch.universe_kr import get_kospi200_tickers as _kr
+    return _kr(refresh=refresh)
+
+
+def get_universe(market: str = "us") -> list[str]:
+    """시장별 유니버스 진입. market='us'|'kr'."""
+    m = market.lower()
+    if m == "us":
+        return get_sp500_tickers()
+    if m == "kr":
+        return get_kospi200_tickers()
+    raise ValueError(f"Unknown market: {market!r}")
+
+
 def get_sp500_tickers() -> list[str]:
     url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
     resp = requests.get(url, headers=_HEADERS, timeout=15)

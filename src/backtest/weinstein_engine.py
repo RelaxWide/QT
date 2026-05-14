@@ -60,7 +60,9 @@ def run_weinstein_backtest(
     spy_ma200 = spy_series.rolling(200).mean().shift(1)
     regime_ok_set = set(spy_series.index[spy_series > spy_ma200])
 
-    spy_df    = price_data.get("SPY", next(iter(price_data.values())))
+    # 레짐 인덱스 (US: SPY / KR: ^KS11) — cfg["market"]["regime_index"]
+    regime_index = cfg.get("market", {}).get("regime_index", "SPY")
+    spy_df    = price_data.get(regime_index, next(iter(price_data.values())))
     all_dates = list(spy_df.index)
 
     signals_sorted = sorted(signals, key=lambda s: (s.entry_date, -s.volume_ratio))

@@ -28,7 +28,11 @@ def run_clenow_backtest(
     max_daily_pct     = cap_cfg.get("max_daily_invest_pct", 100) / 100
     target_invest_pct = cap_cfg.get("target_invested_pct", 100) / 100
 
-    spy_df    = price_data["SPY"]
+    # 레짐/벤치마크 인덱스 (US: SPY / KR: ^KS11)
+    regime_index = cfg.get("market", {}).get("regime_index", "SPY")
+    cl_cfg.setdefault("index_ticker", regime_index)
+
+    spy_df    = price_data[regime_index]
     spy_close = spy_df["close"]
     spy_ma200 = spy_close.rolling(ma200_p).mean()
 
@@ -120,9 +124,12 @@ def run_clenow_backtest(
                 df_sym = price_data.get(sym)
                 if df_sym is None or date not in df_sym.index:
                     continue
+                open_px = df_sym.loc[date, "open"]
+                if pd.isna(open_px) or open_px <= 0:
+                    continue   # 거래정지/데이터누락 — 다음 날로 보류
                 sh      = holdings.pop(sym)
                 cb      = cost_basis.pop(sym, 0.0)
-                sell_px = df_sym.loc[date, "open"] * (1 - slippage)
+                sell_px = open_px * (1 - slippage)
                 comm    = cost_model.sell_cost(sell_px * sh)
                 pnl     = (sell_px - cb) * sh - comm
                 cash   += sell_px * sh - comm
@@ -177,7 +184,10 @@ def run_clenow_backtest(
                     df_sym = price_data.get(sym)
                     if df_sym is None or date not in df_sym.index:
                         continue
-                    buy_px   = df_sym.loc[date, "open"] * (1 + slippage)
+                    open_px = df_sym.loc[date, "open"]
+                    if pd.isna(open_px) or open_px <= 0:
+                        continue
+                    buy_px   = open_px * (1 + slippage)
                     alloc    = min(target_alloc, cash * 0.98)
                     if daily_spent + alloc > daily_budget:
                         continue

@@ -54,17 +54,25 @@ class OrderResult:
 
 # ── OrderManager ──────────────────────────────────────────────────────────
 class OrderManager:
-    def __init__(self, kis: KISClient, cfg_live: dict):
+    def __init__(self, kis: KISClient, cfg_live: dict, market: str = "us"):
         self.kis      = kis
-        self.cap      = cfg_live.get("capital", {})
+        self.market   = market.lower()
+        # 시장별 capital 섹션 우선 (kis 가 us/kr 섹션 분리되었을 때),
+        # fallback 으로 최상위 capital 섹션 (기존 호환)
+        market_cfg    = cfg_live.get(self.market, {}) or {}
+        self.cap      = market_cfg.get("capital") or cfg_live.get("capital", {})
         self._map: dict = self._load_map()
         self._balance_cache: dict | None = None   # auto_allocate 용 잔고 캐시
+        # 통화 키 (auto_allocate 시 잔고 합산 필드)
+        self._cash_key = "cash_krw" if self.market == "kr" else "cash_usd"
+        self._sym      = "₩" if self.market == "kr" else "$"
 
     @classmethod
-    def from_config(cls, path: Path = CONFIG_PATH, allow_prod: bool = False) -> "OrderManager":
+    def from_config(cls, path: Path = CONFIG_PATH, allow_prod: bool = False,
+                    market: str = "us") -> "OrderManager":
         cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
-        kis = KISClient(cfg, allow_prod=allow_prod)
-        return cls(kis, cfg)
+        kis = KISClient(cfg, allow_prod=allow_prod, market=market)
+        return cls(kis, cfg, market=market)
 
     # ── 자본 배분 (auto_allocate 또는 명시값) ─────────────────────────────
     def _get_balance(self) -> dict:
@@ -73,30 +81,41 @@ class OrderManager:
                 self._balance_cache = self.kis.get_balance()
             except Exception as e:
                 log.warning(f"[orders] KIS 잔고 조회 실패: {e} - auto_allocate 비활성화")
-                self._balance_cache = {"cash_usd": 0, "positions": [], "_failed": True}
+                empty = {self._cash_key: 0, "positions": [], "_failed": True}
+                self._balance_cache = empty
         return self._balance_cache
 
     def _strategy_budget(self, strategy: str) -> float:
         """
         전략별 매수 예산.
         auto_allocate=true 면 KIS 총자산 × (1 - buffer_pct/100) × {strategy}_pct/100
-        false 면 cap[{strategy}_usd] 그대로.
+        false 면 cap[{strategy}_usd] (US) 또는 cap[{strategy}_krw] (KR) 또는 cap[{strategy}_usd] 폴백.
         """
+        suffix = "krw" if self.market == "kr" else "usd"
+
         if self.cap.get("auto_allocate"):
             bal = self._get_balance()
             if bal.get("_failed"):
-                return self.cap.get(f"{strategy}_usd", 0)
-            cash     = float(bal.get("cash_usd", 0) or 0)
+                return float(self.cap.get(f"{strategy}_{suffix}", 0)
+                             or self.cap.get(f"{strategy}_usd", 0))
+            cash     = float(bal.get(self._cash_key, 0) or 0)
             eval_sum = sum(float(p.get("eval_amt", 0) or 0) for p in bal.get("positions", []))
             total    = cash + eval_sum
             buffer   = float(self.cap.get("buffer_pct", 1.0)) / 100.0
             usable   = total * (1.0 - buffer)
             pct      = float(self.cap.get(f"{strategy}_pct", 0)) / 100.0
             return round(usable * pct, 2)
-        return float(self.cap.get(f"{strategy}_usd", 0) or 0)
+        return float(self.cap.get(f"{strategy}_{suffix}", 0)
+                     or self.cap.get(f"{strategy}_usd", 0))
 
     def _strategy_max_positions(self, strategy: str) -> int:
         return int(self.cap.get(f"{strategy}_max_positions", 5))
+
+    def _fmt_price(self, price: float) -> str:
+        """통화 기호 + 시장별 표기."""
+        if self.market == "kr":
+            return f"{self._sym}{price:,.0f}"
+        return f"{self._sym}{price:,.2f}"
 
     # ── order_map 관리 ────────────────────────────────────────────────────
     def _load_map(self) -> dict:
@@ -126,14 +145,21 @@ class OrderManager:
         self._save_map()
 
     # ── 수량 계산 ─────────────────────────────────────────────────────────
-    def _calc_qty(self, price: float, budget_usd: float) -> int:
+    def _calc_qty(self, price: float, budget: float) -> int:
         if price <= 0:
             return 0
-        return max(1, int(budget_usd // price))
+        return max(1, int(budget // price))
 
-    def _price_fits(self, price: float, budget_usd: float) -> bool:
+    def _price_fits(self, price: float, budget: float) -> bool:
         """단일 주식 최소 1주 살 수 있는 가격인지 확인."""
-        return 0 < price <= budget_usd
+        return 0 < price <= budget
+
+    def _adjust_limit_price(self, price: float, side: str) -> float:
+        """LIMIT 가격 호가단위 라운딩 (KR 의무, US 는 0.01)."""
+        from src.markets.tick_size import round_buy_to_tick, round_sell_to_tick
+        if side == "BUY":
+            return round_buy_to_tick(price, self.market)
+        return round_sell_to_tick(price, self.market)
 
     # ── 주문 실행 (공통) ──────────────────────────────────────────────────
     def _send(
@@ -341,13 +367,14 @@ class OrderManager:
         if strategy not in ("clenow", "weinstein"):
             raise ValueError(f"strategy must be clenow|weinstein, got {strategy}")
 
-        total_usd = self._strategy_budget(strategy)
-        if total_usd <= 0:
-            log.info(f"[{strategy}] 예산 ${total_usd:.2f} - 실거래 자본 배분 없음")
+        budget = self._strategy_budget(strategy)
+        if budget <= 0:
+            log.info(f"[{strategy}] 예산 {self._fmt_price(budget)} - 실거래 자본 배분 없음")
             return []
         max_pos        = self._strategy_max_positions(strategy)
-        budget_per_pos = total_usd / max_pos
-        log.info(f"[{strategy}] 예산 ${total_usd:.2f} / {max_pos}종목 = ${budget_per_pos:.2f}/종목")
+        budget_per_pos = budget / max_pos
+        log.info(f"[{strategy}] 예산 {self._fmt_price(budget)} / {max_pos}종목 = "
+                 f"{self._fmt_price(budget_per_pos)}/종목")
 
         results = []
         for sym in symbols[:max_pos]:
@@ -358,11 +385,14 @@ class OrderManager:
                 continue
             cur = float(price_info.get("last", 0) or 0)
             if cur <= 0:
-                log.warning(f"[{strategy}] {sym} 현재가 0 — 스킵")
+                log.warning(f"[{strategy}] {sym} 현재가 0 - 스킵")
                 continue
-            price = round(cur * 1.005, 2)
+            # +0.5% LIMIT, 호가단위 라운딩 (KR 의무, US 0.01)
+            raw_price = cur * 1.005
+            price = self._adjust_limit_price(raw_price, "BUY")
             if not self._price_fits(price, budget_per_pos):
-                log.warning(f"[{strategy}] {sym} 가격 ${price:.2f} > 예산 ${budget_per_pos:.0f} — 스킵")
+                log.warning(f"[{strategy}] {sym} 가격 {self._fmt_price(price)} > "
+                            f"예산 {self._fmt_price(budget_per_pos)} - 스킵")
                 continue
             qty = self._calc_qty(price, budget_per_pos)
             r   = self._send(strategy, sym, signal_date, "BUY", qty, price, dry_run)

@@ -19,8 +19,8 @@ class WeinsteinSignal:
     volume_ratio: float = 1.0   # 돌파 주 거래량 / 10주 평균 (랭킹용)
 
 
-def _resample_weekly(df: pd.DataFrame) -> pd.DataFrame:
-    return df.resample("W-WED").agg({
+def _resample_weekly(df: pd.DataFrame, freq: str = "W-WED") -> pd.DataFrame:
+    return df.resample(freq).agg({
         "open":   "first",
         "high":   "max",
         "low":    "min",
@@ -37,12 +37,15 @@ def generate_weinstein_signals(
     ma30_p     = params.get("ma30_period", 30)
     vol_mult   = params.get("volume_mult", 2.0)
     high52_pct = params.get("high52_within_pct", 0.20)
-    min_price  = params.get("min_price_usd", 10)
+    # min_price: 시장에 따라 다른 임계값 (US $10 / KR ₩5,000)
+    min_price  = params.get("min_price", params.get("min_price_usd", 10))
+    # 주봉 리샘플 기준일 (US: W-WED, KR: W-FRI)
+    weekly_freq = params.get("weekly_freq", "W-WED")
 
     if len(df) < ma30_p * 5 + 10:
         return []
 
-    wdf     = _resample_weekly(df)
+    wdf     = _resample_weekly(df, freq=weekly_freq)
     close   = wdf["close"]
     vol     = wdf["volume"]
     ma30    = close.rolling(ma30_p).mean()

@@ -1,3 +1,11 @@
+"""
+가격 데이터 fetch — 시장 (US/KR) 통합 진입.
+
+- market="us" (기본): yfinance 사용 (기존 로직 그대로)
+- market="kr": src.fetch.prices_kr 로 위임 (PyKRX + FDR 폴백)
+
+기존 호출부 (fetch_prices(ticker, start, end, refresh) 시그니처) 는 무수정.
+"""
 from pathlib import Path
 import pandas as pd
 import yfinance as yf
@@ -19,7 +27,14 @@ def fetch_prices(
     end: str | None = None,
     refresh: bool = False,
     cache_dir: str | Path | None = None,
+    market: str = "us",
 ) -> pd.DataFrame:
+    """단일 종목 일봉 OHLCV. market 으로 데이터 소스 분기."""
+    if market == "kr":
+        from src.fetch.prices_kr import fetch_prices_kr
+        return fetch_prices_kr(ticker, start, end, refresh=refresh)
+
+    # US (기본): yfinance
     _cache = Path(cache_dir) if cache_dir else CACHE_DIR
     _cache.mkdir(parents=True, exist_ok=True)
     safe = ticker.replace("^", "_").replace("/", "_")
@@ -52,11 +67,17 @@ def fetch_all(
     min_bars: int = 252,
     refresh: bool = False,
     cache_dir: str | Path | None = None,
+    market: str = "us",
 ) -> dict[str, pd.DataFrame]:
+    """다종목 일괄 fetch. market 으로 데이터 소스 분기."""
+    if market == "kr":
+        from src.fetch.prices_kr import fetch_all_kr
+        return fetch_all_kr(tickers, start, end, min_bars=min_bars, refresh=refresh)
+
     result: dict[str, pd.DataFrame] = {}
     for t in tqdm(tickers, desc="Downloading"):
         try:
-            df = fetch_prices(t, start, end, refresh, cache_dir=cache_dir)
+            df = fetch_prices(t, start, end, refresh, cache_dir=cache_dir, market="us")
             if not df.empty and len(df) >= min_bars:
                 result[t] = df
         except Exception:

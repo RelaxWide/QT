@@ -1,8 +1,8 @@
 """
-Clenow / Weinstein 용 단순 포지션 추적기
+Clenow / Weinstein 용 단순 포지션 추적기 (US/KR 분리 지원)
 
-positions_{strategy}.json: {sym: {entry_date, entry_price, shares}}
-trades_{strategy}.csv:     청산 기록
+US (기본): positions_{strategy}.json, trades_{strategy}.csv  ← 기존 파일 경로 호환
+KR:        positions_{strategy}_kr.json, trades_{strategy}_kr.csv
 """
 import json
 import csv
@@ -19,24 +19,30 @@ class SimplePosition:
     strategy:    str
 
 
-def _pos_file(strategy: str) -> Path:
-    return Path(f"paper_trading/positions_{strategy}.json")
+def _suffix(market: str) -> str:
+    """US 는 기존 호환 위해 suffix 없음, KR 만 _kr."""
+    return "" if market == "us" else f"_{market}"
 
 
-def _trades_file(strategy: str) -> Path:
-    return Path(f"paper_trading/trades_{strategy}.csv")
+def _pos_file(strategy: str, market: str = "us") -> Path:
+    return Path(f"paper_trading/positions_{strategy}{_suffix(market)}.json")
 
 
-def load_simple_positions(strategy: str) -> dict[str, SimplePosition]:
-    f = _pos_file(strategy)
+def _trades_file(strategy: str, market: str = "us") -> Path:
+    return Path(f"paper_trading/trades_{strategy}{_suffix(market)}.csv")
+
+
+def load_simple_positions(strategy: str, market: str = "us") -> dict[str, SimplePosition]:
+    f = _pos_file(strategy, market)
     if not f.exists():
         return {}
     data = json.loads(f.read_text(encoding="utf-8"))
     return {sym: SimplePosition(**pos) for sym, pos in data.items()}
 
 
-def save_simple_positions(strategy: str, positions: dict[str, SimplePosition]) -> None:
-    f = _pos_file(strategy)
+def save_simple_positions(strategy: str, positions: dict[str, SimplePosition],
+                          market: str = "us") -> None:
+    f = _pos_file(strategy, market)
     f.parent.mkdir(exist_ok=True)
     f.write_text(
         json.dumps({sym: asdict(pos) for sym, pos in positions.items()},
@@ -45,8 +51,8 @@ def save_simple_positions(strategy: str, positions: dict[str, SimplePosition]) -
     )
 
 
-def append_simple_trade(strategy: str, record: dict) -> None:
-    f = _trades_file(strategy)
+def append_simple_trade(strategy: str, record: dict, market: str = "us") -> None:
+    f = _trades_file(strategy, market)
     f.parent.mkdir(exist_ok=True)
     is_new = not f.exists() or f.stat().st_size == 0
     with f.open("a", newline="", encoding="utf-8") as fh:
@@ -56,8 +62,8 @@ def append_simple_trade(strategy: str, record: dict) -> None:
         writer.writerow(record)
 
 
-def get_simple_trade_summary(strategy: str) -> dict:
-    f = _trades_file(strategy)
+def get_simple_trade_summary(strategy: str, market: str = "us") -> dict:
+    f = _trades_file(strategy, market)
     if not f.exists():
         return {"total_trades": 0, "win_rate": 0.0, "profit_factor": 0.0, "total_pnl": 0.0}
     with f.open(encoding="utf-8") as fh:

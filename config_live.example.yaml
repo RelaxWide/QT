@@ -1,42 +1,87 @@
-# KIS 자동매매 설정 템플릿
+# KIS 자동매매 설정 템플릿 (US + KR 통합)
 # 사용법: cp config_live.example.yaml config_live.yaml 후 실제 값 입력
 # 절대 git에 커밋하지 말 것 (.gitignore에 등록되어 있음)
+#
+# 시장별 분리 키 (권장):
+#   kis.us_app_key / kis.us_app_secret / kis.us_mock_account_no / kis.us_prod_account_no
+#   kis.kr_app_key / kis.kr_app_secret / kis.kr_mock_account_no / kis.kr_prod_account_no
+# 단일 키 호환:
+#   kis.app_key / kis.app_secret / kis.mock_account_no / kis.prod_account_no  (기존)
 
 kis:
-  mode: "prod"              # "mock" (모의투자) | "prod" (실계좌)
+  mode: "prod"
+
+  # 공통 키 (단일 KIS Developers 앱이 US/KR 둘 다 거래 가능하면 동일 값 사용)
   app_key:    ""
   app_secret: ""
 
-  # 모의투자 계좌번호 (모의투자 신청 후 발급 — 8자리-2자리)
-  mock_account_no:  ""
-  # 실계좌 계좌번호 (Phase G 진입 시에만 사용)
-  prod_account_no:  ""
+  # ── US 계좌번호 ────────────────────────────────────────────────
+  us_mock_account_no:  ""        # 미국 모의투자 계좌
+  us_prod_account_no:  ""        # 미국 실계좌
 
-  # 해외주식 거래 시장 코드
-  exchange: "NASD"          # NASD(나스닥) | NYSE | AMEX
+  # 미국 거래소 코드 (시세/주문에 사용)
+  exchange: "NASD"               # NASD | NYSE | AMEX
+
+  # ── KR 계좌번호 (한국 주식 거래용) ─────────────────────────────
+  # KIS 모의투자는 시장별로 별도 신청 필요 — 한국주식 모의 신청 후 발급
+  kr_mock_account_no:  ""
+  kr_prod_account_no:  ""
+
+  # 모드를 시장별로 다르게 두려면:
+  # us_mode: "prod"
+  # kr_mode: "mock"
 
   # API endpoints (변경 불필요)
   base_url_mock: "https://openapivts.koreainvestment.com:29443"
   base_url_prod: "https://openapi.koreainvestment.com:9443"
 
-# 자본 배분 (USD)
-# 합성 60:40 (Clenow + Weinstein) 권장 배분 — Phase 4 는 페이퍼 전용
-#
-# 모드 1 (auto_allocate=true, 권장): 매수 직전 KIS 잔고 조회해 비율 적용
-#   - 입출금 시 config 수정 불필요
-#   - 잔고 조회는 OrderManager 인스턴스당 1회만 (토큰 가드와 양립)
-#
-# 모드 2 (auto_allocate=false): clenow_usd / weinstein_usd 명시값 사용
-capital:
-  auto_allocate: true          # true: KIS 잔고 기준 동적 / false: 아래 _usd 값 사용
-  buffer_pct:      1.0         # 잔고의 1% 는 미배분 (수수료/환차 버퍼)
-  clenow_pct:     60           # auto_allocate 시 적용 비율 (합산 100)
-  weinstein_pct:  40
-  phase4_pct:      0           # Phase 4 는 페이퍼 전용
-  clenow_max_positions:    5   # 백테스트 사양은 20, $10k 자본 한계로 5 권장
-  weinstein_max_positions: 4   # 백테스트 사양은 15, 동일 사유로 4
+  # 기존 호환 (단일 모드만 운영하는 경우)
+  mock_account_no:  ""
+  prod_account_no:  ""
 
-  # 명시값 (auto_allocate=false 일 때만 사용)
+# ── US 자본 배분 ──────────────────────────────────────────────────
+# 합성 60:40 (Clenow + Weinstein), Phase 4 는 페이퍼 전용
+# auto_allocate=true 면 KIS 잔고 기준 동적 (입출금 시 config 수정 불필요)
+us:
+  capital:
+    auto_allocate: true
+    buffer_pct:      1.0
+    clenow_pct:     60
+    weinstein_pct:  40
+    phase4_pct:      0
+    clenow_max_positions:    5
+    weinstein_max_positions: 4
+    # 명시값 (auto_allocate=false 일 때 사용)
+    total_usd:    10000
+    phase4_usd:       0
+    clenow_usd:    6000
+    weinstein_usd: 4000
+
+# ── KR 자본 배분 (KOSPI200, KRW) ──────────────────────────────────
+# 초기: ₩5,000,000 입금 가정 → 종목당 약 ₩594,000 (Clenow) / ₩495,000 (Weinstein)
+# auto_allocate=true 면 KIS KRW 잔고 자동 조회
+kr:
+  capital:
+    auto_allocate: true
+    buffer_pct:      1.0
+    clenow_pct:     60
+    weinstein_pct:  40
+    clenow_max_positions:    5
+    weinstein_max_positions: 4
+    # 명시값 (auto_allocate=false 일 때 사용, KRW)
+    total_krw:    5000000
+    clenow_krw:   3000000
+    weinstein_krw: 2000000
+
+# 최상위 capital (기존 호환 — us 섹션 없으면 폴백)
+capital:
+  auto_allocate: true
+  buffer_pct:      1.0
+  clenow_pct:     60
+  weinstein_pct:  40
+  phase4_pct:      0
+  clenow_max_positions:    5
+  weinstein_max_positions: 4
   total_usd:     10000
   phase4_usd:        0
   clenow_usd:     6000

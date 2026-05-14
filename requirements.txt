@@ -10,3 +10,7 @@ matplotlib>=3.8
 scipy>=1.11
 tqdm>=4.66
 pytest>=8.0
+
+# 한국 시장 데이터 (KR 트랙)
+pykrx>=1.0.45
+finance-datareader>=0.9.96

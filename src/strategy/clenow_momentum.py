@@ -45,13 +45,16 @@ def compute_scores(
     ma50_p      = params.get("ma50_period", 50)
     atr_p       = params.get("atr_period", 20)
     atr_pct_max = params.get("atr_pct_max", 0.12)
-    min_price   = params.get("min_price_usd", 10)
+    # min_price: 시장에 따라 다른 임계값 (US $10 / KR ₩5,000)
+    min_price   = params.get("min_price", params.get("min_price_usd", 10))
     min_score   = params.get("min_score", 0.15)
+    # 레짐/벤치마크 티커는 점수 계산 대상에서 제외
+    index_ticker = params.get("index_ticker", "SPY")
 
     scores: dict[str, float] = {}
 
     for sym, df in price_data.items():
-        if sym == "SPY":
+        if sym == index_ticker or sym in ("SPY", "^KS11", "^KS200", "^VIX", "^VKOSPI"):
             continue
         idx = df.index.searchsorted(date)
         if idx < ma100_p + lookback:

@@ -1,10 +1,20 @@
 """
-Clenow / Weinstein 실시간 신호 생성 (당일 기준)
+Clenow / Weinstein 실시간 신호 생성 (당일 기준).
+
+market 인자는 신호 자체는 시장 독립적이라 영향 작지만,
+- regime index 제외 (SPY vs ^KS11)
+- 주봉 리샘플 freq (W-WED vs W-FRI)
+두 가지만 시장별로 다르다.
 """
 import pandas as pd
 
 from src.strategy.clenow_momentum import compute_scores
 from src.strategy.weinstein_stage2 import generate_weinstein_signals, _resample_weekly
+
+
+def _index_ticker(cfg: dict) -> str:
+    """cfg market.regime_index 우선, 없으면 SPY."""
+    return cfg.get("market", {}).get("regime_index", "SPY")
 
 
 def get_clenow_signals(
@@ -16,13 +26,14 @@ def get_clenow_signals(
 ) -> dict:
     """
     Returns:
-        sell: MA100 이탈 종목 (매일 체크)
-        buy:  신규 진입 후보 (수요일에만)
-        rebalance: 탈락 종목 매도 (수요일에만)
+        sell_ma100:  MA100 이탈 종목 (매일 체크)
+        sell_ranked: 모멘텀 상위 N 밖으로 밀려난 종목 (수요일에만)
+        buy:         신규 진입 후보 (수요일에만)
     """
-    cl_p    = cfg.get("clenow_strategy", {})
+    cl_p    = dict(cfg.get("clenow_strategy", {}))   # 변형 방지 사본
     ma100_p = cl_p.get("ma100_period", 100)
     max_pos = cl_p.get("max_positions", 20)
+    cl_p.setdefault("index_ticker", _index_ticker(cfg))
 
     # 매일: MA100 이탈 청산
     sell_ma100 = []
@@ -63,11 +74,13 @@ def get_weinstein_signals(
 ) -> dict:
     """
     Returns:
-        sell: MA30 이탈 종목 (매일 체크)
-        buy:  Stage 2 돌파 후보 (수요일에만)
+        sell_ma30: MA30 이탈 종목 (매일 체크)
+        buy:       Stage 2 돌파 후보 (수요일에만)
     """
-    w_p    = cfg.get("weinstein_strategy", {})
+    w_p    = dict(cfg.get("weinstein_strategy", {}))
     ma30_p = w_p.get("ma30_period", 30)
+    weekly_freq = w_p.get("weekly_freq", "W-WED")
+    idx_ticker  = _index_ticker(cfg)
 
     # 매일: MA30 이탈 청산
     sell_ma30 = []
@@ -76,21 +89,21 @@ def get_weinstein_signals(
         if df_sym is None or today not in df_sym.index:
             continue
         c   = df_sym.loc[today, "close"]
-        wdf = _resample_weekly(df_sym)
+        wdf = _resample_weekly(df_sym, freq=weekly_freq)
         ma30_weekly = wdf["close"].rolling(ma30_p).mean()
-        # forward-fill to today
         ma30_val = ma30_weekly.reindex([today], method="ffill")
         if not ma30_val.empty and pd.notna(ma30_val.iloc[0]) and c < ma30_val.iloc[0]:
             sell_ma30.append(sym)
 
-    # 수요일: Stage 2 돌파 스캔 (이번 주 수요일 종가 기준 신호)
+    # 수요일: Stage 2 돌파 스캔 (최근 6일 내 신호)
     new_buys = []
     if is_wednesday:
         for sym, df in price_data.items():
-            if sym == "SPY" or sym in holdings:
+            if sym == idx_ticker or sym in holdings:
+                continue
+            if sym in ("SPY", "^KS11", "^KS200", "^VIX", "^VKOSPI"):
                 continue
             sigs = generate_weinstein_signals(sym, df, w_p)
-            # signal_week == today (W-WED 리샘플 기준 이번 주 수요일)
             recent = [s for s in sigs if s.signal_week >= today - pd.Timedelta(days=6)]
             if recent:
                 new_buys.append(sym)

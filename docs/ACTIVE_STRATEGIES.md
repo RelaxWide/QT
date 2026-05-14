@@ -1,7 +1,7 @@
 # 채택 전략 플레이북
 
-> 최종 업데이트: 2026-05-15  
-> 이 파일은 지속적으로 업데이트한다 — 새 백테스트 결과, 페이퍼 현황, 실전 진행 사항 반영.
+> 최종 업데이트: 2026-05-15
+> 지원 시장: **US (S&P 500)** ✅ 실전 운영 / **KR (KOSPI200)** 🔧 Phase 1~3 구현 완료, KIS 모의 진입 대기
 
 ---
 
@@ -16,6 +16,7 @@
 7. [운영 가이드](#7-운영-가이드)
 8. [공통 리스크 프레임워크](#8-공통-리스크-프레임워크)
 9. [검증 방법론](#9-검증-방법론)
+10. [KR 시장 트랙](#10-kr-시장-트랙)
 
 ---
 
@@ -558,10 +559,127 @@ position_size  = risk_per_trade / (entry_price − stop_price)
 
 ---
 
+## 10. KR 시장 트랙
+
+### 10.1 결정사항
+
+| 항목 | 결정 |
+|---|---|
+| 유니버스 | **KOSPI200 (대형주 200종목)** |
+| 자본 출처 | KR용 별도 입금 (US/KR 계좌 분리 운용) |
+| 데이터 소스 | PyKRX 1차 + FinanceDataReader 폴백 |
+| 통화 | KRW (환차 없음, 한국 거주자) |
+| 리밸런싱 요일 | Clenow 주 1회, Weinstein 주 1회 — 한국 거래일 기준 수요일 |
+| 주봉 리샘플 | `W-FRI` (KOSPI 주봉 = 금요일 종가) |
+
+### 10.2 Phase 진행 현황
+
+| Phase | 내용 | 상태 |
+|---|---|---|
+| **1: 데이터 + 유니버스** | PyKRX/FDR 데이터, KOSPI200 유니버스, KR regime filter | ✅ 구현 완료 |
+| **2: 백테스트** | KR 시장 백테스트 엔진, 거래세 0.18% 비용 모델 | ✅ 구현 완료 (실행 결과는 별도) |
+| **3: 페이퍼 트레이딩** | run_daily_kr.py, GHA daily_kr workflow, 신호 추적 | ✅ 구현 완료 |
+| **4: KIS API 한국 주식** | TR_IDS KR 분기, domestic endpoint, 토큰 캐시 분리 | ✅ 구현 완료 (실행 검증 사용자 진행) |
+| **5: KIS 실전 + 스케줄러** | KR 전용 스케줄러 3개 작업, 본운영 진입 | ✅ 구현 완료 (등록 사용자 진행) |
+
+### 10.3 시장별 파라미터 차이
+
+**Clenow Momentum**:
+| 파라미터 | US | KR |
+|---|---|---|
+| 유니버스 | S&P 500 (~500종목) | KOSPI200 (~200종목) |
+| 레짐 인덱스 | SPY > MA200 | `^KS11` (KOSPI) > MA200 |
+| VIX 필터 | `^VIX` > 30 시 중단 | (옵션) VKOSPI > 35, 또는 비활성 |
+| 90일 지수회귀 | 동일 | 동일 |
+| 최소 가격 | $5 | ₩5,000 |
+| 갭 필터 (90일 ±15%) | 동일 | 동일 (한국은 상하한가 ±30% 도 별도 체크) |
+
+**Weinstein Stage 2**:
+| 파라미터 | US | KR |
+|---|---|---|
+| 주봉 리샘플 | W-WED | W-FRI |
+| 30주 MA 돌파 | 동일 | 동일 |
+| 거래량 멀티플 | 1.5배 | 2.0배 (KR 박스권 가짜 돌파 강화) |
+| 청산 MA | 30주 | 30주 |
+
+### 10.4 운영 시간 매트릭스 (KR 시간 기준)
+
+KR 트랙은 미국과 시간 충돌 없음 — 단일 PC 에서 두 시장 모두 추적 가능.
+
+| 시각 (KR) | 작업 | 시장 |
+|---|---|---|
+| 09:00 수 | wednesday_morning_buy_kr (KR 매수 실행) | KR |
+| 16:00 평일 | daily_close_kr (KR 매도 + pending) | KR |
+| 16:30 평일 | summary_kr (KR 텔레그램 요약) | KR |
+| 22:29 평일 | morning_entry (US Phase 4 진입) | US |
+| 23:00~04:00 평일 매시 | exit_check (US 손절) | US |
+| 00:00 목 | wednesday_morning_buy (US Wed 11 AM ET 매수) | US |
+| 06:00 평일 | daily_close (US 매도 + pending) | US |
+| 07:00 평일 | summary (US 텔레그램 요약) | US |
+
+### 10.5 KR 시장 특수 위험
+
+| 위험 | 대응 |
+|---|---|
+| **호가 단위 미준수** | `tick_size_kospi(price)` 의무 라운딩. 가격대별 1~1,000원 단위 |
+| **상하한가 ±30%** | LIMIT 권장. 매수가가 상한 초과 시 자동 스킵 |
+| **VI (변동성 완화장치)** | 2분 단일가 거래 → 미체결 시 다음날 재시도 |
+| **거래정지 / 관리종목** | 일일 universe 갱신 + 사전 체크 |
+| **거래세 0.18% 매도** | fee_model 에 정확 반영 |
+| **양도세** | 대주주 아니면 무관 (시총 50억+/지분 1%+ 만 과세) |
+| **모멘텀 약화** | 코스피 모멘텀 프리미엄이 US 대비 약함 → 백테스트 결과 합격 조건 완화 (Sharpe ≥ 0.6) |
+
+### 10.6 KR 자본 배분
+
+`config_live.yaml` 의 `kr:` 섹션 분리. 동일 KIS 종합계좌 내 USD/KRW 잔고 독립 관리.
+
+```yaml
+kr:
+  mode: "mock"     # mock → prod 단계 진행
+  capital:
+    auto_allocate: true
+    buffer_pct: 1.0
+    clenow_pct: 60       # KRW 잔고의 60%
+    weinstein_pct: 40    # KRW 잔고의 40%
+    clenow_max_positions: 5
+    weinstein_max_positions: 4
+```
+
+KR 종목당 예산 = (KRW 잔고 × 0.99 × pct) / max_positions.
+예: ₩5,000,000 입금 → Clenow ₩594,000/종목 × 5종목, Weinstein ₩495,000/종목 × 4종목.
+
+### 10.7 KR 트랙 검증 명령
+
+```bash
+# Phase 1
+python -c "from src.fetch.universe import get_kospi200_tickers; print(len(get_kospi200_tickers()))"
+python -c "from src.fetch.prices import fetch_prices; print(fetch_prices('005930', '2024-01-01', '2026-05-15', market='kr').tail())"
+
+# Phase 2
+python run_clenow.py --market kr --start 2015-01-01 --end 2025-12-31
+python run_weinstein.py --market kr --start 2015-01-01 --end 2025-12-31
+
+# Phase 3
+python run_daily_kr.py --print-only
+
+# Phase 4 (KIS 모의 신청 후)
+python -m live_trading.kis_client --market kr --test-auth
+python -m live_trading.kis_client --market kr --test-price 005930
+python -m live_trading.kis_client --market kr --test-order 005930 1
+
+# Phase 5
+.\scheduler\register_tasks_kr.ps1
+```
+
+---
+
 ## 참고 자료
 
 - Andreas Clenow, *Stocks on the Move* (2015)
 - Stan Weinstein, *Secrets for Profiting in Bull and Bear Markets* (1988)
 - Gary Antonacci, *Dual Momentum Investing* (2014)
 - KIS API: https://apiportal.koreainvestment.com/
+- PyKRX: https://github.com/sharebook-kr/pykrx
+- FinanceDataReader: https://github.com/financedata-org/FinanceDataReader
 - 한국시간 미국장 정규시간: 22:30~05:00 (서머타임), 23:30~06:00 (표준시)
+- 한국시간 KOSPI 정규시간: 09:00~15:30 (단일가 마감 동시호가 15:20~15:30)
