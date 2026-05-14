@@ -23,10 +23,10 @@
 
 | 전략 | 유형 | 기간 | CAGR | MDD | Sharpe | 상태 |
 |---|---|---|---|---|---|---|
-| **Clenow Momentum** | 주봉 모멘텀 | 2015~ | 16.92% | -19.6% | 1.10 | ✅ 페이퍼 운용중 |
-| **Weinstein Stage 2** | 주봉 추세 | 2015~ | 8.0% | -14.0% | 0.88 | ✅ 페이퍼 운용중 |
-| **합성 60:40** | 포트폴리오 합성 | — | — | — | — | ✅ 페이퍼 운용중 (NAV 모니터링) |
-| Phase 4 | 일봉 추세 | 2015~ | ~8% | -11.92% | 0.74 | ⚠️ Sharpe 미달, 페이퍼 병행 |
+| **Clenow Momentum** | 주봉 모멘텀 | 2015~ | 16.92% | -19.6% | 1.10 | ✅ 페이퍼 + **실계좌 운영 시작 (2026-05-18)** |
+| **Weinstein Stage 2** | 주봉 추세 | 2015~ | 8.0% | -14.0% | 0.88 | ✅ 페이퍼 + **실계좌 운영 시작 (2026-05-18)** |
+| **합성 60:40** | 포트폴리오 합성 | — | — | — | — | ✅ 페이퍼 NAV 모니터링 + 실계좌 동일 비율 운영 |
+| Phase 4 | 일봉 추세 | 2015~ | ~8% | -11.92% | 0.74 | ⚠️ Sharpe 미달, 페이퍼만 (실계좌 배분 0) |
 
 **합성 60:40** = Clenow 60% + Weinstein 40% (별도 거래 없음 — NAV 가중합산)
 
@@ -289,21 +289,22 @@ Clenow 비중(%)을 0~100%로 5%씩 변화시킨 Sharpe 스윕 분석.
 
 | Phase | 내용 | 상태 |
 |---|---|---|
-| **A: KIS 클라이언트** | 인증·시세·주문 API 래퍼 | ✅ 완료 |
-| **B: 신호→주문 변환** | 페이퍼 신호 → KIS 주문 | ✅ 완료 |
+| **A: KIS 클라이언트** | 인증·시세·주문 API 래퍼, OAuth 토큰 캐시 | ✅ 완료 |
+| **B: 신호→주문 변환** | 페이퍼 신호 → KIS 주문 (LIMIT ±0.5%) | ✅ 완료 |
 | **C: 포지션 동기화** | KIS 잔고 ↔ 로컬 positions 일치 | ✅ 완료 |
-| **D: 리스크 가드** | Kill switch, 손실 한도, 연속손절 차단 | ✅ 완료 |
-| **E: 스케줄러** | Windows Task Scheduler 무인 운영 | ✅ 완료 |
-| **F: 모의투자 4주** | 슬리피지·체결 검증 | **진행 중** |
-| **G: 실계좌 전환** | Phase F 통과 후 실자본 투입 | 대기 |
+| **D: 리스크 가드** | Kill switch, 손실 한도, 연속손절, 토큰 발급 가드 | ✅ 완료 |
+| **E: 스케줄러** | Windows Task Scheduler 5개 작업 무인 운영 | ✅ 완료 |
+| **F: 스모크 테스트** | GHA 수동 트리거 → prod 실계좌 1종목 체결 검증 | ✅ 완료 (2026-05-15, APA $37.48 체결) |
+| **G: 실계좌 본운영** | Windows 스케줄러 + auto_allocate, $10k prod | ✅ 운영 시작 (2026-05-18 월 ~) |
 
-### 6.2 Phase F 통과 기준
+### 6.2 Phase F 통과 기준 (스모크 테스트)
 
-| 지표 | 기준 |
-|---|---|
-| 슬리피지 평균 | < 0.3% |
-| 주문 실패율 | < 5% |
-| 체결 지연 | ±1거래일 이내 |
+| 지표 | 기준 | 2026-05-15 결과 |
+|---|---|---|
+| KIS prod 인증 | OK | ✅ 토큰 발급 정상 |
+| LIMIT 주문 전송 | 성공 | ✅ APA $37.48 order_no=0031680490 |
+| 텔레그램 시작/완료 알림 | 도착 | ✅ |
+| 슬리피지 평균 | < 0.3% | 추후 본운영에서 측정 |
 
 ### 6.3 스케줄러 (KR 시간 기준)
 
@@ -335,6 +336,22 @@ Clenow 비중(%)을 0~100%로 5%씩 변화시킨 Sharpe 스윕 분석.
 | 단일 주문 > 자본 50% | 주문 거부 |
 
 Kill Switch: `type nul > live_trading/KILL_SWITCH` / 재개: `del live_trading/KILL_SWITCH`
+
+### 6.4-B KIS API 안전 장치
+
+| 장치 | 설명 |
+|---|---|
+| **토큰 캐시** | `live_trading/.kis_token.json` (24h TTL, 60분 margin 자동 갱신) |
+| **토큰 발급 가드** | `live_trading/.kis_last_issued.txt` 별도 보존. 최근 2시간 이내 발급 이력 있으면 `RuntimeError` 로 거부 (KIS "1일 1회 발급 원칙" 보호) |
+| **prod 모드 이중 잠금** | `KISClient.from_config(allow_prod=True)` 명시 호출해야 prod 진입 |
+| **placeholder 차단** | `12345678-01` 같은 예시 계좌번호 진입 시 ValueError |
+| **psamount API 자동 재시도** | 초당 한도 (429/500) 감지 시 1초 대기 후 1회 재시도 |
+| **order_map.json** | `{strategy}:{symbol}:{signal_date}:{side}` 키로 중복 주문 차단 |
+
+강제 토큰 재발급이 필요하면 두 파일 모두 삭제:
+```bash
+rm live_trading/.kis_token.json live_trading/.kis_last_issued.txt
+```
 
 ### 6.4-A KIS Live 스모크 테스트 ($100 prod)
 
@@ -373,20 +390,31 @@ cp config_live.example.yaml config_live.yaml
 
 ⚠️ `config_live.yaml`은 절대 git 커밋 금지 (.gitignore 등록됨)
 
-### 6.6 Phase G — 실계좌 전환 (Phase F 통과 후)
+### 6.6 Phase G — 실계좌 본운영 (2026-05-18 ~)
 
-**자본 배분 (총 $10,000 기준, 합성 60:40)**:
+**실제 자본 배분 ($10,000 prod, auto_allocate)**:
 
-| 전략 | 자본 | 최대 종목 수 |
-|---|---|---|
-| Phase 4 | $0 (페이퍼 전용) | — |
-| Clenow | $6,000 | 5 |
-| Weinstein | $4,000 | 4 |
+| 전략 | 비율 | 1% 버퍼 후 예산 | 최대 종목 수 | 종목당 |
+|---|---|---|---|---|
+| Phase 4 | 0% | $0 | — | 페이퍼 전용 |
+| Clenow | 60% | ~$5,940 | 5 | ~$1,188 |
+| Weinstein | 40% | ~$3,960 | 4 | ~$990 |
 
-전환 절차:
-1. `config_live.yaml` → `mode: "prod"`, 실전 AppKey/AppSecret 입력
-2. 스케줄러 진입점 → `KISClient.from_config(allow_prod=True)` 변경
-3. 첫 1주: 매일 수동 모니터링
+`auto_allocate=true` 라 입출금 시 config 수정 불필요. 매수 직전 KIS 잔고 조회해 비율 자동 적용.
+
+**첫 자동 사이클 (2026-05-18 ~)**:
+| 시점 (KR) | 동작 |
+|---|---|
+| 월 5/18 06:00 | daily_close → KIS sync (APA 자동 등록), MA 이탈 체크 |
+| 월 5/18 07:00 | summary → 텔레그램 일일 리포트 |
+| 수 5/20 06:00 | 매수 후보 계산 → wed_buy_pending.json 저장 |
+| 목 5/21 00:00 | Wed 11 AM ET 매수 실행 (Clenow 4종목 + Weinstein 후보) |
+
+**모니터링 포인트** (월요일 아침):
+- 텔레그램 일일 요약 도착
+- `live_trading/positions_live_clenow.json` 에 APA 등 등록 확인
+- `logs/kis_api_YYYYMMDD.log` 일별 생성
+- KIS 앱 거래내역 = 시스템 기록 일치
 
 ---
 
@@ -412,13 +440,24 @@ python run_phase4_v2.py   # Phase 4-v2 (Anticipatory Cloud) 백테스트
 
 **주의**: Claude Code 터미널에서 Python 실행 불가 (Windows Anaconda DLL 문제). Anaconda Prompt 사용.
 
-### 7.3 모의투자 명령
+### 7.3 KIS 라이브 운영 명령
 
 ```bash
+# 잔고 / 손익 일일 요약 (텔레그램 전송)
+python scheduler/summary.py
+python scheduler/summary.py --print-only   # 콘솔만, 텔레그램 미발송
+
+# 매수가능금액 + 잔고 raw 응답 디버그
+python scripts/debug_kis_balance.py
+
+# KIS 잔고 종목을 전략 positions_live_*.json 에 수동 등록
+# (스모크 테스트나 수동 매수로 들어온 포지션을 추적에 추가)
+python scripts/register_position.py --strategy clenow --symbol APA
+
+# Dry-run (실제 주문 X)
 python -m live_trading.kis_client --test-auth
 python -m live_trading.kis_client --test-price AAPL
 python -m live_trading.orders --clenow --dry-run
-python -m live_trading.orders --weinstein --dry-run
 python -m live_trading.account --report    # 슬리피지 누적 리포트
 ```
 
