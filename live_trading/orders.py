@@ -291,6 +291,52 @@ class OrderManager:
 
         return results
 
+    # ── KIS 실시간가 매수 (Wed 11 AM ET 트리거 전용) ──────────────────────
+    def place_buys_at_kis_price(
+        self,
+        strategy: str,
+        symbols: list,
+        signal_date: str,
+        dry_run: bool = False,
+    ) -> list:
+        """
+        KIS 현재가를 직접 조회해 LIMIT 매수 주문.
+        wednesday_morning_buy.py 에서 사용 — daily_close 가 저장한 후보를 11 AM ET에 체결.
+        """
+        if strategy not in ("clenow", "weinstein"):
+            raise ValueError(f"strategy must be clenow|weinstein, got {strategy}")
+
+        cap_key = f"{strategy}_usd"
+        max_key = f"{strategy}_max_positions"
+        total_usd = self.cap.get(cap_key, 0)
+        if total_usd <= 0:
+            log.info(f"[{strategy}] {cap_key}={total_usd} — 실거래 자본 배분 없음")
+            return []
+        max_pos        = self.cap.get(max_key, 5)
+        budget_per_pos = total_usd / max_pos
+
+        results = []
+        for sym in symbols[:max_pos]:
+            try:
+                price_info = self.kis.get_price(sym)
+            except Exception as e:
+                log.error(f"[{strategy}] {sym} KIS 현재가 조회 실패: {e}")
+                continue
+            cur = float(price_info.get("last", 0) or 0)
+            if cur <= 0:
+                log.warning(f"[{strategy}] {sym} 현재가 0 — 스킵")
+                continue
+            price = round(cur * 1.005, 2)
+            if not self._price_fits(price, budget_per_pos):
+                log.warning(f"[{strategy}] {sym} 가격 ${price:.2f} > 예산 ${budget_per_pos:.0f} — 스킵")
+                continue
+            qty = self._calc_qty(price, budget_per_pos)
+            r   = self._send(strategy, sym, signal_date, "BUY", qty, price, dry_run)
+            results.append(r)
+            if not dry_run:
+                time.sleep(0.5)
+        return results
+
 
 # ── 보유수량 조회 헬퍼 (Phase C 전 임시) ─────────────────────────────────
 def _get_live_qty(strategy: str, symbol: str) -> int:

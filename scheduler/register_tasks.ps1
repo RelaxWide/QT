@@ -14,8 +14,10 @@ function Register-QTTask {
                     -Argument "$workdir\$script" `
                     -WorkingDirectory $workdir
 
+    # wednesday_morning_buy 는 최대 1시간 슬립할 수 있으므로 90분 한도
+    $limit = if ($name -eq "QT_WedMorningBuy") { New-TimeSpan -Minutes 90 } else { New-TimeSpan -Minutes 30 }
     $settings = New-ScheduledTaskSettingsSet `
-        -ExecutionTimeLimit (New-TimeSpan -Minutes 30) `
+        -ExecutionTimeLimit $limit `
         -StartWhenAvailable `
         -RunOnlyIfNetworkAvailable
 
@@ -43,13 +45,20 @@ $exitTriggers = @(
 )
 Register-QTTask "QT_ExitCheck" "scheduler\exit_check.py" $exitTriggers
 
-# 3. 06:00 — 종가 신호 + Clenow/Weinstein 주문
+# 3. 06:00 — 종가 신호:
+#     매도(MA 이탈, rank_exit) 즉시 주문 / KR 수요일엔 매수 후보 pending 저장
 $t3 = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "06:00"
 Register-QTTask "QT_DailyClose" "scheduler\daily_close.py" $t3
 
-# 4. 07:00 — 텔레그램 일일 요약
-$t4 = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "07:00"
-Register-QTTask "QT_Summary" "scheduler\summary.py" $t4
+# 4. 목 00:00 — Wed 11 AM ET 매수 실행 (스크립트가 ET 11:00 까지 대기)
+#     DST(서머타임 3~11월): KR 목 00:00 = Wed 11:00 ET 정확
+#     표준시(11~3월): KR 목 00:00 = Wed 10:00 ET → 스크립트 1시간 슬립 후 11:00 ET 실행
+$t4 = New-ScheduledTaskTrigger -Weekly -DaysOfWeek "Thursday" -At "00:00"
+Register-QTTask "QT_WedMorningBuy" "scheduler\wednesday_morning_buy.py" $t4
+
+# 5. 07:00 — 텔레그램 일일 요약
+$t5 = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "07:00"
+Register-QTTask "QT_Summary" "scheduler\summary.py" $t5
 
 Write-Host ""
 Write-Host "Registered tasks:"

@@ -306,8 +306,16 @@ Clenow 비중(%)을 0~100%로 5%씩 변화시킨 Sharpe 스윕 분석.
 |---|---|---|
 | 22:29 평일 | `scheduler/morning_entry.py` | Phase 4 pending → MOO 주문 |
 | 23:00~04:00 매시 | `scheduler/exit_check.py` | 손절·트레일 체크 |
-| 06:00 평일 | `scheduler/daily_close.py` | Clenow/Weinstein 신호+주문, Phase 4 pending 저장 |
+| 06:00 평일 | `scheduler/daily_close.py` | Clenow/Weinstein 매도 즉시 / KR 수요일 매수 후보 pending 저장 / Phase 4 pending |
+| **목 00:00** | `scheduler/wednesday_morning_buy.py` | **Wed 11 AM ET 매수 실행** (스크립트가 ET 11:00 까지 대기) |
 | 07:00 평일 | `scheduler/summary.py` | 텔레그램 일일 리포트 |
+
+**Clenow / Weinstein 매수 시점 (Wed 11 AM ET 매수 정책)**:
+- KR 수요일 06:00: 화요일 종가 데이터로 매수 후보 계산 → `live_trading/wed_buy_pending.json` 저장
+- KR 목요일 00:00: 매수 후보 읽어 KIS 현재가 조회 + LIMIT 매수 주문 전송 (Wed 11 AM ET 부근 체결)
+- 표준시 기간(11~3월)에는 스크립트가 1시간 슬립 후 Wed 11 AM ET 정각에 실행
+- 매도(MA100/MA30 이탈, Clenow rank_exit)는 06:00 KR 에 즉시 → Wed 시초가 체결
+- 페이퍼 트레이딩(run_daily.py)은 변경 없음 (Wed 종가 매수 가정 유지 → 백테스트와 동일)
 
 등록: `.\scheduler\register_tasks.ps1`
 
