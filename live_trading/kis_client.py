@@ -32,6 +32,8 @@ import yaml
 
 CONFIG_PATH    = Path(__file__).parent.parent / "config_live.yaml"
 TOKEN_CACHE    = Path(__file__).parent / ".kis_token.json"
+TOKEN_HISTORY  = Path(__file__).parent / ".kis_last_issued.txt"   # 캐시 삭제와 무관하게 발급 시각 보존
+MIN_REISSUE_HOURS = 2.0   # 최근 N시간 이내 발급된 적 있으면 신규 발급 거부
 LOG_DIR        = Path(__file__).parent.parent / "logs"
 
 
@@ -61,10 +63,19 @@ class Token:
     access_token: str
     expires_at:   str   # ISO datetime
     mode:         str = "mock"
+    issued_at:    str = ""   # ISO datetime; 빈 문자열이면 expires_at - 24h 로 추정 (구 캐시 호환)
 
     def is_expired(self, margin_min: int = 60) -> bool:
         exp = datetime.fromisoformat(self.expires_at)
         return datetime.now() >= exp - timedelta(minutes=margin_min)
+
+    def issued_datetime(self) -> datetime:
+        if self.issued_at:
+            try:
+                return datetime.fromisoformat(self.issued_at)
+            except Exception:
+                pass
+        return datetime.fromisoformat(self.expires_at) - timedelta(hours=24)
 
 
 def _load_token() -> Token | None:
@@ -78,6 +89,20 @@ def _load_token() -> Token | None:
 
 def _save_token(t: Token) -> None:
     TOKEN_CACHE.write_text(json.dumps(asdict(t), indent=2), encoding="utf-8")
+
+
+def _read_last_issued() -> datetime | None:
+    """캐시 파일과 별개로 유지되는 발급 이력 — 캐시 삭제 후에도 가드 동작."""
+    if not TOKEN_HISTORY.exists():
+        return None
+    try:
+        return datetime.fromisoformat(TOKEN_HISTORY.read_text(encoding="utf-8").strip())
+    except Exception:
+        return None
+
+
+def _write_last_issued(t: datetime) -> None:
+    TOKEN_HISTORY.write_text(t.isoformat(), encoding="utf-8")
 
 
 # ── 거래코드(tr_id) 테이블 ────────────────────────────────────────────────
@@ -149,6 +174,32 @@ class KISClient:
     def _ensure_token(self) -> str:
         if self._token and not self._token.is_expired() and self._token.mode == self.mode:
             return self._token.access_token
+
+        # KIS '1일 1회 발급 원칙' 가드 — 최근 N시간 내 발급 이력 있으면 거부
+        now = datetime.now()
+        last_issued_candidates = []
+        if self._token and self._token.mode == self.mode:
+            try:
+                last_issued_candidates.append(self._token.issued_datetime())
+            except Exception:
+                pass
+        hist = _read_last_issued()
+        if hist is not None:
+            last_issued_candidates.append(hist)
+
+        if last_issued_candidates:
+            last_issued = max(last_issued_candidates)
+            elapsed = now - last_issued
+            if elapsed < timedelta(hours=MIN_REISSUE_HOURS):
+                minutes_ago = elapsed.total_seconds() / 60
+                wait_min    = MIN_REISSUE_HOURS * 60 - minutes_ago
+                raise RuntimeError(
+                    f"[auth] 토큰 발급 가드 발동 - 최근 {minutes_ago:.0f}분 전 발급 이력 존재. "
+                    f"KIS '1일 1회 발급 원칙' 보호로 신규 발급 차단. "
+                    f"{wait_min:.0f}분 후 재시도하거나, 강제 발급이 필요하면 "
+                    f"live_trading/.kis_token.json + live_trading/.kis_last_issued.txt 모두 삭제."
+                )
+
         log.info(f"[auth] 새 토큰 발급 (mode={self.mode})")
         url = f"{self.base_url}/oauth2/tokenP"
         body = {
@@ -169,9 +220,16 @@ class KISClient:
             )
         d = r.json()
         # KIS는 expires_in 초 단위 반환 (보통 86400 = 24h)
-        exp = datetime.now() + timedelta(seconds=int(d.get("expires_in", 86400)))
-        self._token = Token(access_token=d["access_token"], expires_at=exp.isoformat(), mode=self.mode)
+        issued = datetime.now()
+        exp    = issued + timedelta(seconds=int(d.get("expires_in", 86400)))
+        self._token = Token(
+            access_token=d["access_token"],
+            expires_at=exp.isoformat(),
+            mode=self.mode,
+            issued_at=issued.isoformat(),
+        )
         _save_token(self._token)
+        _write_last_issued(issued)
         log.info(f"[auth] 토큰 발급 완료, 만료 {exp:%Y-%m-%d %H:%M}")
         return self._token.access_token
 
