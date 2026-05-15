@@ -258,3 +258,36 @@ backtest:
   monte_carlo_runs: 1000
   wfo_train_years: 3
   wfo_test_years: 1
+
+# ── KW (강환국 류) 펀더멘털 전략 (KR 전용) ──────────────────────────────
+kw_super_value:
+  rebalance_months: [5, 8, 11, 4]
+  rebalance_dom:    [16, 16, 16, 1]
+  small_cap_pct: 0.20
+  top_n: 20
+  min_per: 0.5
+  max_per: 100
+  min_pbr: 0.1
+
+kw_super_quality:
+  rebalance_months: [5, 8, 11, 4]
+  rebalance_dom:    [16, 16, 16, 1]
+  small_cap_pct: 0.20
+  top_n: 20
+  vol_lookback_days: 120
+  min_roe: 0.0
+
+kw_ultra:
+  rebalance_months: [5, 8, 11, 4]
+  rebalance_dom:    [16, 16, 16, 1]
+  small_cap_pct: 0.30
+  top_n: 20
+  component_weights:
+    value:    0.4
+    quality:  0.3
+    momentum: 0.3
+  momentum_lookback_months: 12
+  exclude_recent_month: true
+  use_regime: true
+  regime_index: "^KS11"
+  regime_ma: 200

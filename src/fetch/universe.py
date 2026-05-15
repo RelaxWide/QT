@@ -11,6 +11,21 @@ def get_kospi200_tickers(refresh: bool = False) -> list[str]:
     return _kr(refresh=refresh)
 
 
+def get_kospi_all_tickers(refresh: bool = False, include_preferred: bool = False) -> list[str]:
+    """KOSPI 전체 종목 (FDR StockListing). 우선주 제외 기본.
+    소형주 효과를 활용하는 KW 전략 등에서 사용."""
+    import FinanceDataReader as _fdr
+    df = _fdr.StockListing("KOSPI")
+    if df.empty:
+        raise RuntimeError("FDR KOSPI 마스터 조회 실패")
+    ticker_col = "Code" if "Code" in df.columns else "Symbol"
+    tickers = df[ticker_col].astype(str).str.zfill(6).tolist()
+    if include_preferred:
+        return tickers
+    # 우선주 제외 (6자리 끝자리 != 0)
+    return [t for t in tickers if t[-1] == "0"]
+
+
 def get_universe(market: str = "us") -> list[str]:
     """시장별 유니버스 진입. market='us'|'kr'."""
     m = market.lower()
