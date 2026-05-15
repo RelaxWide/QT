@@ -13,6 +13,7 @@ from pathlib import Path
 import yaml
 
 from src.fetch.universe import get_sp500_tickers, get_kospi200_tickers
+from src.fetch.universe_kr import get_kospi_top_n_tickers
 from src.fetch.prices import fetch_all
 from src.backtest.clenow_engine import run_clenow_backtest, compute_clenow_metrics
 from src.markets import get_profile
@@ -24,6 +25,9 @@ def main():
     parser.add_argument("--refresh", action="store_true")
     parser.add_argument("--market", choices=["us", "kr"], default="us",
                         help="시장 선택 (기본 us)")
+    parser.add_argument("--universe", choices=["kospi200", "kospi300", "kospi500"],
+                        default="kospi200",
+                        help="KR universe 옵션. kospi200(기본)/kospi300(시총 300)/kospi500")
     args = parser.parse_args()
 
     profile = get_profile(args.market)
@@ -53,8 +57,15 @@ def main():
     # 티커 목록
     if args.tickers:
         tickers = list(args.tickers)
+    elif args.market == "kr":
+        if args.universe == "kospi300":
+            tickers = get_kospi_top_n_tickers(300)
+        elif args.universe == "kospi500":
+            tickers = get_kospi_top_n_tickers(500)
+        else:
+            tickers = get_kospi200_tickers()
     else:
-        tickers = get_kospi200_tickers() if args.market == "kr" else get_sp500_tickers()
+        tickers = get_sp500_tickers()
 
     benchmark = profile.index_ticker
     if benchmark not in tickers:

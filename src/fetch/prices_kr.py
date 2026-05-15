@@ -47,7 +47,9 @@ def _fetch_pykrx(ticker: str, start: str, end: str) -> pd.DataFrame:
         _, idx_code = INDEX_TICKERS[ticker]
         df = _kx.get_index_ohlcv(s, e, idx_code)
     else:
-        df = _kx.get_market_ohlcv(s, e, ticker)
+        # adjusted=True 명시: 권리락/배당락 조정된 수정주가
+        # (PyKRX 기본값도 True 지만 safety 차원에서 명시)
+        df = _kx.get_market_ohlcv(s, e, ticker, adjusted=True)
     if df is None or df.empty:
         return pd.DataFrame()
     return _normalize_columns(df)

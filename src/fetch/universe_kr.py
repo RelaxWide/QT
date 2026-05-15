@@ -76,17 +76,36 @@ def _try_fdr() -> list[str]:
     return sorted(top[ticker_col].astype(str).str.zfill(6).tolist())
 
 
-def get_kospi200_tickers(refresh: bool = False) -> list[str]:
+def _is_preferred_stock(ticker: str) -> bool:
+    """우선주 패턴 — 6자리 코드 마지막 자리가 0 이 아니면 우선주/전환우선주.
+    예: 005930(삼성전자 보통주) vs 005935(우), 005385(현대차2우B), 00680K(전환우선주)."""
+    if len(ticker) != 6:
+        return False
+    return ticker[-1] != "0"
+
+
+def _filter_tradable(tickers: list[str], include_preferred: bool = False) -> list[str]:
+    """우선주·기타 거래 불안정 종목 제외 (옵션)."""
+    if include_preferred:
+        return tickers
+    return [t for t in tickers if not _is_preferred_stock(t)]
+
+
+def get_kospi200_tickers(refresh: bool = False, include_preferred: bool = False) -> list[str]:
     """
     KOSPI200 구성 종목 6자리 코드 리스트.
 
     - PyKRX 우선 → 실패 시 FDR → 실패 시 캐시.
-    - refresh=True 면 외부 API 강제 호출 (네트워크 필요).
+    - refresh=True 면 외부 API 강제 호출.
+    - include_preferred=False (기본): 우선주 제외 (보통주만).
+
+    참고: 시점별 KOSPI200 구성 변경은 적용 안 됨 (현재 시점 구성으로 11년 백테스트).
+    생존편향 완전 제거는 시점별 KRX 데이터 (별도 인프라) 필요.
     """
     if not refresh:
         cached = _load_cache()
         if cached:
-            return cached
+            return _filter_tradable(cached, include_preferred)
 
     last_err: Exception | None = None
     for fn in (_try_pykrx, _try_fdr):
@@ -94,12 +113,37 @@ def get_kospi200_tickers(refresh: bool = False) -> list[str]:
             tickers = fn()
             if tickers:
                 _save_cache(tickers)
-                return tickers
+                return _filter_tradable(tickers, include_preferred)
         except Exception as e:
             last_err = e
             continue
 
     cached = _load_cache()
     if cached:
-        return cached
+        return _filter_tradable(cached, include_preferred)
     raise RuntimeError(f"KOSPI200 유니버스 조회 모두 실패: {last_err}")
+
+
+def get_kospi_top_n_tickers(n: int = 300, include_preferred: bool = False) -> list[str]:
+    """
+    KOSPI 시총 상위 N 종목 (현재 시점 기준).
+    KOSPI200 보다 확장된 유니버스 — 과거 KOSPI200 이었다 빠진 종목 포함 가능성.
+    완전한 생존편향 제거는 아니지만 sensitivity 검증용.
+
+    FDR StockListing("KOSPI") 사용.
+    """
+    import FinanceDataReader as fdr
+    df = fdr.StockListing("KOSPI")
+    if df.empty:
+        raise RuntimeError("FDR KOSPI 마스터 조회 실패")
+    cap_col = None
+    for c in ("Marcap", "MarketCap", "MktCap", "marcap", "marketcap"):
+        if c in df.columns:
+            cap_col = c
+            break
+    ticker_col = "Code" if "Code" in df.columns else "Symbol"
+
+    if cap_col:
+        df = df.sort_values(cap_col, ascending=False)
+    tickers = df[ticker_col].astype(str).str.zfill(6).head(n * 2).tolist()
+    return _filter_tradable(tickers, include_preferred)[:n]
