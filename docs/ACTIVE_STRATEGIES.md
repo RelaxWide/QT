@@ -683,9 +683,9 @@ KR 종목당 예산 = (KRW 잔고 × 0.99 × pct) / max_positions.
 python -c "from src.fetch.universe import get_kospi200_tickers; print(len(get_kospi200_tickers()))"
 python -c "from src.fetch.prices import fetch_prices; print(fetch_prices('005930', '2024-01-01', '2026-05-15', market='kr').tail())"
 
-# Phase 2
-python run_clenow.py --market kr --start 2015-01-01 --end 2025-12-31
-python run_weinstein.py --market kr --start 2015-01-01 --end 2025-12-31
+# Phase 2 (전체 11년 백테스트)
+python run_clenow.py --market kr
+python run_weinstein.py --market kr
 
 # Phase 3
 python run_daily_kr.py --print-only
@@ -698,6 +698,74 @@ python -m live_trading.kis_client --market kr --test-order 005930 1
 # Phase 5
 .\scheduler\register_tasks_kr.ps1
 ```
+
+### 10.8 알려진 데이터 이슈 & 트러블슈팅
+
+| 이슈 | 원인 | 조치 |
+|---|---|---|
+| `KRX 로그인 실패: KRX_ID 환경변수` 로그 | PyKRX 가 KRX 의 새 인증 도입 후 환경변수 요구 | 폴백으로 FDR 자동 사용. INDEX (`^KS11` 등) 는 FDR 우선 (`src/fetch/prices_kr.py:fns` 분기) |
+| 마지막 영업일 종목 평가 0 | ^KS11 vs 종목 데이터 1일 시차 | 백테스트 엔진의 equity 계산이 `df["close"].asof(date)` 로 ffill (clenow_engine.py L237, weinstein_engine.py L160) |
+| 액면분할 직후 OHLV=0 (예: 005930 2018-05) | PyKRX 수정주가가 임시 0 메우기 | 매수 가드 `open_px <= 0 → skip` 으로 우회 |
+| KR 백테스트 결과 (-73% 가짜 손실) | 위 1일 시차 ffill 미적용 시 발생 | 2026-05-15 fix(backtest) 커밋으로 해결됨 |
+| 신규상장 (240일 미만) 종목 | min_bars=150 필터로 제외 | 신호 미발생 — 정상 |
+
+### 10.9 KR 백테스트 한계점 (현재)
+
+| 한계 | 영향 | 향후 개선 방향 |
+|---|---|---|
+| **생존편향** (현재 KOSPI200 = 2026 구성) | 과거 시점 구성과 다름. 결과 부풀려질 수 있음 | 시점별 KOSPI200 구성 동적 적용 (PyKRX `get_index_portfolio_deposit_file` 일별) |
+| **VKOSPI 미반영** | regime filter 가 KOSPI MA200 만 사용 | VKOSPI 별도 fetch + 임계값 35 검토 |
+| **Walk-Forward 미수행** | OOS 검증 부족, 과적합 가능성 | run_validation.py 의 WFO 로직 KR 적용 |
+| **Monte Carlo 미수행** | 트레이드 순서 의존성 미측정 | 트레이드 순서 셔플 1,000 회 |
+| **거래정지/관리종목 자동 제외 없음** | 과거 데이터에 정지 종목 포함 가능 | PyKRX `get_market_cap` + 관리종목 리스트 사전 필터 |
+| **권리락/배당락 검증** | adjusted=True 가 기본인지 미확정 | PyKRX 호출 시 명시적 `adjusted=True` 지정 |
+
+---
+
+## 11. 다음 단계 — 개선 방향
+
+현재 (2026-05-15) US 트랙은 실계좌 운영 중, KR Clenow 는 11년 백테스트 통과 후 KIS 모의 대기.
+다음 우선순위로 시스템을 더 견고하게 만든다.
+
+### 11.1 단기 (1-2주 내)
+
+| 항목 | 효과 | 비고 |
+|---|---|---|
+| **KIS 한국주식 모의 신청 + 검증** | KR 실전 진입 전 필수 | 사용자 액션 |
+| **권리락/배당락 명시 처리** | 백테스트 정확성 ↑ | `prices_kr.py` 에서 `get_market_ohlcv(..., adjusted=True)` 명시 |
+| **거래정지/관리종목 사전 제외** | 가짜 손실 거래 제거 | PyKRX `get_market_cap` 로 시총 0 종목 + 관리종목 리스트 |
+| **KR 페이퍼 1주 안정 실행** | 신호·NAV 추적 검증 | GHA `daily_kr.yml` 자동 실행 |
+| **시점별 KOSPI200 구성 (생존편향 제거)** | 백테스트 신뢰성 ↑ | `get_index_portfolio_deposit_file(date)` 일별 호출 + 캐시 |
+
+### 11.2 중기 (2-4주 내)
+
+| 항목 | 효과 | 비고 |
+|---|---|---|
+| **KR Walk-Forward 검증** | OOS Sharpe·CAGR 확인, 과적합 여부 | run_validation.py 의 WFO 로직 재사용 |
+| **Monte Carlo (트레이드 순서 셔플)** | 백테스트 결과 robust 성 측정 | 1,000회 셔플 → MDD 분포 |
+| **US/KR Clenow 상관계수 분석** | 분산 효과 정량화 → 합성 비율 결정 | analyze_correlation.py 의 KR 확장 |
+| **Weinstein KR 파라미터 재최적화** | KR 박스권 가짜 돌파 필터 강화 | vol_mult 2.0→2.5, high52 0.20→0.15, ADR 필터 추가 |
+| **합성 60:40 KR 적용** | 변동성 분산 | Clenow KR 단독 vs Clenow+Weinstein KR 합성 비교 |
+
+### 11.3 장기 (1개월+)
+
+| 항목 | 효과 | 비고 |
+|---|---|---|
+| **글로벌 NAV 통합 모니터링** | US/KR/Phase 4 합산 자산 추적 + 통합 텔레그램 | 환율 반영, 일별 글로벌 손익 |
+| **이상 거래 알림** | 큰 일중 변동·미체결 누적 감지 | 슬리피지 임계 초과 시 텔레그램 |
+| **KR 전략 추가 탐색** | 박스권/소형주에 적합한 별도 전략 | Mean reversion, 섹터 로테이션, pair trading 등 |
+| **백테스트 시각화 자동화** | equity curve / drawdown / monthly heatmap | matplotlib 보고서 자동 생성 |
+| **KR 데이터 정합 모니터** | 매일 데이터 누락·이상 자동 점검 | 종목 마지막 일자 vs ^KS11 일자 비교 |
+| **세금 정산 자동화 (US 양도세, KR 거래세)** | 5월 신고 데이터 자동 추출 | trades_live_*.csv 누적 분석기 |
+
+### 11.4 의사 결정 필요
+
+다음 항목들은 백테스트 결과 보면서 사용자 합의 필요:
+
+- **KR Clenow 실전 시드 자본** — 5천만원 백테스트 결과지만 실제 시작은 얼마? (예: 천만원 → 점진 확대 vs 5천만 한번에)
+- **KR Weinstein 활성화 여부** — 파라미터 튜닝 시도 vs 완전 폐기
+- **US/KR 합성 비율** — 50:50, 60:40 (US 우선), 70:30 등
+- **글로벌 통합 자본 관리** vs **시장 분리 운용** 유지
 
 ---
 
