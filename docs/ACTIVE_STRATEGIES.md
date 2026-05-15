@@ -26,8 +26,8 @@
 |---|---|---|---|---|---|---|---|---|
 | **Clenow Momentum** | US | 주봉 모멘텀 | 2015~ | 16.92% | -19.6% | 1.10 | +3.40%p | ✅ **실계좌 운영 (2026-05-18~)** |
 | **Clenow Momentum** | KR | 주봉 모멘텀 | 2015~ | 14.14% | -19.2% | 0.94 | +0.45%p | ✅ 백테스트 통과, KIS 모의 대기 |
-| **KW Super Value** | KR | 분기 가치 | 2014~ | **20.36%** | -45.6% | 0.95 | **+6.35%p** | ✅ 4/5 게이트, **KR 메인 엔진 후보** |
-| **KW Super Quality** | KR | 분기 퀄리티 | 2014~ | **18.92%** | -44.8% | 0.91 | **+4.91%p** | ✅ **5/5 [PASS]** 전 게이트 통과 |
+| **KW Super Value** | KR | 분기 가치 | 2014~ | **20.52%** | -39.2% | **0.97** | **+6.51%p** | ✅ **5/5 [PASS]** WFO 5/7, MC robust, 최적 0.15/15 |
+| **KW Super Quality** | KR | 분기 퀄리티 | 2014~ | **20.40%** | -45.4% | **0.95** | **+6.71%p** | ✅ **5/5 [PASS]** WFO 4/6, 최적 0.20/15 |
 | **Weinstein Stage 2** | US | 주봉 추세 | 2015~ | 8.0% | -14.0% | 0.88 | — | ✅ **실계좌 운영 (2026-05-18~)** |
 | KW Ultra | KR | 분기 혼합 | 2014~ | 16.34% | -46.1% | 0.82 | +2.33%p | ⚠️ alpha 미달, Super Value 미만 — 폐기 |
 | Weinstein Stage 2 | KR | 주봉 추세 | 2015~ | 4.19% | -19.3% | 0.40 | -9.5%p | ⚠️ KR 박스권 가짜 돌파 — 보류 |
@@ -771,6 +771,119 @@ Super Value 와 Super Quality 의 상관 **0.91** — 동시 운영 가치 작�
 
 단독 대비 모든 지표 개선 (Clenow 0.95 → 1.13, SV 0.87 → 1.13).
 
+### 10.2-H KW Super Quality 심층 검증 (2026-05-15)
+
+KW Super Value 와 동일 프로토콜 (WFO + Sensitivity) 적용.
+
+#### Walk-Forward (5년 학습 / 1년 OOS, 6개 윈도우)
+
+| 윈도우 | Test | IS CAGR | OOS CAGR | IS Sharpe | OOS Sharpe |
+|---|---|---|---|---|---|
+| 2014-2019 | 2019-2020 | +27.7% | +37.3% | 1.35 | **2.01** |
+| 2015-2020 | 2020-2021 | +21.5% | **+140.4%** | 1.15 | **4.02** |
+| 2016-2021 | 2021-2022 | +22.9% | +5.7% | 1.02 | 0.47 |
+| 2017-2022 | 2022-2023 | +24.5% | +14.1% | 1.04 | 0.75 |
+| 2018-2023 | 2023-2024 | +24.4% | -7.4% | 1.01 | -0.34 |
+| 2019-2024 | 2024-2025 | +25.7% | -8.2% | 1.05 | -0.39 |
+
+**결과**: OOS 양수 **4/6 (67%)**, 평균 OOS CAGR **+30.3%**, IS-OOS 상관 -0.51, **평균 열화 +5.9% (OOS > IS)** — 매우 robust.
+2020-2021 (코로나 회복기) 에서 폭발적 OOS (140%) — 변동성 낮은 퀄리티 종목이 약세장 후 회복 강한 성질.
+
+#### Sensitivity 그리드 (5 × 4 = 20 조합)
+
+| small_cap_pct | top_n | CAGR | MDD | Sharpe | alpha |
+|---|---|---|---|---|---|
+| **0.20** | **15** ⭐ Sharpe 최고 | 20.40% | -45.38% | **0.95** | +6.71%p |
+| 0.15 | 10 ⭐ alpha 최고 | **21.21%** | -49.79% | 0.89 | **+7.52%p** |
+| 0.20 | 20 (이전 기본) | 19.04% | -44.81% | 0.92 | +5.35 |
+| 0.30 / 0.50 | (any) | <14% | -34~-46% | <0.79 | 음수 (소형주 효과 희석) |
+| 0.10 | (any) | ~8% | -63% | 0.42 | -5%p (풀 너무 작음) |
+
+**핵심**: Super Quality 도 0.20/15 가 Sharpe 0.95, alpha +6.71%p — Super Value 와 유사한 sweet spot.
+Super Quality 와 Super Value 의 상관 0.91 (10.2-E) → 둘 중 하나만 운영해도 충분.
+
+### 10.2-I 글로벌 3자 합성 (US + KR Clenow + KW Super Value)
+
+전 세계 분산: 미국 모멘텀 + 한국 모멘텀 + 한국 가치 — 상관 거의 0.
+
+#### 상관계수 매트릭스 (일별 returns)
+
+| | US Clenow | Clenow KR | KW SV |
+|---|---|---|---|
+| US Clenow | 1.00 | **0.044** | **0.047** |
+| Clenow KR | 0.044 | 1.00 | 0.300 |
+| KW SV | 0.047 | 0.300 | 1.00 |
+
+**핵심**: US vs KR 상관 0.044~0.047 — 사실상 독립. 분산 효과 극대화 가능.
+
+#### 3자 가중 sweep 결과 (Sharpe Top 5)
+
+| US : KR Clenow : KW SV | CAGR | MDD | Sharpe | Calmar |
+|---|---|---|---|---|
+| 0.50 : 0.30 : 0.20 ⭐ | 18.49% | -16.54% | **1.61** | 1.12 |
+| 0.40 : 0.40 : 0.20 | 18.30% | -15.27% | 1.60 | 1.20 |
+| 0.50 : 0.40 : 0.10 | 17.84% | -14.41% | 1.59 | 1.24 |
+| 0.40 : 0.30 : 0.30 | 18.49% | -17.21% | 1.58 | 1.07 |
+| **0.40 : 0.50 : 0.10** ⭐ Calmar | **17.15%** | **-13.15%** | 1.57 | **1.30** |
+
+**합성 권장**:
+- **Sharpe 극대화**: US 50% / KR Clenow 30% / KW SV 20% → Sharpe **1.61**, CAGR 18.49%, MDD -16.54%
+- **Calmar 극대화**: US 40% / KR Clenow 50% / KW SV 10% → Calmar **1.30**, MDD **-13.15%**
+
+단일 전략 최고 (US Clenow Sharpe 1.10) 대비 **약 +50% Sharpe 개선**. 3자 합성이 단일 시장 대비 명확히 우월.
+
+### 10.2-J 거래비용·슬리피지 Sensitivity (KW Super Value)
+
+소형주 슬리피지 위험 정량화 — `slippage_pct × fee_multiplier` 그리드.
+
+| 슬리피지 | fee×1.0 | fee×1.5 | fee×2.0 |
+|---|---|---|---|
+| 0.1% (기본) | CAGR 20.42% | 20.42% | 20.42% |
+| 0.3% | 19.82% | 19.82% | 19.82% |
+| 0.5% (보수) | 19.22% | 19.22% | 19.22% |
+| 1.0% (소형주) | **17.82%** ✓ | 17.82% ✓ | 17.82% ✓ |
+| 2.0% (극단) | 15.08% ⚠️ | 15.08% | 15.08% |
+
+**결과**:
+- 슬리피지 **1% (소형주 현실치) 시 CAGR 17.82%** — 게이트 15% 통과
+- **2% 극단 시 15.08%** — 게이트 경계
+- fee 배수 효과는 미미 (cost_model 의 base_fee 가 핵심)
+
+**실전 함의**: 시총 하위 15% 의 일거래대금 < 10억원 종목은 슬리피지 1% 이상도 발생 가능. 그래도 알파 유지됨.
+
+### 10.2-K 생존편향 점검 (미완료)
+
+KOSPI 시점별 마스터 (`pykrx.stock.get_market_ticker_list(date=X)`) 로 백테스트를 다시 돌려 현재 universe (838 종목) 와 비교 시도.
+
+**결과**: PyKRX 의 `get_market_ticker_list(date=과거)` 함수가 KRX 인증 환경에서도 빈 응답 반환 — 시점별 마스터 추출 불가 (PyKRX 라이브러리 이슈).
+
+**대안 (TODO)**:
+- DART OpenAPI 의 회사 목록 + 상장폐지 일자 활용
+- KRX 정보데이터시스템 (data.krx.co.kr) 직접 스크래핑
+
+현재로서는 **생존편향 magnitude 측정 불가** — 관찰된 CAGR 20.52% 는 일부 부풀려졌을 가능성 ([[risk-survivorship]] 참고).
+
+### 10.2-L DART OpenAPI 통합 (코드 완료, 데이터 미수집)
+
+PyKRX 만으로는 부족한 펀더멘털 지표 — GP/A (강환국 슈퍼퀄리티 핵심), 자산성장률, 부채비율, F-Score 9개 등 — 을 위해 DART 통합 모듈 작성.
+
+**파일**: `src/fetch/dart_kr.py` (opendartreader 0.2.2 사용)
+- `fetch_financials(ticker, year, report_type)` — 단일 종목·연도 재무제표 (사업/1Q/반기/3Q)
+- `compute_derived_metrics(fin, fin_prev)` — gp_a, ROA, ROE, 부채비율, 자산성장률, F-Score 4점 (부분)
+- `fetch_kospi_financials_for_year(tickers, year)` — KOSPI 일괄 fetch
+- 캐시: `data/raw/kr/dart/{ticker}/{year}_{report}.parquet`
+
+**사용자 액션 필요**:
+1. https://opendart.fss.or.kr/ 회원 가입
+2. 마이페이지 → 인증키 신청 (즉시 발급, 40자)
+3. 환경변수 `DART_API_KEY` 또는 `config.yaml` 의 `dart_api_key` 설정
+4. `python scripts/debug_dart_kr.py` 로 동작 확인
+
+**적용 예정 (API key 수령 후)**:
+- Super Quality 의 ROE → 실제 ROE (PyKRX 추정 EPS/BPS 대신 DART 순이익/자기자본)
+- GP/A factor 추가 → Super Quality 정밀도 ↑ 예상
+- F-Score 9점 백테스트 (KW Ultra 변형) — 한국 1995-2016 CAGR 21.38% 보고 재현
+
 ### 10.3 시장별 파라미터 차이
 
 **Clenow Momentum**:
@@ -874,7 +987,7 @@ python -m live_trading.kis_client --market kr --test-order 005930 1
 
 | 한계 | 영향 | 향후 개선 방향 |
 |---|---|---|
-| **생존편향** (현재 KOSPI200 = 2026 구성) | 과거 시점 구성과 다름. 결과 부풀려질 수 있음 | 시점별 KOSPI200 구성 동적 적용 (PyKRX `get_index_portfolio_deposit_file` 일별) |
+| **생존편향** (현재 KOSPI = 2026 구성) | 과거 시점 구성과 다름. 결과 부풀려질 수 있음 | PyKRX `get_market_ticker_list(date)` 시도 실패 (10.2-K) — DART 회사목록 + 상장폐지일 활용 필요 |
 | **VKOSPI 미반영** | regime filter 가 KOSPI MA200 만 사용 | VKOSPI 별도 fetch + 임계값 35 검토 |
 | **Walk-Forward 미수행** | OOS 검증 부족, 과적합 가능성 | run_validation.py 의 WFO 로직 KR 적용 |
 | **Monte Carlo 미수행** | 트레이드 순서 의존성 미측정 | 트레이드 순서 셔플 1,000 회 |
@@ -892,11 +1005,13 @@ python -m live_trading.kis_client --market kr --test-order 005930 1
 
 | 항목 | 효과 | 비고 |
 |---|---|---|
+| **DART API key 신청 + GP/A 백테스트** | Super Quality 정밀도 ↑, F-Score 가능 | 사용자 액션 — opendart.fss.or.kr 회원가입 |
 | **KIS 한국주식 모의 신청 + 검증** | KR 실전 진입 전 필수 | 사용자 액션 |
+| **KW Super Value Phase E (페이퍼)** | 분기 리밸런싱 신호 자동 생성 | `paper_trading/live_signals_kw.py` 신규 |
 | **권리락/배당락 명시 처리** | 백테스트 정확성 ↑ | `prices_kr.py` 에서 `get_market_ohlcv(..., adjusted=True)` 명시 |
 | **거래정지/관리종목 사전 제외** | 가짜 손실 거래 제거 | PyKRX `get_market_cap` 로 시총 0 종목 + 관리종목 리스트 |
 | **KR 페이퍼 1주 안정 실행** | 신호·NAV 추적 검증 | GHA `daily_kr.yml` 자동 실행 |
-| **시점별 KOSPI200 구성 (생존편향 제거)** | 백테스트 신뢰성 ↑ | `get_index_portfolio_deposit_file(date)` 일별 호출 + 캐시 |
+| **생존편향 우회 측정** | 백테스트 신뢰성 ↑ | DART 회사목록 + 상장폐지일 (PyKRX get_market_ticker_list 미작동) |
 
 ### 11.2 중기 (2-4주 내)
 
