@@ -50,23 +50,6 @@
     "shares_remaining": 20.98950524737633,
     "realized_pnl": 0.0
   },
-  "PSA": {
-    "symbol": "PSA",
-    "entry_date": "2026-04-24T00:00:00",
-    "entry_price": 310.9306151123047,
-    "stop_initial": 287.3699951171875,
-    "stop_current": 294.6499938964844,
-    "targets": [
-      381.6124750976562
-    ],
-    "partial_weights": [
-      0.5
-    ],
-    "targets_hit": 0,
-    "shares_total": 29.710593360661623,
-    "shares_remaining": 29.710593360661623,
-    "realized_pnl": 0.0
-  },
   "PWR": {
     "symbol": "PWR",
     "entry_date": "2026-04-24T00:00:00",
@@ -133,6 +116,23 @@
     "targets_hit": 0,
     "shares_total": 161.89499983217746,
     "shares_remaining": 161.89499983217746,
+    "realized_pnl": 0.0
+  },
+  "VRSN": {
+    "symbol": "VRSN",
+    "entry_date": "2026-05-15T00:00:00",
+    "entry_price": 293.41311511230464,
+    "stop_initial": 265.989990234375,
+    "stop_current": 265.989990234375,
+    "targets": [
+      375.68248974609355
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 25.525902066812442,
+    "shares_remaining": 25.525902066812442,
     "realized_pnl": 0.0
   }
 }
