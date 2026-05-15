@@ -89,11 +89,15 @@ def main():
         print(f"[STOP] {profile.index_ticker} 없음")
         return
 
-    # 2) 펀더멘털 panel — 리밸런싱 일자만 fetch
+    # 2) 펀더멘털 panel — 리밸런싱 일자를 영업일 보정 후 fetch
+    from src.strategy._kw_common import adjust_signals_to_trading
     rebal_months = params.get("rebalance_months", [5, 8, 11, 4])
     rebal_dom    = params.get("rebalance_dom",    [16, 16, 16, 1])
-    rebal_dates  = rebalance_dates_kr_quarterly(start, end, rebal_months, rebal_dom)
-    print(f"Rebalancing dates: {len(rebal_dates)}")
+    raw_rebal    = rebalance_dates_kr_quarterly(start, end, rebal_months, rebal_dom)
+    # ^KS11 인덱스를 영업일 캘린더로 사용 (휴장일 회피)
+    calendar = price_data[profile.index_ticker].index
+    rebal_dates = adjust_signals_to_trading(raw_rebal, calendar)
+    print(f"Rebalancing dates: {len(rebal_dates)} (영업일 보정 후)")
 
     print("Loading fundamentals (per rebalance date) ...")
     t0 = time.time()
