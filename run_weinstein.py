@@ -39,6 +39,12 @@ def main():
     w_p.setdefault("min_price",   profile.min_price)
     w_p.setdefault("weekly_freq", profile.calendar_freq)
 
+    # 통화별 초기 자본 (엔진은 initial_capital_usd 키 사용)
+    if args.market == "kr":
+        cfg["backtest"]["initial_capital_usd"] = cfg["backtest"].get(
+            "initial_capital_krw", 50_000_000
+        )
+
     start = cfg["data"]["start_date"]
     end   = cfg["data"]["end_date"]
     cap   = cfg["backtest"]["initial_capital_usd"]

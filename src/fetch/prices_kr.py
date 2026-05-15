@@ -93,7 +93,10 @@ def fetch_prices_kr(
 
     df: pd.DataFrame = pd.DataFrame()
     last_err: Exception | None = None
-    for fn in (_fetch_pykrx, _fetch_fdr):
+    # 지수(^로 시작)는 FDR 우선 — PyKRX 의 KRX 인증이 깨지면 짧은 응답 반환되는 경우 있음
+    is_index = ticker.startswith("^") or ticker in INDEX_TICKERS
+    fns = (_fetch_fdr, _fetch_pykrx) if is_index else (_fetch_pykrx, _fetch_fdr)
+    for fn in fns:
         try:
             df = fn(ticker, start, end)
             if not df.empty:

@@ -252,7 +252,8 @@ residual_strategy:
   max_positions:      20
 
 backtest:
-  initial_capital_usd: 100000
+  initial_capital_usd: 100000        # US 백테스트 (USD)
+  initial_capital_krw: 50000000      # KR 백테스트 (KRW, 5천만원)
   results_dir: "backtest_results"
   monte_carlo_runs: 1000
   wfo_train_years: 3

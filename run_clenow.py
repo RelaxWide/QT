@@ -40,6 +40,12 @@ def main():
     cl_p.setdefault("min_price", profile.min_price)
     cl_p.setdefault("index_ticker", profile.index_ticker)
 
+    # 통화별 초기 자본 — 엔진은 initial_capital_usd 키를 통화 무관 수치로 사용
+    if args.market == "kr":
+        cfg["backtest"]["initial_capital_usd"] = cfg["backtest"].get(
+            "initial_capital_krw", 50_000_000
+        )
+
     start = cfg["data"]["start_date"]
     end   = cfg["data"]["end_date"]
     cap   = cfg["backtest"]["initial_capital_usd"]

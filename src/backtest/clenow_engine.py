@@ -226,12 +226,19 @@ def run_clenow_backtest(
             if not pd.isna(ma_val) and c < ma_val:
                 ma100_exit_next[sym] = "ma100_exit"
 
-        # 일별 자산 계산
-        pos_value = sum(
-            price_data[s].loc[date, "close"] * sh
-            for s, sh in holdings.items()
-            if s in price_data and date in price_data[s].index
-        )
+        # 일별 자산 계산 — 종목 데이터가 해당 일자에 없으면 직전 종가 (ffill) 사용.
+        # (KR 데이터 소스 1일 지연 등으로 ^KS11 인덱스 vs 종목 인덱스 불일치 시 평가 오류 방지)
+        pos_value = 0.0
+        for s, sh in holdings.items():
+            if s not in price_data:
+                continue
+            df_s = price_data[s]
+            if date in df_s.index:
+                close_v = df_s.loc[date, "close"]
+            else:
+                close_v = df_s["close"].asof(date)
+            if pd.notna(close_v) and close_v > 0:
+                pos_value += close_v * sh
         equity_records.append({"date": date, "equity": cash + pos_value})
 
     equity_curve = pd.DataFrame(equity_records).set_index("date")["equity"]
