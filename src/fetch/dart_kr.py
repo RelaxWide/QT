@@ -46,16 +46,35 @@ def _client():
     key = _get_api_key()
     if not key:
         return None
-    try:
-        from OpenDartReader import OpenDartReader
-        return OpenDartReader(key)
-    except Exception as e:
-        print(f"[dart] 클라이언트 초기화 실패: {e}")
-        return None
+    # OpenDartReader 패키지는 버전·설치 상태에 따라 import 패턴이 다름.
+    # 여러 형태 순차 시도.
+    candidates = [
+        ("OpenDartReader",                 "OpenDartReader"),   # FinanceData 표준
+        ("OpenDartReader.OpenDartReader",  "OpenDartReader"),
+        ("opendartreader",                 "OpenDartReader"),
+        ("opendartreader",                 "opendartreader"),
+    ]
+    import importlib
+    last_err = None
+    for module_path, class_name in candidates:
+        try:
+            mod = importlib.import_module(module_path)
+            cls = getattr(mod, class_name, None)
+            if cls is None and callable(mod):
+                cls = mod
+            if cls is None:
+                continue
+            return cls(key)
+        except Exception as e:
+            last_err = e
+            continue
+    print(f"[dart] 클라이언트 초기화 실패: {last_err}")
+    print(f"[dart] 'python -c \"import OpenDartReader; print(OpenDartReader.__file__, dir(OpenDartReader))\"' 결과 공유 부탁")
+    return None
 
 
 # ── 핵심 재무지표 ─────────────────────────────────────────────────────────
-def fetch_financials(ticker: str, year: int, report_type: str = "annual") -> dict | None:
+def fetch_financials(ticker: str, year: int, report_type: str = "annual", refresh: bool = False) -> dict | None:
     """단일 종목·연도 재무제표 핵심 항목 추출.
 
     Args:
@@ -81,25 +100,37 @@ def fetch_financials(ticker: str, year: int, report_type: str = "annual") -> dic
     if dart is None:
         return None
     cache_path = CACHE_DART / ticker / f"{year}_{report_type}.parquet"
-    if cache_path.exists():
+    if cache_path.exists() and not refresh:
         try:
             df = pd.read_parquet(cache_path)
+            print(f"[dart] {ticker} {year} {report_type}: cache hit ({cache_path})")
             return df.iloc[0].to_dict()
         except Exception:
             pass
+    print(f"[dart] {ticker} {year} {report_type}: 신규 fetch")
 
     reprt_code = {"annual": "11011", "q1": "11013", "q2": "11012", "q3": "11014"}[report_type]
+    # finstate_all 우선 (전체 재무항목, 매출원가/매출총이익 포함). 실패 시 finstate 폴백.
+    fs = None
     try:
-        fs = dart.finstate(ticker, year, reprt_code=reprt_code)
+        fs = dart.finstate_all(ticker, year, reprt_code=reprt_code, fs_div="CFS")  # 연결재무제표
         if fs is None or fs.empty:
+            fs = dart.finstate_all(ticker, year, reprt_code=reprt_code, fs_div="OFS")  # 별도재무제표
+    except Exception:
+        fs = None
+    if fs is None or fs.empty:
+        try:
+            fs = dart.finstate(ticker, year, reprt_code=reprt_code)
+        except Exception as e:
+            print(f"[dart] {ticker} {year} {report_type} 실패: {e}")
             return None
-    except Exception as e:
-        print(f"[dart] {ticker} {year} {report_type} 실패: {e}")
+    if fs is None or fs.empty:
         return None
 
     # 표준 항목 추출 (DART 계정명 매핑)
     name_map = {
         "revenue":       ["매출액", "수익(매출액)", "영업수익"],
+        "cost_of_sales": ["매출원가"],
         "gross_profit":  ["매출총이익"],
         "operating_inc": ["영업이익", "영업이익(손실)"],
         "net_income":    ["당기순이익", "당기순이익(손실)"],
@@ -111,7 +142,11 @@ def fetch_financials(ticker: str, year: int, report_type: str = "annual") -> dic
     for key, names in name_map.items():
         val = None
         for n in names:
-            mask = fs["account_nm"].str.contains(n, na=False)
+            # 1순위: 정확 일치 (부채총계 vs 부채와자본총계 같은 substring 충돌 방지)
+            mask = fs["account_nm"] == n
+            if not mask.any():
+                # 2순위: substring 매칭 (regex 비활성 — 영업이익(손실) 의 () 정규식 그룹 해석 방지)
+                mask = fs["account_nm"].str.contains(n, na=False, regex=False)
             if mask.any():
                 amt = fs.loc[mask, "thstrm_amount"].iloc[0]
                 try:
@@ -120,6 +155,10 @@ def fetch_financials(ticker: str, year: int, report_type: str = "annual") -> dic
                     pass
                 break
         result[key] = val
+
+    # 매출총이익 누락 시 매출액 - 매출원가 로 역산 (IFRS 표준 재무제표는 매출원가만 표기되는 경우 많음)
+    if result.get("gross_profit") is None and result.get("revenue") and result.get("cost_of_sales"):
+        result["gross_profit"] = result["revenue"] - result["cost_of_sales"]
 
     # 영업현금흐름 (현금흐름표 항목, finstate 안 들어있을 수 있음)
     cache_path.parent.mkdir(parents=True, exist_ok=True)

@@ -291,3 +291,7 @@ kw_ultra:
   use_regime: true
   regime_index: "^KS11"
   regime_ma: 200
+
+# DART OpenAPI 인증키 — opendart.fss.or.kr 회원가입 후 마이페이지에서 발급 (40자)
+# 환경변수 DART_API_KEY 가 있으면 그게 우선됨. 미설정 시 PyKRX-only 모드로 동작.
+dart_api_key: ""

@@ -23,15 +23,15 @@ def main():
         print("       또는 config.yaml 에 dart_api_key: '<키>' 추가")
         return
 
-    # 삼성전자 2023 사업보고서
-    print("\n=== 005930 (삼성전자) 2023 사업보고서 ===")
-    fin = fetch_financials("005930", 2023, "annual")
+    # 삼성전자 2023 사업보고서 (refresh=True 로 캐시 무시 — 코드 수정 검증용)
+    print("\n=== 005930 (삼성전자) 2023 사업보고서 (refresh=True) ===")
+    fin = fetch_financials("005930", 2023, "annual", refresh=True)
     if fin:
         for k, v in fin.items():
             print(f"  {k}: {v}")
         print()
         # 전년도와 비교
-        fin_prev = fetch_financials("005930", 2022, "annual")
+        fin_prev = fetch_financials("005930", 2022, "annual", refresh=True)
         derived = compute_derived_metrics(fin, fin_prev)
         print("=== 유도 지표 ===")
         for k, v in derived.items():
