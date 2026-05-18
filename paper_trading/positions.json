@@ -16,40 +16,6 @@
     "shares_remaining": 11.180140968897037,
     "realized_pnl": 0.0
   },
-  "GNRC": {
-    "symbol": "GNRC",
-    "entry_date": "2026-04-24T00:00:00",
-    "entry_price": 220.87064389038085,
-    "stop_initial": 201.0,
-    "stop_current": 252.58999633789062,
-    "targets": [
-      280.4825755615234
-    ],
-    "partial_weights": [
-      0.5
-    ],
-    "targets_hit": 0,
-    "shares_total": 35.22784686100997,
-    "shares_remaining": 35.22784686100997,
-    "realized_pnl": 0.0
-  },
-  "KEYS": {
-    "symbol": "KEYS",
-    "entry_date": "2026-04-24T00:00:00",
-    "entry_price": 350.34999999999997,
-    "stop_initial": 317.0,
-    "stop_current": 343.3399963378906,
-    "targets": [
-      450.39999999999986
-    ],
-    "partial_weights": [
-      0.5
-    ],
-    "targets_hit": 0,
-    "shares_total": 20.98950524737633,
-    "shares_remaining": 20.98950524737633,
-    "realized_pnl": 0.0
-  },
   "PWR": {
     "symbol": "PWR",
     "entry_date": "2026-04-24T00:00:00",
@@ -133,6 +99,40 @@
     "targets_hit": 0,
     "shares_total": 25.525902066812442,
     "shares_remaining": 25.525902066812442,
+    "realized_pnl": 0.0
+  },
+  "CIEN": {
+    "symbol": "CIEN",
+    "entry_date": "2026-05-18T00:00:00",
+    "entry_price": 564.0534802246093,
+    "stop_initial": 486.25,
+    "stop_current": 486.25,
+    "targets": [
+      797.4639208984372
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 8.997026842233586,
+    "shares_remaining": 8.997026842233586,
+    "realized_pnl": 0.0
+  },
+  "EBAY": {
+    "symbol": "EBAY",
+    "entry_date": "2026-05-18T00:00:00",
+    "entry_price": 115.72561061096191,
+    "stop_initial": 96.27999877929688,
+    "stop_current": 96.27999877929688,
+    "targets": [
+      174.062446105957
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 35.99783879569822,
+    "shares_remaining": 35.99783879569822,
     "realized_pnl": 0.0
   }
 }
