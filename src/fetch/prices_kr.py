@@ -73,6 +73,35 @@ def _fetch_fdr(ticker: str, start: str, end: str) -> pd.DataFrame:
     return _normalize_columns(df)
 
 
+def _fetch_yfinance(ticker: str, start: str, end: str) -> pd.DataFrame:
+    """yfinance 폴백 — PyKRX/FDR 가 2015년 이전 데이터 미제공 시.
+
+    한국주식 yahoo suffix:
+      - KOSPI: 6자리코드.KS (예: 005930.KS)
+      - KOSDAQ: 6자리코드.KQ (예: 035420.KQ)
+      - KOSPI 지수: ^KS11 (그대로)
+    """
+    try:
+        import yfinance as yf
+    except ImportError:
+        return pd.DataFrame()
+
+    if ticker.startswith("^"):
+        yf_ticker = ticker
+    elif len(ticker) == 6 and ticker.isdigit():
+        yf_ticker = f"{ticker}.KS"
+    else:
+        yf_ticker = ticker
+
+    end_str = (pd.Timestamp(end) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    df = yf.download(yf_ticker, start=start, end=end_str, progress=False, auto_adjust=False)
+    if df is None or df.empty:
+        return pd.DataFrame()
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    return _normalize_columns(df)
+
+
 def fetch_prices_kr(
     ticker: str,
     start: str,
@@ -88,16 +117,25 @@ def fetch_prices_kr(
     if cache_path.exists() and not refresh:
         try:
             cached = pd.read_parquet(cache_path)
-            if not cached.empty and cached.index[-1] >= _last_trading_day() - pd.offsets.BDay(30):
+            # 캐시 유효 조건: ① 최신 (마지막 30 영업일 이내) ② 요청 시작점까지 커버
+            start_ts = pd.Timestamp(start)
+            fresh_enough = cached.index[-1] >= _last_trading_day() - pd.offsets.BDay(30)
+            covers_start = cached.index[0] <= start_ts + pd.offsets.BDay(5)  # 5일 여유 (영업일 휴장)
+            if not cached.empty and fresh_enough and covers_start:
                 return cached
+            # 시작점 못 커버 (예: 2008부터 필요한데 캐시는 2015 부터) → 다시 fetch
         except Exception:
             pass
 
     df: pd.DataFrame = pd.DataFrame()
     last_err: Exception | None = None
     # 지수(^로 시작)는 FDR 우선 — PyKRX 의 KRX 인증이 깨지면 짧은 응답 반환되는 경우 있음
+    # yfinance 는 2015년 이전 데이터를 위한 최종 폴백
     is_index = ticker.startswith("^") or ticker in INDEX_TICKERS
-    fns = (_fetch_fdr, _fetch_pykrx) if is_index else (_fetch_pykrx, _fetch_fdr)
+    if is_index:
+        fns = (_fetch_fdr, _fetch_pykrx, _fetch_yfinance)
+    else:
+        fns = (_fetch_pykrx, _fetch_fdr, _fetch_yfinance)
     for fn in fns:
         try:
             df = fn(ticker, start, end)
@@ -116,16 +154,120 @@ def fetch_prices_kr(
     return df
 
 
+def _yfinance_batch(
+    missing_tickers: list[str],
+    start: str,
+    end: str,
+) -> dict[str, pd.DataFrame]:
+    """yfinance 배치 다운로드 — 한 번에 다수 종목 fetch (단일 종목 호출 대비 5~10배 빠름)."""
+    try:
+        import yfinance as yf
+    except ImportError:
+        return {}
+    if not missing_tickers:
+        return {}
+
+    yf_tickers = []
+    yf_to_orig = {}
+    for t in missing_tickers:
+        if t.startswith("^"):
+            yf_t = t
+        elif len(t) == 6 and t.isdigit():
+            yf_t = f"{t}.KS"
+        else:
+            yf_t = t
+        yf_tickers.append(yf_t)
+        yf_to_orig[yf_t] = t
+
+    end_str = (pd.Timestamp(end) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    print(f"  yfinance batch: {len(yf_tickers)} 종목 download ...")
+    df_all = yf.download(yf_tickers, start=start, end=end_str, progress=True,
+                          auto_adjust=False, threads=True, group_by="ticker")
+    if df_all is None or df_all.empty:
+        return {}
+
+    result = {}
+    for yf_t in yf_tickers:
+        try:
+            if isinstance(df_all.columns, pd.MultiIndex):
+                sub = df_all[yf_t]
+            else:
+                sub = df_all
+            if sub.empty or sub["Close"].dropna().empty:
+                continue
+            norm = _normalize_columns(sub.dropna(how="all"))
+            if not norm.empty:
+                result[yf_to_orig[yf_t]] = norm
+        except KeyError:
+            continue
+        except Exception:
+            continue
+    return result
+
+
 def fetch_all_kr(
     tickers: list[str],
     start: str,
     end: str | None = None,
     min_bars: int = 252,
     refresh: bool = False,
+    use_yf_batch: bool = True,
 ) -> dict[str, pd.DataFrame]:
-    """KR 다종목 일괄 조회. min_bars 미만은 제외 (신규상장)."""
+    """KR 다종목 일괄 조회. min_bars 미만은 제외 (신규상장).
+
+    start < 2015: yfinance batch 우선 (PyKRX/FDR 가 2015년 이전 데이터 미제공).
+    start ≥ 2015: PyKRX/FDR 개별 호출 (기존 방식).
+    인덱스(^*) 는 항상 fetch_prices_kr 사용 — FDR/PyKRX 가 더 정확.
+    """
     from tqdm import tqdm
+    end = end or pd.Timestamp.today().strftime("%Y-%m-%d")
     result: dict[str, pd.DataFrame] = {}
+    start_ts = pd.Timestamp(start)
+    # yfinance batch 모드 트리거:
+    #   1) start < 2015 (PyKRX/FDR 가 데이터 미제공)
+    #   2) start < 2022 (PyKRX 가 일부 종목에서 timeout 으로 hang — 캐시 우선 + batch 폴백이 안전)
+    needs_yf_batch = use_yf_batch and start_ts < pd.Timestamp("2022-01-01")
+
+    if needs_yf_batch:
+        # 인덱스는 PyKRX/FDR (yfinance 인덱스는 데이터 품질 떨어짐)
+        index_tickers = [t for t in tickers if t.startswith("^")]
+        stock_tickers = [t for t in tickers if not t.startswith("^")]
+        for t in tqdm(index_tickers, desc="KR Index"):
+            try:
+                df = fetch_prices_kr(t, start, end, refresh)
+                if not df.empty and len(df) >= min_bars:
+                    result[t] = df
+            except Exception:
+                pass
+
+        # 개별 종목: 캐시 hit 먼저 확인 → 누락분만 yfinance batch
+        missing = []
+        for t in tqdm(stock_tickers, desc="Cache check"):
+            safe = t.replace("^", "_").replace("/", "_")
+            cache_path = CACHE_DIR_KR / f"{safe}.parquet"
+            if cache_path.exists() and not refresh:
+                try:
+                    cached = pd.read_parquet(cache_path)
+                    if not cached.empty and cached.index[0] <= start_ts + pd.offsets.BDay(20) and len(cached) >= min_bars:
+                        result[t] = cached
+                        continue
+                except Exception:
+                    pass
+            missing.append(t)
+
+        if missing:
+            print(f"  캐시 미커버 {len(missing)}종목 → yfinance batch 다운로드 (한 번에)")
+            yf_result = _yfinance_batch(missing, start, end)
+            for t, df in yf_result.items():
+                if len(df) >= min_bars:
+                    safe = t.replace("^", "_").replace("/", "_")
+                    cache_path = CACHE_DIR_KR / f"{safe}.parquet"
+                    df.to_parquet(cache_path)
+                    result[t] = df
+            print(f"  yfinance: {len(yf_result)}/{len(missing)} 종목 받음")
+        return result
+
+    # start ≥ 2015: 기존 방식 (PyKRX/FDR 개별)
     for t in tqdm(tickers, desc="KR Downloading"):
         try:
             df = fetch_prices_kr(t, start, end, refresh)

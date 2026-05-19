@@ -261,6 +261,8 @@ backtest:
 
 # ── KW (강환국 류) 펀더멘털 전략 (KR 전용) ──────────────────────────────
 kw_super_value:
+  # 최적 파라미터 (10x10 sensitivity, 2026-05-19): small_cap=0.15 / top_n=18
+  # 18년 컷오프 검증: CAGR 30.79%, Sharpe 1.30, Calmar 0.88
   rebalance_months: [5, 8, 11, 4]
   rebalance_dom:    [16, 16, 16, 1]
   small_cap_pct: 0.20

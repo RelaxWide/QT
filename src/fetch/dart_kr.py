@@ -19,13 +19,31 @@ opendartreader 패키지 사용 — 사업/분기 보고서 XBRL 파싱.
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import os
+import sys
 from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
 
 CACHE_DART = Path("data/raw/kr/dart")
+
+
+@contextlib.contextmanager
+def _suppress_stdout():
+    """opendartreader 의 자체 print 출력 suppress.
+
+    라이브러리가 'reprt_code...', '조회된 데이타가 없습니다', '전자공시...' 등을
+    매 호출마다 print — 이 noise 를 잠시 차단.
+    """
+    saved = sys.stdout
+    sys.stdout = io.StringIO()
+    try:
+        yield
+    finally:
+        sys.stdout = saved
 
 
 def _get_api_key() -> str | None:
@@ -103,28 +121,35 @@ def fetch_financials(ticker: str, year: int, report_type: str = "annual", refres
     if cache_path.exists() and not refresh:
         try:
             df = pd.read_parquet(cache_path)
-            print(f"[dart] {ticker} {year} {report_type}: cache hit ({cache_path})")
             return df.iloc[0].to_dict()
         except Exception:
             pass
-    print(f"[dart] {ticker} {year} {report_type}: 신규 fetch")
+    # 이전에 빈 응답으로 마킹된 종목은 skip
+    empty_marker = cache_path.with_suffix(".empty")
+    if empty_marker.exists() and not refresh:
+        return None
 
     reprt_code = {"annual": "11011", "q1": "11013", "q2": "11012", "q3": "11014"}[report_type]
     # finstate_all 우선 (전체 재무항목, 매출원가/매출총이익 포함). 실패 시 finstate 폴백.
+    # opendartreader 의 라이브러리 자체 print 는 suppress
     fs = None
-    try:
-        fs = dart.finstate_all(ticker, year, reprt_code=reprt_code, fs_div="CFS")  # 연결재무제표
-        if fs is None or fs.empty:
-            fs = dart.finstate_all(ticker, year, reprt_code=reprt_code, fs_div="OFS")  # 별도재무제표
-    except Exception:
-        fs = None
-    if fs is None or fs.empty:
+    with _suppress_stdout():
         try:
-            fs = dart.finstate(ticker, year, reprt_code=reprt_code)
-        except Exception as e:
-            print(f"[dart] {ticker} {year} {report_type} 실패: {e}")
-            return None
+            fs = dart.finstate_all(ticker, year, reprt_code=reprt_code, fs_div="CFS")
+            if fs is None or fs.empty:
+                fs = dart.finstate_all(ticker, year, reprt_code=reprt_code, fs_div="OFS")
+        except Exception:
+            fs = None
+        if fs is None or fs.empty:
+            try:
+                fs = dart.finstate(ticker, year, reprt_code=reprt_code)
+            except Exception:
+                fs = None
     if fs is None or fs.empty:
+        # 빈 캐시 마커로 다음 fetch 에서 skip
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        empty_marker = cache_path.with_suffix(".empty")
+        empty_marker.touch()
         return None
 
     # 표준 항목 추출 (DART 계정명 매핑)

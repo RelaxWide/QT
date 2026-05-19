@@ -57,21 +57,23 @@ us:
     clenow_usd:    6000
     weinstein_usd: 4000
 
-# ── KR 자본 배분 (KOSPI200, KRW) ──────────────────────────────────
-# 초기: ₩5,000,000 입금 가정 → 종목당 약 ₩594,000 (Clenow) / ₩495,000 (Weinstein)
-# auto_allocate=true 면 KIS KRW 잔고 자동 조회
+# ── KR 자본 배분 (KOSPI 전체, KRW) ──────────────────────────────────
+# 2026-05-19 update: KW Super Value 단일 채택 (Clenow KR / Weinstein KR / Quality 전부 폐기)
+# 18년 컷오프 검증: CAGR 30.79%, Sharpe 1.30, alpha vs KOSPI +27%p
+# 분기 4회 (5/16, 8/16, 11/16, 4/1) 만 매매. 평소 매매 없음.
+#
+# 종목당 자본 = (KRW 잔고 × 0.99) / top_n
+# 예: ₩10,000,000 입금 → 종목당 약 ₩550,000 × top_n=18 종목
 kr:
+  mode: "mock"           # mock → prod 단계 진행. 모의 신청 후 prod 전환
   capital:
-    auto_allocate: true
+    auto_allocate: true   # KIS KRW 잔고 자동 조회 (입출금 시 config 수정 불필요)
     buffer_pct:      1.0
-    clenow_pct:     60
-    weinstein_pct:  40
-    clenow_max_positions:    5
-    weinstein_max_positions: 4
-    # 명시값 (auto_allocate=false 일 때 사용, KRW)
-    total_krw:    5000000
-    clenow_krw:   3000000
-    weinstein_krw: 2000000
+    kw_super_value_pct: 100      # KR 트랙 100% KW SV
+    kw_super_value_max_positions: 18   # sensitivity 10x10 최적 (Calmar 0.88)
+    # 명시값 (auto_allocate=false 일 때, KRW)
+    total_krw:            10000000
+    kw_super_value_krw:   10000000
 
 # 최상위 capital (기존 호환 — us 섹션 없으면 폴백)
 capital:
