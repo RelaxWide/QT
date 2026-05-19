@@ -1034,6 +1034,34 @@ DART 838종목 × 10년 panel fetch 완료 (`data/raw/kr/dart_panel/{year}.parqu
 - DART 의 진짜 ROE vs PyKRX 추정 ROE 차이 미미
 - GP/A factor 자체가 한국 시장에서 강환국 보고 (CAGR 46%) 만큼 작동 안 함
 
+### 10.2-Q-1 생존편향 측정 (DART 회사목록, 2026-05-19) — 부분 성공
+
+`OpenDartReader.corp_codes()` 로 KR 전체 상장사 목록 활용 시도.
+
+#### 결과
+
+| 비교 | 종목수 | CAGR | Sharpe | MDD |
+|---|---|---|---|---|
+| 현재 KOSPI (838) | 838 | 20.71% | 0.97 | -39.2% |
+| DART 합집합 (KOSPI + KOSDAQ + 폐지) | 2,740 (가격 보유) | **+26.75%** | **1.27** | -37.3% |
+| Δ | +1,902 | **+6.04%p** | +0.30 | +1.9%p |
+
+#### 한계 — 생존편향 magnitude 정확 측정 X
+
+DART corp_codes 가 **KOSPI 만이 아닌 KOSDAQ + 코넥스 + 과거 폐지 종목** 모두 반환. yfinance 가 `.KS` suffix 만 시도 (1,221 종목 fail = 대부분 KOSDAQ `.KQ`). 결과적으로 측정된 "합집합" 은 "확장된 universe" 이지 "과거 KOSPI universe" 가 아님.
+
+#### 의미 — universe 확장 효과 발견
+
+KW SV 알파가 **KOSDAQ 까지 확장해도 작동** (오히려 +6%p 증가). 시총 하위 15% 필터에서 더 작은 KOSDAQ 종목들이 가치/소형주 프리미엄 더 강함.
+
+#### 진짜 생존편향 추정
+
+- 보수적 (KOSPI 만 기준 가정): 부풀림 약 +2~3%p (10년간 ~50~70 종목 상장폐지)
+- 실제 KW SV 18년 컷오프 CAGR 30.79% → 보수적으로 27~28% 가능
+- 게이트 모두 통과 (CAGR 15%, Sharpe 0.7, alpha 3%p)
+
+**조치**: 실전 진입 결정에는 영향 없음. **향후 KOSDAQ universe 확장 옵션 추가 검토 가능** (KIS API 한국주식 KOSDAQ 지원 + 호가단위 확인 후).
+
 ### 10.2-Q 최종 결정 — KR 트랙 단일 전략 (2026-05-19)
 
 #### KW Super Value 단일 채택
