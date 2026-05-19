@@ -16,40 +16,6 @@
     "shares_remaining": 11.180140968897037,
     "realized_pnl": 0.0
   },
-  "PWR": {
-    "symbol": "PWR",
-    "entry_date": "2026-04-24T00:00:00",
-    "entry_price": 638.6379999999999,
-    "stop_initial": 576.0,
-    "stop_current": 717.2000122070312,
-    "targets": [
-      826.5519999999997
-    ],
-    "partial_weights": [
-      0.5
-    ],
-    "targets_hit": 0,
-    "shares_total": 11.175324882659101,
-    "shares_remaining": 11.175324882659101,
-    "realized_pnl": 0.0
-  },
-  "VRT": {
-    "symbol": "VRT",
-    "entry_date": "2026-04-24T00:00:00",
-    "entry_price": 328.328,
-    "stop_initial": 280.9700012207031,
-    "stop_current": 321.45001220703125,
-    "targets": [
-      470.4019963378905
-    ],
-    "partial_weights": [
-      0.5
-    ],
-    "targets_hit": 0,
-    "shares_total": 14.781029985287592,
-    "shares_remaining": 14.781029985287592,
-    "realized_pnl": 0.0
-  },
   "WMT": {
     "symbol": "WMT",
     "entry_date": "2026-04-24T00:00:00",
