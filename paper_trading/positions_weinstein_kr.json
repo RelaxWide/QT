@@ -1,1 +1,9 @@
-{}
+{
+  "034220": {
+    "symbol": "034220",
+    "entry_date": "2026-05-20T00:00:00",
+    "entry_price": 12560.0,
+    "shares": 0.5307855626326964,
+    "strategy": "weinstein"
+  }
+}
