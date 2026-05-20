@@ -13,13 +13,6 @@
     "shares": 68.22213040716024,
     "strategy": "clenow"
   },
-  "EQIX": {
-    "symbol": "EQIX",
-    "entry_date": "2026-04-29T00:00:00",
-    "entry_price": 1089.0699462890625,
-    "shares": 4.591073343853796,
-    "strategy": "clenow"
-  },
   "CIEN": {
     "symbol": "CIEN",
     "entry_date": "2026-04-29T00:00:00",
@@ -46,13 +39,6 @@
     "entry_date": "2026-04-29T00:00:00",
     "entry_price": 1064.2099609375,
     "shares": 4.698320992593721,
-    "strategy": "clenow"
-  },
-  "CF": {
-    "symbol": "CF",
-    "entry_date": "2026-04-29T00:00:00",
-    "entry_price": 126.77999877929688,
-    "shares": 39.43839760327003,
     "strategy": "clenow"
   },
   "VRT": {
@@ -111,13 +97,6 @@
     "shares": 16.397206309962044,
     "strategy": "clenow"
   },
-  "TER": {
-    "symbol": "TER",
-    "entry_date": "2026-04-29T00:00:00",
-    "entry_price": 306.3299865722656,
-    "shares": 16.32226755189199,
-    "strategy": "clenow"
-  },
   "DOW": {
     "symbol": "DOW",
     "entry_date": "2026-04-29T00:00:00",
@@ -137,6 +116,27 @@
     "entry_date": "2026-05-13T00:00:00",
     "entry_price": 120.29000091552734,
     "shares": 41.56621466410336,
+    "strategy": "clenow"
+  },
+  "ON": {
+    "symbol": "ON",
+    "entry_date": "2026-05-20T00:00:00",
+    "entry_price": 110.20999908447266,
+    "shares": 45.36793432116491,
+    "strategy": "clenow"
+  },
+  "JBL": {
+    "symbol": "JBL",
+    "entry_date": "2026-05-20T00:00:00",
+    "entry_price": 345.1499938964844,
+    "shares": 14.486455420594835,
+    "strategy": "clenow"
+  },
+  "CASY": {
+    "symbol": "CASY",
+    "entry_date": "2026-05-20T00:00:00",
+    "entry_price": 852.510009765625,
+    "shares": 5.865033774060456,
     "strategy": "clenow"
   }
 }
