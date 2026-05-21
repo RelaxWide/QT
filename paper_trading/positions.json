@@ -1,38 +1,4 @@
 {
-  "CASY": {
-    "symbol": "CASY",
-    "entry_date": "2026-04-24T00:00:00",
-    "entry_price": 791.8010197753905,
-    "stop_initial": 729.1900024414062,
-    "stop_current": 821.0,
-    "targets": [
-      979.6340717773433
-    ],
-    "partial_weights": [
-      0.5
-    ],
-    "targets_hit": 0,
-    "shares_total": 11.180140968897037,
-    "shares_remaining": 11.180140968897037,
-    "realized_pnl": 0.0
-  },
-  "WMT": {
-    "symbol": "WMT",
-    "entry_date": "2026-04-24T00:00:00",
-    "entry_price": 132.06192266845702,
-    "stop_initial": 122.55000305175781,
-    "stop_current": 126.37999725341797,
-    "targets": [
-      160.59768151855462
-    ],
-    "partial_weights": [
-      0.5
-    ],
-    "targets_hit": 0,
-    "shares_total": 73.59187505864476,
-    "shares_remaining": 73.59187505864476,
-    "realized_pnl": 0.0
-  },
   "KO": {
     "symbol": "KO",
     "entry_date": "2026-04-30T00:00:00",
@@ -150,6 +116,23 @@
     "targets_hit": 0,
     "shares_total": 20.78676777813926,
     "shares_remaining": 20.78676777813926,
+    "realized_pnl": 0.0
+  },
+  "XOM": {
+    "symbol": "XOM",
+    "entry_date": "2026-05-21T00:00:00",
+    "entry_price": 158.57841816711425,
+    "stop_initial": 142.9497252181697,
+    "stop_current": 142.9497252181697,
+    "targets": [
+      205.4644970139479
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 44.78941407875526,
+    "shares_remaining": 44.78941407875526,
     "realized_pnl": 0.0
   }
 }
