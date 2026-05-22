@@ -134,5 +134,22 @@
     "shares_total": 44.78941407875526,
     "shares_remaining": 44.78941407875526,
     "realized_pnl": 0.0
+  },
+  "HPE": {
+    "symbol": "HPE",
+    "entry_date": "2026-05-22T00:00:00",
+    "entry_price": 34.68465152740478,
+    "stop_initial": 29.309999465942383,
+    "stop_current": 29.309999465942383,
+    "targets": [
+      50.80860771179198
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 130.24098899706925,
+    "shares_remaining": 130.24098899706925,
+    "realized_pnl": 0.0
   }
 }
