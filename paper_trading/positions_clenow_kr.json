@@ -6,13 +6,6 @@
     "shares": 0.017391304347826087,
     "strategy": "clenow"
   },
-  "006800": {
-    "symbol": "006800",
-    "entry_date": "2026-05-20T00:00:00",
-    "entry_price": 62000.0,
-    "shares": 0.08064516129032258,
-    "strategy": "clenow"
-  },
   "000150": {
     "symbol": "000150",
     "entry_date": "2026-05-20T00:00:00",
@@ -83,13 +76,6 @@
     "shares": 0.006002400960384154,
     "strategy": "clenow"
   },
-  "278470": {
-    "symbol": "278470",
-    "entry_date": "2026-05-20T00:00:00",
-    "entry_price": 390000.0,
-    "shares": 0.01282051282051282,
-    "strategy": "clenow"
-  },
   "120110": {
     "symbol": "120110",
     "entry_date": "2026-05-20T00:00:00",
@@ -132,11 +118,25 @@
     "shares": 0.032658393207054215,
     "strategy": "clenow"
   },
-  "085620": {
-    "symbol": "085620",
-    "entry_date": "2026-05-20T00:00:00",
-    "entry_price": 14270.0,
-    "shares": 0.350385423966363,
+  "005930": {
+    "symbol": "005930",
+    "entry_date": "2026-05-27T00:00:00",
+    "entry_price": 307000.0,
+    "shares": 0.016286644951140065,
+    "strategy": "clenow"
+  },
+  "010060": {
+    "symbol": "010060",
+    "entry_date": "2026-05-27T00:00:00",
+    "entry_price": 388000.0,
+    "shares": 0.01288659793814433,
+    "strategy": "clenow"
+  },
+  "336260": {
+    "symbol": "336260",
+    "entry_date": "2026-05-27T00:00:00",
+    "entry_price": 101500.0,
+    "shares": 0.04926108374384237,
     "strategy": "clenow"
   }
 }
