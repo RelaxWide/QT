@@ -1,10 +1,10 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-05-26
+날짜: 2026-05-27
 
 ## 전략별 현황
 
 ### Phase 4 (추세추종)
-보유 9종목: CIEN, EBAY, HPE, KMI, KO, OKE, TRGP, VRSN, XOM
+보유 10종목: CIEN, DAL, EBAY, HPE, KMI, KO, OKE, TRGP, VRSN, XOM
 
 누적: 10건 | WR 30.0% | PF 0.81 | PnL $-522
 낙폭: 현재 -0.6% | 최대 -1.9%
@@ -15,12 +15,14 @@
 ⚠️ PF 0.81 < 게이트 1.5
 
 ### Clenow (모멘텀)
-보유 20종목: APA, CASY, CIEN, COHR, DELL, DOW, FIX, GEV, GLW, INTC, JBL, KEYS, LITE, LYB, ON, PWR, SNDK, STX, VRT, WDC
+보유 20종목: AMD, APA, CIEN, COHR, DELL, FIX, GEV, GLW, HPE, INTC, JBL, KEYS, LITE, MU, ON, PWR, SNDK, STX, VRT, WDC
 
-누적: 5건 | WR 20.0% | PF 0.66 | PnL $-319
-낙폭: 현재 -0.3% | 최대 -0.7%
-스트릭: L 2연속
-최근 10건: L L W L L
+누적: 8건 | WR 12.5% | PF 0.26 | PnL $-1,756
+낙폭: 현재 -1.8% | 최대 -1.8%
+스트릭: L 5연속
+최근 10건: L L W L L L L L
+
+⚠️ 5연속 손절 중
 
 ### Weinstein (Stage 2)
 보유 2종목: CNC, QCOM
@@ -39,11 +41,7 @@
 | TRGP | 2026-05-20T00:00:00 | $275.54 | $241.86 | 0 |
 | XOM | 2026-05-21T00:00:00 | $158.58 | $142.95 | 0 |
 | HPE | 2026-05-22T00:00:00 | $34.68 | $29.31 | 0 |
-
-## 내일 진입 예정 (Phase 4)
-| 종목 | 예상가 | stop | R |
-|------|--------|------|---|
-| DAL | $78.19 | $67.76 | $10.43 |
+| DAL | 2026-05-27T00:00:00 | $80.83 | $67.76 | 0 |
 
 ## 최근 거래 내역 (최근 20건)
 | 날짜 | 전략 | 종목 | PnL | R | 사유 |
@@ -63,3 +61,6 @@
 | 2026-05-20T00:00:00 | Clenow | CF | ❌ $-142 | - | rank_exit |
 | 2026-05-21T00:00:00 | Phase4 | CASY | ✅ $+317 | 0.4532 | stop |
 | 2026-05-21T00:00:00 | Phase4 | WMT | ❌ $-572 | -0.8177 | stop_gap |
+| 2026-05-27T00:00:00 | Clenow | LYB | ❌ $-388 | - | rank_exit |
+| 2026-05-27T00:00:00 | Clenow | DOW | ❌ $-644 | - | rank_exit |
+| 2026-05-27T00:00:00 | Clenow | CASY | ❌ $-404 | - | rank_exit |

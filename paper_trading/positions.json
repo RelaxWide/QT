@@ -151,5 +151,22 @@
     "shares_total": 130.24098899706925,
     "shares_remaining": 130.24098899706925,
     "realized_pnl": 0.0
+  },
+  "DAL": {
+    "symbol": "DAL",
+    "entry_date": "2026-05-27T00:00:00",
+    "entry_price": 80.83075,
+    "stop_initial": 67.76000213623047,
+    "stop_current": 67.76000213623047,
+    "targets": [
+      120.04299359130857
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 53.554701482714094,
+    "shares_remaining": 53.554701482714094,
+    "realized_pnl": 0.0
   }
 }

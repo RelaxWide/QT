@@ -6,13 +6,6 @@
     "shares": 5.825333159350808,
     "strategy": "clenow"
   },
-  "LYB": {
-    "symbol": "LYB",
-    "entry_date": "2026-04-29T00:00:00",
-    "entry_price": 73.29000091552734,
-    "shares": 68.22213040716024,
-    "strategy": "clenow"
-  },
   "CIEN": {
     "symbol": "CIEN",
     "entry_date": "2026-04-29T00:00:00",
@@ -97,13 +90,6 @@
     "shares": 16.397206309962044,
     "strategy": "clenow"
   },
-  "DOW": {
-    "symbol": "DOW",
-    "entry_date": "2026-04-29T00:00:00",
-    "entry_price": 39.54999923706055,
-    "shares": 126.42225275480466,
-    "strategy": "clenow"
-  },
   "PWR": {
     "symbol": "PWR",
     "entry_date": "2026-05-06T00:00:00",
@@ -132,11 +118,25 @@
     "shares": 14.486455420594835,
     "strategy": "clenow"
   },
-  "CASY": {
-    "symbol": "CASY",
-    "entry_date": "2026-05-20T00:00:00",
-    "entry_price": 852.510009765625,
-    "shares": 5.865033774060456,
+  "AMD": {
+    "symbol": "AMD",
+    "entry_date": "2026-05-27T00:00:00",
+    "entry_price": 495.5400085449219,
+    "shares": 10.090002651212245,
+    "strategy": "clenow"
+  },
+  "MU": {
+    "symbol": "MU",
+    "entry_date": "2026-05-27T00:00:00",
+    "entry_price": 928.4099731445312,
+    "shares": 5.385551797838797,
+    "strategy": "clenow"
+  },
+  "HPE": {
+    "symbol": "HPE",
+    "entry_date": "2026-05-27T00:00:00",
+    "entry_price": 37.20000076293945,
+    "shares": 134.40859939393485,
     "strategy": "clenow"
   }
 }
