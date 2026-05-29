@@ -84,23 +84,6 @@
     "shares_remaining": 202.06031003551772,
     "realized_pnl": 0.0
   },
-  "OKE": {
-    "symbol": "OKE",
-    "entry_date": "2026-05-20T00:00:00",
-    "entry_price": 95.1950984725952,
-    "stop_initial": 83.66000366210938,
-    "stop_current": 83.66000366210938,
-    "targets": [
-      129.8003829040527
-    ],
-    "partial_weights": [
-      0.5
-    ],
-    "targets_hit": 0,
-    "shares_total": 60.68437334070924,
-    "shares_remaining": 60.68437334070924,
-    "realized_pnl": 0.0
-  },
   "TRGP": {
     "symbol": "TRGP",
     "entry_date": "2026-05-20T00:00:00",
