@@ -67,23 +67,6 @@
     "shares_remaining": 35.99783879569822,
     "realized_pnl": 0.0
   },
-  "KMI": {
-    "symbol": "KMI",
-    "entry_date": "2026-05-20T00:00:00",
-    "entry_price": 34.3443113746643,
-    "stop_initial": 30.8799991607666,
-    "stop_current": 30.8799991607666,
-    "targets": [
-      44.7372480163574
-    ],
-    "partial_weights": [
-      0.5
-    ],
-    "targets_hit": 0,
-    "shares_total": 202.06031003551772,
-    "shares_remaining": 202.06031003551772,
-    "realized_pnl": 0.0
-  },
   "TRGP": {
     "symbol": "TRGP",
     "entry_date": "2026-05-20T00:00:00",
@@ -150,6 +133,23 @@
     "targets_hit": 0,
     "shares_total": 53.554701482714094,
     "shares_remaining": 53.554701482714094,
+    "realized_pnl": 0.0
+  },
+  "AMAT": {
+    "symbol": "AMAT",
+    "entry_date": "2026-06-01T00:00:00",
+    "entry_price": 442.47202877807615,
+    "stop_initial": 396.87662146355484,
+    "stop_current": 396.87662146355484,
+    "targets": [
+      579.25825072164
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 15.352423439741102,
+    "shares_remaining": 15.352423439741102,
     "realized_pnl": 0.0
   }
 }
