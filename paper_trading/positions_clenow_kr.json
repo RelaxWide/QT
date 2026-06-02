@@ -76,13 +76,6 @@
     "shares": 0.006002400960384154,
     "strategy": "clenow"
   },
-  "120110": {
-    "symbol": "120110",
-    "entry_date": "2026-05-20T00:00:00",
-    "entry_price": 71000.0,
-    "shares": 0.07042253521126761,
-    "strategy": "clenow"
-  },
   "375500": {
     "symbol": "375500",
     "entry_date": "2026-05-20T00:00:00",
