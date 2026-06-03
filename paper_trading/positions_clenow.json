@@ -20,13 +20,6 @@
     "shares": 7.772423589115837,
     "strategy": "clenow"
   },
-  "GEV": {
-    "symbol": "GEV",
-    "entry_date": "2026-04-29T00:00:00",
-    "entry_price": 1063.1099853515625,
-    "shares": 4.703182237862753,
-    "strategy": "clenow"
-  },
   "SNDK": {
     "symbol": "SNDK",
     "entry_date": "2026-04-29T00:00:00",
@@ -46,13 +39,6 @@
     "entry_date": "2026-04-29T00:00:00",
     "entry_price": 335.4599914550781,
     "shares": 14.904907074945646,
-    "strategy": "clenow"
-  },
-  "APA": {
-    "symbol": "APA",
-    "entry_date": "2026-04-29T00:00:00",
-    "entry_price": 40.31999969482422,
-    "shares": 124.00793744653322,
     "strategy": "clenow"
   },
   "FIX": {
@@ -137,6 +123,20 @@
     "entry_date": "2026-05-27T00:00:00",
     "entry_price": 37.20000076293945,
     "shares": 134.40859939393485,
+    "strategy": "clenow"
+  },
+  "DDOG": {
+    "symbol": "DDOG",
+    "entry_date": "2026-06-03T00:00:00",
+    "entry_price": 250.3300018310547,
+    "shares": 19.973634655962858,
+    "strategy": "clenow"
+  },
+  "HUM": {
+    "symbol": "HUM",
+    "entry_date": "2026-06-03T00:00:00",
+    "entry_price": 327.5400085449219,
+    "shares": 15.265310708796216,
     "strategy": "clenow"
   }
 }
