@@ -151,5 +151,22 @@
     "shares_total": 15.71287671637513,
     "shares_remaining": 15.71287671637513,
     "realized_pnl": 0.0
+  },
+  "FFIV": {
+    "symbol": "FFIV",
+    "entry_date": "2026-06-05T00:00:00",
+    "entry_price": 405.5451546630859,
+    "stop_initial": 372.6199951171875,
+    "stop_current": 372.6199951171875,
+    "targets": [
+      504.3206333007811
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 21.260337372828353,
+    "shares_remaining": 21.260337372828353,
+    "realized_pnl": 0.0
   }
 }
