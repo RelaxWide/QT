@@ -16,23 +16,6 @@
     "shares_remaining": 25.525902066812442,
     "realized_pnl": 0.0
   },
-  "CIEN": {
-    "symbol": "CIEN",
-    "entry_date": "2026-05-18T00:00:00",
-    "entry_price": 564.0534802246093,
-    "stop_initial": 486.25,
-    "stop_current": 486.25,
-    "targets": [
-      797.4639208984372
-    ],
-    "partial_weights": [
-      0.5
-    ],
-    "targets_hit": 0,
-    "shares_total": 8.997026842233586,
-    "shares_remaining": 8.997026842233586,
-    "realized_pnl": 0.0
-  },
   "EBAY": {
     "symbol": "EBAY",
     "entry_date": "2026-05-18T00:00:00",
