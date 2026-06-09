@@ -151,5 +151,22 @@
     "shares_total": 21.260337372828353,
     "shares_remaining": 21.260337372828353,
     "realized_pnl": 0.0
+  },
+  "ELV": {
+    "symbol": "ELV",
+    "entry_date": "2026-06-09T00:00:00",
+    "entry_price": 420.6202122192382,
+    "stop_initial": 384.29998779296875,
+    "stop_current": 384.29998779296875,
+    "targets": [
+      529.5808854980467
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 19.273008662735798,
+    "shares_remaining": 19.273008662735798,
+    "realized_pnl": 0.0
   }
 }
