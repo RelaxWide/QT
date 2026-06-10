@@ -27,79 +27,72 @@ log = logging.getLogger("kis")
 STRATEGIES = ("phase4", "clenow", "weinstein")
 
 
-def sync_all(kis: KISClient, notify_fn=None) -> dict:
+def sync_all(kis: KISClient) -> dict:
     """
-    KIS 전체 잔고를 조회해 3전략 positions_live 파일과 비교·갱신.
-    반환: {strategy: {"added": [...], "removed": [...], "mismatches": [...]}}
+    KIS 전체 잔고를 조회해 **계정 단위**로 로컬 추적과 대조.
+
+    KIS 잔고는 종합계좌 단위라 종목이 어느 전략 소속인지 구분하지 않는다.
+    따라서 전 전략(phase4/clenow/weinstein) positions_live 의 **합집합**과 비교해야
+    "Clenow 가 산 종목이 phase4·weinstein 에는 없다"는 거짓 경고를 피한다.
+
+    반환:
+        {
+          "untracked": [sym, ...],        # KIS 보유 O / 어느 전략에도 X → 미할당 (등록 필요)
+          "missing":   [(sym, strat), ...],# 전략 보유 O / KIS X → 외부 청산·미체결 의심
+          "mismatch":  [{symbol, strategy, local_qty, kis_qty}, ...],
+          "kis_count": int,
+        }
     """
     balance = kis.get_balance()
     kis_holdings: dict[str, dict] = {
         p["symbol"]: p for p in balance.get("positions", [])
     }
+    kis_syms = set(kis_holdings)
 
-    report = {}
+    # 전 전략 합집합: symbol -> {strategy: qty}
+    tracked: dict[str, dict[str, int]] = {}
     for strategy in STRATEGIES:
-        local = load_live_positions(strategy)
-        result = _reconcile(strategy, local, kis_holdings, notify_fn)
-        report[strategy] = result
+        for sym, pos in load_live_positions(strategy).items():
+            tracked.setdefault(sym, {})[strategy] = pos.qty
+    tracked_syms = set(tracked)
 
-    return report
+    # 미할당: KIS 에 있는데 어느 전략에도 없음 (진짜 등록 필요 케이스)
+    untracked = sorted(kis_syms - tracked_syms)
 
+    # 외부 청산·미체결: 전략이 추적 중인데 KIS 잔고에 없음
+    missing = sorted(
+        (sym, strat)
+        for sym in tracked_syms - kis_syms
+        for strat in tracked[sym]
+    )
 
-def _reconcile(
-    strategy: str,
-    local: dict[str, LivePosition],
-    kis_all: dict[str, dict],
-    notify_fn=None,
-) -> dict:
-    """
-    로컬 positions_live_{strategy}.json 과 KIS 잔고를 비교.
+    # 수량 불일치: 계정 단위 합계 vs KIS 실제
+    mismatch = []
+    for sym in kis_syms & tracked_syms:
+        kis_qty     = int(kis_holdings[sym]["qty"])
+        local_total = sum(tracked[sym].values())
+        if local_total != kis_qty:
+            for strat, q in tracked[sym].items():
+                mismatch.append({
+                    "symbol": sym, "strategy": strat,
+                    "local_qty": q, "kis_qty": kis_qty,
+                })
 
-    케이스:
-    A. 로컬 O / KIS O → qty 불일치 시 경고
-    B. 로컬 O / KIS X → 외부 청산 또는 미체결 → 경고
-    C. 로컬 X / KIS O → 수동 매수 또는 미기록 → 경고
-    """
-    added      = []
-    removed    = []
-    mismatches = []
+    if untracked:
+        log.warning(f"[sync] 미할당 KIS 보유 (등록 필요): {untracked}")
+    for sym, strat in missing:
+        log.warning(f"[sync] {strat} {sym}: 전략 보유 O / KIS X — 외부 청산·미체결 의심")
+    for m in mismatch:
+        log.warning(f"[sync] {m['strategy']} {m['symbol']}: 수량 불일치 "
+                     f"로컬 {m['local_qty']} / KIS {m['kis_qty']}")
 
-    local_syms = set(local.keys())
-    kis_syms   = set(kis_all.keys())
-
-    # B: 로컬에 있는데 KIS에 없음
-    for sym in local_syms - kis_syms:
-        msg = f"[{strategy}] {sym}: 로컬 보유 O / KIS 잔고 X — 외부 청산 또는 미체결 가능성"
-        log.warning(msg)
-        if notify_fn:
-            notify_fn(msg)
-        removed.append(sym)
-
-    # C: KIS에 있는데 로컬에 없음
-    for sym in kis_syms - local_syms:
-        kis_qty = kis_all[sym]["qty"]
-        msg = f"[{strategy}] {sym}: KIS 보유 {kis_qty}주 / 로컬 X — 수동 매수 또는 미기록"
-        log.warning(msg)
-        if notify_fn:
-            notify_fn(msg)
-        added.append(sym)
-
-    # A: 양쪽 모두 있지만 수량 불일치
-    for sym in local_syms & kis_syms:
-        local_qty = local[sym].qty
-        kis_qty   = kis_all[sym]["qty"]
-        if local_qty != kis_qty:
-            msg = (f"[{strategy}] {sym}: 수량 불일치 — "
-                   f"로컬 {local_qty}주 / KIS {kis_qty}주")
-            log.warning(msg)
-            if notify_fn:
-                notify_fn(msg)
-            mismatches.append({"symbol": sym, "local_qty": local_qty, "kis_qty": kis_qty})
-            # KIS 실제값으로 로컬 업데이트
-            local[sym].qty = kis_qty
-
-    save_live_positions(strategy, local)
-    return {"added": added, "removed": removed, "mismatches": mismatches}
+    return {
+        "untracked": untracked,
+        "missing":   missing,
+        "mismatch":  mismatch,
+        "kis_count": len(kis_syms),
+        "balance":   balance,
+    }
 
 
 def record_fill(
@@ -174,18 +167,18 @@ def _cli():
 
     if args.sync:
         kis = KISClient.from_config()
-        report = sync_all(kis)
-        for strategy, r in report.items():
-            print(f"\n[{strategy}]")
-            if r["added"]:
-                print(f"  KIS에만 있음 (미기록): {r['added']}")
-            if r["removed"]:
-                print(f"  로컬에만 있음 (외부청산?): {r['removed']}")
-            if r["mismatches"]:
-                for m in r["mismatches"]:
-                    print(f"  수량 불일치: {m['symbol']} 로컬={m['local_qty']} KIS={m['kis_qty']}")
-            if not any(r.values()):
-                print("  [OK] 일치")
+        r = sync_all(kis)
+        print(f"\nKIS 보유: {r['kis_count']}종목")
+        if r["untracked"]:
+            print(f"  미할당 (어느 전략에도 없음): {r['untracked']}")
+        if r["missing"]:
+            for sym, strat in r["missing"]:
+                print(f"  로컬에만 있음 (외부청산?): {strat} {sym}")
+        if r["mismatch"]:
+            for m in r["mismatch"]:
+                print(f"  수량 불일치: {m['strategy']} {m['symbol']} 로컬={m['local_qty']} KIS={m['kis_qty']}")
+        if not (r["untracked"] or r["missing"] or r["mismatch"]):
+            print("  [OK] 계정 단위 일치")
 
     if args.report:
         r = slippage_report()

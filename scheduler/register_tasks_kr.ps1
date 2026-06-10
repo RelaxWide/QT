@@ -14,20 +14,33 @@ $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interac
 function Register-QTKRTask {
     param($name, $script, $triggers)
 
+    # daily_close_kr 는 매번 가격 캐시 갱신 (--refresh) — 최신 시점 신호 산출 보장
+    if ($name -eq "QT_KR_DailyClose") {
+        $scriptArg = "$workdir\$script --refresh"
+    } else {
+        $scriptArg = "$workdir\$script"
+    }
     $action   = New-ScheduledTaskAction -Execute $python `
-                    -Argument "$workdir\$script" `
+                    -Argument $scriptArg `
                     -WorkingDirectory $workdir
 
-    # wednesday_morning_buy_kr 는 최대 30분 슬립 가능 → 한도 60분
-    $limit = if ($name -eq "QT_KR_WedMorningBuy") { New-TimeSpan -Minutes 60 } else { New-TimeSpan -Minutes 30 }
+    # wed_buy_kr: 최대 30분 슬립 / daily_close_kr: 분기 리밸런싱일엔 KW SV universe+DART
+    # 처리로 무거움 → 둘 다 60분 한도. (평일 daily_close_kr 은 인덱스 1종목만 받고 즉시 종료)
+    # PowerShell 5.1: if-else expression 이 New-TimeSpan 출력 캡처 못 함 → 분리
+    if ($name -eq "QT_KR_WedMorningBuy" -or $name -eq "QT_KR_DailyClose") {
+        $limit = New-TimeSpan -Minutes 60
+    } else {
+        $limit = New-TimeSpan -Minutes 30
+    }
     $settings = New-ScheduledTaskSettingsSet `
         -ExecutionTimeLimit $limit `
         -StartWhenAvailable `
-        -RunOnlyIfNetworkAvailable
+        -RunOnlyIfNetworkAvailable `
+        -WakeToRun
 
     Register-ScheduledTask -TaskName $name `
         -Action $action -Trigger $triggers -Settings $settings `
-        -Principal $principal -Force | Out-Null
+        -Principal $principal -Force -ErrorAction Stop | Out-Null
 
     Write-Host "[OK] $name registered"
 }

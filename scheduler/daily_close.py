@@ -22,6 +22,9 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from scheduler._log_helper import setup_file_logger
+setup_file_logger("daily_close")
+
 from live_trading.kis_client import KISClient
 from live_trading.orders import OrderManager
 from live_trading.account import sync_all
@@ -33,7 +36,7 @@ log = logging.getLogger("kis")
 WED_BUY_PENDING = Path("live_trading/wed_buy_pending.json")
 
 
-def main(dry_run: bool = False):
+def main(dry_run: bool = False, refresh: bool = False):
     cfg_live = yaml.safe_load(Path("config_live.yaml").read_text(encoding="utf-8"))
     cfg      = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
 
@@ -55,7 +58,8 @@ def main(dry_run: bool = False):
     from src.fetch.prices import fetch_all
     tickers    = get_sp500_tickers()
     price_data = fetch_all(tickers, cfg["data"]["start_date"],
-                           cfg["data"]["end_date"], min_bars=150)
+                           cfg["data"]["end_date"], min_bars=150,
+                           refresh=refresh)
     log.info(f"[daily_close] {len(price_data)} 종목 로드 완료")
 
     # 데이터의 마지막 거래일을 today 로 사용 (실행 시점/타임존 영향 제거)
@@ -128,15 +132,52 @@ def main(dry_run: bool = False):
     if allow_new:
         _update_phase4_pending(cfg, cfg_live, price_data, today)
 
-    # ── 5. KIS 잔고 동기화 ───────────────────────────────────────────────
+    # ── 5. KIS 잔고 동기화 + 핵심정보 텔레그램 1건 ───────────────────────
     if not dry_run:
         kis = KISClient.from_config(allow_prod=True)
-        report = sync_all(kis, notify_fn=lambda msg: _notify(msg, cfg_live))
-        for strategy, r in report.items():
-            if any(r.values()):
-                log.warning(f"[sync] {strategy}: {r}")
+        report = sync_all(kis)
+        msg = _build_core_message(report, today, cl_sell_orders, w_sell_orders,
+                                  pending_payload)
+        log.info("[daily_close] " + msg.replace("\n", " | "))
+        _notify(msg, cfg_live)
 
     log.info("[daily_close] 완료")
+
+
+def _build_core_message(report, today, cl_sells, w_sells, pending) -> str:
+    """daily_close 핵심정보 텔레그램. 종목별 스팸 대신 요약 1건."""
+    L = [f"🇺🇸 <b>{today.date()} US 장마감 처리</b>"]
+
+    bal = report.get("balance") or {}
+    cash = bal.get("cash_usd", 0.0)
+    sum_eval = sum(p.get("eval_amt", 0) for p in bal.get("positions", []))
+    pnl = bal.get("total_pnl_usd", 0.0)
+    L.append(f"잔고: 예수금 ${cash:,.2f} | 평가 ${sum_eval:,.2f} | 손익 ${pnl:+,.2f}")
+
+    n_sells = len(cl_sells) + len(w_sells)
+    if n_sells:
+        L.append(f"💸 매도 {n_sells}건 (Clenow {len(cl_sells)} / Weinstein {len(w_sells)})")
+    else:
+        L.append("매도: 없음")
+
+    if pending:
+        parts = [f"{k} {len(v.get('symbols', []))}종목" for k, v in pending.items()]
+        L.append("🔔 매수대기 (목 00:00 KST 실행): " + ", ".join(parts))
+
+    L.append(f"보유: KIS {report.get('kis_count', 0)}종목 추적 중")
+
+    # 진짜 이상만 경고 (거짓 '미기록' 스팸 제거됨)
+    if report.get("untracked"):
+        L.append("⚠️ 미할당 KIS 보유 (등록 필요): " + ", ".join(report["untracked"]))
+    if report.get("missing"):
+        items = ", ".join(f"{s}({st})" for s, st in report["missing"])
+        L.append(f"⚠️ 외부 청산·미체결 의심: {items}")
+    if report.get("mismatch"):
+        items = ", ".join(f"{m['symbol']} 로컬{m['local_qty']}/KIS{m['kis_qty']}"
+                          for m in report["mismatch"])
+        L.append(f"⚠️ 수량 불일치: {items}")
+
+    return "\n".join(L)
 
 
 def _update_phase4_pending(cfg, cfg_live, price_data, today):
@@ -205,5 +246,6 @@ def _notify(msg: str, cfg_live: dict):
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--refresh", action="store_true", help="가격 캐시 강제 갱신")
     args = p.parse_args()
-    main(dry_run=args.dry_run)
+    main(dry_run=args.dry_run, refresh=args.refresh)

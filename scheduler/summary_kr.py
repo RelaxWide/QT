@@ -22,11 +22,7 @@ from live_trading.kis_client import KISClient
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 log = logging.getLogger("kis")
 
-STRATEGIES = ("clenow", "weinstein")
-LABEL = {
-    "clenow":    "📊 Clenow (모멘텀)",
-    "weinstein": "🏭 Weinstein (Stage 2)",
-}
+KW_STATE_PATH = Path("paper_trading/positions_kw_super_value_kr.json")
 
 
 def build_summary() -> str:
@@ -69,12 +65,18 @@ def build_summary() -> str:
         L.append(f"  {sym}: {qty}주 ₩{avg:,.0f}→₩{cur:,.0f} ({pct:+.1f}%) | 평가 ₩{ev:,.0f}")
 
     L.append("")
-    L.append("━━━ 자본 배분 (KR) ━━━")
-    if cap.get("auto_allocate"):
-        L.append(f"auto_allocate ON: Clenow {cap.get('clenow_pct', 60)}% / "
-                 f"Weinstein {cap.get('weinstein_pct', 40)}% / 버퍼 {cap.get('buffer_pct', 1.0)}%")
-    L.append(f"max_positions: Clenow {cap.get('clenow_max_positions', 5)}, "
-             f"Weinstein {cap.get('weinstein_max_positions', 4)}")
+    L.append("━━━ ⭐ KW Super Value (KR 메인 엔진) ━━━")
+    L.append(f"KR 자본 {cap.get('kw_super_value_pct', 100)}% · "
+             f"top {cap.get('kw_super_value_max_positions', 18)} 동일비중 · "
+             f"분기 리밸런싱 (5/16·8/16·11/16·4/1)")
+    # 최근 리밸런싱 상태
+    if KW_STATE_PATH.exists():
+        try:
+            st = json.loads(KW_STATE_PATH.read_text(encoding="utf-8"))
+            L.append(f"최근 리밸런싱: {st.get('rebal_date', '?')} | "
+                     f"매수 {len(st.get('orders', []))}종목 ₩{st.get('spent', 0):,}")
+        except Exception:
+            pass
 
     return "\n".join(L)
 
