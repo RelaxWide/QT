@@ -1,5 +1,5 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-06-09
+날짜: 2026-06-10
 
 ## 전략별 현황
 
@@ -16,16 +16,15 @@
 ⚠️ 5연속 손절 중
 
 ### Clenow (모멘텀)
-보유 20종목: AMD, CIEN, COHR, DDOG, DELL, FIX, GLW, HPE, HUM, INTC, JBL, KEYS, LITE, MU, ON, PWR, SNDK, STX, VRT, WDC
+보유 20종목: AMD, CIEN, COHR, CRWD, DDOG, DELL, FIX, FTNT, HPE, HUM, INTC, JBL, LITE, MU, ON, PANW, SNDK, STX, UNH, WDC
 
-누적: 10건 | WR 10.0% | PF 0.2 | PnL $-2,500
-낙폭: 현재 -2.5% | 최대 -2.5%
-스트릭: L 7연속
-최근 10건: L L W L L L L L L L
+누적: 14건 | WR 14.3% | PF 0.25 | PnL $-3,421
+낙폭: 현재 -3.4% | 최대 -3.4%
+스트릭: L 2연속
+최근 10건: L L L L L L L W L L
 
-⚠️ WR 10.0% < 게이트 55%
-⚠️ PF 0.2 < 게이트 1.5
-⚠️ 7연속 손절 중
+⚠️ WR 14.3% < 게이트 55%
+⚠️ PF 0.25 < 게이트 1.5
 
 ### Weinstein (Stage 2)
 보유 2종목: CNC, QCOM
@@ -49,10 +48,6 @@
 ## 최근 거래 내역 (최근 20건)
 | 날짜 | 전략 | 종목 | PnL | R | 사유 |
 |------|------|------|-----|---|------|
-| 2026-05-14T00:00:00 | Phase4 | TT | ❌ $-263 | -0.3761 | stop |
-| 2026-05-15T00:00:00 | Phase4 | PSA | ❌ $-492 | -0.7035 | stop |
-| 2026-05-18T00:00:00 | Phase4 | GNRC | ✅ $+1,109 | 1.5836 | stop |
-| 2026-05-18T00:00:00 | Phase4 | KEYS | ❌ $-154 | -0.2205 | stop |
 | 2026-05-19T00:00:00 | Phase4 | PWR | ✅ $+749 | 1.0699 | stop_gap |
 | 2026-05-19T00:00:00 | Phase4 | VRT | ❌ $-106 | -0.152 | stop |
 | 2026-05-20T00:00:00 | Clenow | TER | ✅ $+615 | - | rank_exit |
@@ -69,3 +64,7 @@
 | 2026-06-03T00:00:00 | Clenow | APA | ❌ $-252 | - | rank_exit |
 | 2026-06-04T00:00:00 | Phase4 | KO | ❌ $-198 | -0.2825 | stop |
 | 2026-06-08T00:00:00 | Phase4 | CIEN | ❌ $-704 | -1.0062 | stop |
+| 2026-06-10T00:00:00 | Clenow | VRT | ❌ $-416 | - | rank_exit |
+| 2026-06-10T00:00:00 | Clenow | GLW | ✅ $+530 | - | rank_exit |
+| 2026-06-10T00:00:00 | Clenow | KEYS | ❌ $-176 | - | rank_exit |
+| 2026-06-10T00:00:00 | Clenow | PWR | ❌ $-859 | - | rank_exit |

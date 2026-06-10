@@ -27,32 +27,11 @@
     "shares": 4.698320992593721,
     "strategy": "clenow"
   },
-  "VRT": {
-    "symbol": "VRT",
-    "entry_date": "2026-04-29T00:00:00",
-    "entry_price": 306.17999267578125,
-    "shares": 16.330263634484364,
-    "strategy": "clenow"
-  },
-  "KEYS": {
-    "symbol": "KEYS",
-    "entry_date": "2026-04-29T00:00:00",
-    "entry_price": 335.4599914550781,
-    "shares": 14.904907074945646,
-    "strategy": "clenow"
-  },
   "FIX": {
     "symbol": "FIX",
     "entry_date": "2026-04-29T00:00:00",
     "entry_price": 1724.1400146484375,
     "shares": 2.8999964953655635,
-    "strategy": "clenow"
-  },
-  "GLW": {
-    "symbol": "GLW",
-    "entry_date": "2026-04-29T00:00:00",
-    "entry_price": 151.89999389648438,
-    "shares": 32.9163936860153,
     "strategy": "clenow"
   },
   "DELL": {
@@ -74,13 +53,6 @@
     "entry_date": "2026-04-29T00:00:00",
     "entry_price": 304.92999267578125,
     "shares": 16.397206309962044,
-    "strategy": "clenow"
-  },
-  "PWR": {
-    "symbol": "PWR",
-    "entry_date": "2026-05-06T00:00:00",
-    "entry_price": 785.239990234375,
-    "shares": 6.367480085301848,
     "strategy": "clenow"
   },
   "INTC": {
@@ -137,6 +109,34 @@
     "entry_date": "2026-06-03T00:00:00",
     "entry_price": 327.5400085449219,
     "shares": 15.265310708796216,
+    "strategy": "clenow"
+  },
+  "PANW": {
+    "symbol": "PANW",
+    "entry_date": "2026-06-10T00:00:00",
+    "entry_price": 263.2200012207031,
+    "shares": 18.995516969881137,
+    "strategy": "clenow"
+  },
+  "UNH": {
+    "symbol": "UNH",
+    "entry_date": "2026-06-10T00:00:00",
+    "entry_price": 407.4599914550781,
+    "shares": 12.271143437039125,
+    "strategy": "clenow"
+  },
+  "CRWD": {
+    "symbol": "CRWD",
+    "entry_date": "2026-06-10T00:00:00",
+    "entry_price": 647.739990234375,
+    "shares": 7.7191466875324855,
+    "strategy": "clenow"
+  },
+  "FTNT": {
+    "symbol": "FTNT",
+    "entry_date": "2026-06-10T00:00:00",
+    "entry_price": 138.8800048828125,
+    "shares": 36.00230288167847,
     "strategy": "clenow"
   }
 }
