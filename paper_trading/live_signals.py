@@ -49,14 +49,16 @@ def get_clenow_signals(
                 sell_ma100.append(sym)
 
     # 수요일: 스코어 기반 리밸런싱
+    # set 으로 변환하면 순회 순서 비결정적 (PYTHONHASHSEED 영향) → score 순서 유지를 위해 list 사용
     new_buys    = []
     sell_ranked = []
     if is_wednesday:
-        scores   = compute_scores(price_data, today, cl_p)
-        top_syms = set(sorted(scores, key=lambda s: scores[s], reverse=True)[:max_pos])
+        scores       = compute_scores(price_data, today, cl_p)
+        top_syms_ord = sorted(scores, key=lambda s: scores[s], reverse=True)[:max_pos]
+        top_set      = set(top_syms_ord)
 
-        sell_ranked = [s for s in holdings if s not in top_syms and s not in sell_ma100]
-        new_buys    = [s for s in top_syms if s not in holdings]
+        sell_ranked = [s for s in holdings if s not in top_set and s not in sell_ma100]
+        new_buys    = [s for s in top_syms_ord if s not in holdings]   # score 순서 유지
 
     return {
         "sell_ma100":    sell_ma100,

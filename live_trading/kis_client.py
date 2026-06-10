@@ -202,10 +202,14 @@ class KISClient:
         self.exchange    = kis.get("exchange", "NASD")   # US 전용 (KR 은 무시)
         self.tr          = TR_IDS[f"{self.mode}_{self.market}"]
 
-        # 시장별 토큰 캐시 분리 — '1일 1회 발급' 가드 충돌 회피
-        global TOKEN_CACHE, TOKEN_HISTORY
-        self._token_cache_path   = Path(__file__).parent / f".kis_token_{self.market}.json"
-        self._token_history_path = Path(__file__).parent / f".kis_last_issued_{self.market}.txt"
+        # 토큰 캐시: app_key 가 시장별 동일하면 통합 (.kis_token_{mode}.json)
+        #            시장별 다르면 분리 (.kis_token_{mode}_{market}.json)
+        kr_app = kis.get(f"{self.market}_app_key") or ""
+        common_app = kis.get("app_key") or ""
+        market_key = self.market if kr_app and kr_app != common_app else "shared"
+        suffix = f"{self.mode}_{market_key}" if market_key != "shared" else self.mode
+        self._token_cache_path   = Path(__file__).parent / f".kis_token_{suffix}.json"
+        self._token_history_path = Path(__file__).parent / f".kis_last_issued_{suffix}.txt"
         self._token: Token | None = self._load_token_local()
 
     def _load_token_local(self) -> "Token | None":
@@ -333,30 +337,61 @@ class KISClient:
             return self._get_price_kr(symbol)
         return self._get_price_us(symbol)
 
+    # 종목별 exchange 캐시 — 첫 매칭 후 재사용
+    _symbol_exchange_cache: dict = {}   # {symbol: "NAS"|"NYS"|"AMS"}
+
     def _get_price_us(self, symbol: str) -> dict:
-        url    = f"{self.base_url}/uapi/overseas-price/v1/quotations/price"
-        params = {
-            "AUTH":    "",
-            "EXCD":    PRICE_EXCD.get(self.exchange, self.exchange),
-            "SYMB":    symbol,
-        }
-        r = requests.get(url, headers=self._headers(self.tr["price"]),
-                         params=params, timeout=10)
-        r.raise_for_status()
-        d = r.json()
-        if d.get("rt_cd") != "0":
-            log.error(f"[price] {symbol} 조회 실패: {d.get('msg1')}")
-            return {}
-        out = d.get("output", {})
-        return {
-            "symbol":     symbol,
-            "last":       float(out.get("last", 0) or 0),
-            "open":       float(out.get("open", 0) or 0),
-            "high":       float(out.get("high", 0) or 0),
-            "low":        float(out.get("low", 0) or 0),
-            "prev_close": float(out.get("base", 0) or 0),
-            "volume":     int(float(out.get("tvol", 0) or 0)),
-        }
+        """US 현재가 조회 — NASD/NYSE/AMEX 순으로 fallback (종목별 exchange 자동 매핑)."""
+        # 캐시된 exchange 있으면 그것부터
+        cached_excd = KISClient._symbol_exchange_cache.get(symbol)
+        excd_order = [cached_excd] if cached_excd else []
+        for excd in ["NAS", "NYS", "AMS"]:
+            if excd not in excd_order:
+                excd_order.append(excd)
+
+        for excd in excd_order:
+            url    = f"{self.base_url}/uapi/overseas-price/v1/quotations/price"
+            params = {"AUTH": "", "EXCD": excd, "SYMB": symbol}
+            try:
+                r = requests.get(url, headers=self._headers(self.tr["price"]),
+                                 params=params, timeout=10)
+                r.raise_for_status()
+                d = r.json()
+            except Exception as e:
+                log.debug(f"[price] {symbol} EXCD={excd} HTTP 실패: {e}")
+                continue
+            if d.get("rt_cd") != "0":
+                continue   # 다음 exchange 시도
+            out = d.get("output", {})
+            last = float(out.get("last", 0) or 0)
+            if last <= 0:
+                continue   # 응답은 OK 지만 가격 0 → 다른 exchange
+            # 성공 — 캐시
+            KISClient._symbol_exchange_cache[symbol] = excd
+            return {
+                "symbol":     symbol,
+                "exchange":   excd,
+                "last":       last,
+                "open":       float(out.get("open", 0) or 0),
+                "high":       float(out.get("high", 0) or 0),
+                "low":        float(out.get("low", 0) or 0),
+                "prev_close": float(out.get("base", 0) or 0),
+                "volume":     int(float(out.get("tvol", 0) or 0)),
+            }
+        log.error(f"[price] {symbol} 조회 실패 — 모든 exchange (NAS/NYS/AMS) 시도")
+        return {}
+
+    def get_symbol_exchange(self, symbol: str) -> str:
+        """종목의 KIS exchange code (주문용 OVRS_EXCG_CD). 캐시 우선, 없으면 get_price 로 채움."""
+        cached = KISClient._symbol_exchange_cache.get(symbol)
+        if cached:
+            # 시세 EXCD (NAS/NYS/AMS) → 주문 EXCG_CD (NASD/NYSE/AMEX)
+            return {"NAS": "NASD", "NYS": "NYSE", "AMS": "AMEX"}.get(cached, "NASD")
+        # get_price 호출하여 자동 매핑
+        info = self._get_price_us(symbol)
+        if info and info.get("exchange"):
+            return {"NAS": "NASD", "NYS": "NYSE", "AMS": "AMEX"}.get(info["exchange"], "NASD")
+        return self.exchange   # fallback 기본값
 
     def _get_price_kr(self, symbol: str) -> dict:
         """국내 주식 현재가 조회 (KOSPI/KOSDAQ 6자리 종목코드)."""
@@ -407,8 +442,32 @@ class KISClient:
             "CTX_AREA_FK200": "",
             "CTX_AREA_NK200": "",
         }
-        r = requests.get(url, headers=self._headers(self.tr["balance"]),
-                         params=params, timeout=10)
+        # 만료 토큰 (EGW00123) 또는 5xx 일시적 에러 자동 재시도
+        r = None
+        for attempt in range(3):
+            r = requests.get(url, headers=self._headers(self.tr["balance"]),
+                             params=params, timeout=10)
+            # 만료 토큰 감지 — KIS 가 500 + EGW00123 으로 응답
+            if r.status_code >= 500:
+                try:
+                    body = r.json()
+                    if body.get("msg_cd") == "EGW00123":
+                        log.warning(f"[balance] 토큰 만료 (EGW00123) — 캐시 무효화 + 재발급")
+                        # 캐시 파일 삭제 + 메모리 토큰 초기화
+                        if self._token_cache_path.exists():
+                            self._token_cache_path.unlink()
+                        if self._token_history_path.exists():
+                            self._token_history_path.unlink()
+                        self._token = None
+                        # 다음 _headers 호출 시 자동 재발급
+                        continue
+                except Exception:
+                    pass
+                wait_s = 2 ** attempt
+                log.warning(f"[balance] HTTP {r.status_code} 재시도 {attempt+1}/3 — {wait_s}초 대기")
+                time.sleep(wait_s)
+            else:
+                break
         if not r.ok:
             log.error(f"[balance] HTTP {r.status_code}: {r.text}")
         r.raise_for_status()
@@ -457,8 +516,29 @@ class KISClient:
             "CTX_AREA_FK100":  "",
             "CTX_AREA_NK100":  "",
         }
-        r = requests.get(url, headers=self._headers(self.tr["balance"]),
-                         params=params, timeout=10)
+        # 만료 토큰 (EGW00123) 또는 5xx 일시적 에러 자동 재시도
+        r = None
+        for attempt in range(3):
+            r = requests.get(url, headers=self._headers(self.tr["balance"]),
+                             params=params, timeout=10)
+            if r.status_code >= 500:
+                try:
+                    body = r.json()
+                    if body.get("msg_cd") == "EGW00123":
+                        log.warning(f"[balance KR] 토큰 만료 — 캐시 무효화 + 재발급")
+                        if self._token_cache_path.exists():
+                            self._token_cache_path.unlink()
+                        if self._token_history_path.exists():
+                            self._token_history_path.unlink()
+                        self._token = None
+                        continue
+                except Exception:
+                    pass
+                wait_s = 2 ** attempt
+                log.warning(f"[balance KR] HTTP {r.status_code} 재시도 {attempt+1}/3 — {wait_s}초 대기")
+                time.sleep(wait_s)
+            else:
+                break
         if not r.ok:
             log.error(f"[balance KR] HTTP {r.status_code}: {r.text}")
         r.raise_for_status()
@@ -596,11 +676,13 @@ class KISClient:
             ord_dvsn = "00"
             log.warning("[order] 미국주식은 MARKET 직접 미지원 - LIMIT으로 전환 필요")
 
+        # 종목별 exchange 자동 매핑 (NASD/NYSE/AMEX)
+        ovrs_excg = self.get_symbol_exchange(symbol)
         url  = f"{self.base_url}/uapi/overseas-stock/v1/trading/order"
         body = {
             "CANO":          self.cano,
             "ACNT_PRDT_CD":  self.acnt_prdt,
-            "OVRS_EXCG_CD":  self.exchange,
+            "OVRS_EXCG_CD":  ovrs_excg,
             "PDNO":          symbol,
             "ORD_QTY":       str(qty),
             "OVRS_ORD_UNPR": ord_unpr,

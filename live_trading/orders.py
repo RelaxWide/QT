@@ -183,10 +183,9 @@ class OrderManager:
 
         if dry_run:
             log.info(f"[DRY-RUN] {side} {symbol} x{qty} @${price:.2f} ({strategy})")
-            result = OrderResult(symbol=symbol, side=side, qty=qty,
-                                 price=price, order_no="DRY_RUN", dry_run=True)
-            self._record(key, result)
-            return result
+            # dry_run 은 order_map 에 기록 안 함 — 실전 매수 시 중복 방지 오작동 방지
+            return OrderResult(symbol=symbol, side=side, qty=qty,
+                               price=price, order_no="DRY_RUN", dry_run=True)
 
         try:
             resp = self.kis.place_order(symbol, qty, side=side,
@@ -201,7 +200,33 @@ class OrderManager:
 
         if result.ok:
             self._record(key, result)
+            # positions_live_{strategy}.json 갱신 (매수=추가 / 매도=제거)
+            self._update_live_positions(strategy, symbol, signal_date, side, qty, price, result.order_no)
         return result
+
+    def _update_live_positions(self, strategy: str, symbol: str, signal_date: str,
+                                side: str, qty: int, price: float, order_no: str) -> None:
+        """매수/매도 체결 시 positions_live_{strategy}.json 자동 갱신."""
+        try:
+            from live_trading.tracker_live import LivePosition, load_live_positions, save_live_positions
+            positions = load_live_positions(strategy)
+            if side == "BUY":
+                from datetime import date as _date
+                positions[symbol] = LivePosition(
+                    symbol=symbol,
+                    strategy=strategy,
+                    entry_date=signal_date,
+                    fill_date=_date.today().isoformat(),
+                    signal_price=price,
+                    fill_price=price,
+                    qty=qty,
+                    order_no=order_no,
+                )
+            elif side == "SELL" and symbol in positions:
+                del positions[symbol]
+            save_live_positions(strategy, positions)
+        except Exception as e:
+            log.warning(f"[orders] positions_live 갱신 실패 ({strategy}/{symbol}): {e}")
 
     # ── Phase 4: pending → 장개시 MOO 주문 ───────────────────────────────
     def place_phase4_entries(self, dry_run: bool = False) -> list[OrderResult]:
@@ -359,13 +384,17 @@ class OrderManager:
         symbols: list,
         signal_date: str,
         dry_run: bool = False,
+        allow_overflow: bool = True,
     ) -> list:
         """
         KIS 현재가를 직접 조회해 LIMIT 매수 주문.
         wednesday_morning_buy.py 에서 사용 — daily_close 가 저장한 후보를 11 AM ET에 체결.
+
+        allow_overflow=True (기본): 종목별 예산 초과 시에도 실잔여 cash 충분하면 1주 매수.
+                  → Weinstein 신호 0 등 다른 전략 미사용 자본 활용.
         """
-        if strategy not in ("clenow", "weinstein"):
-            raise ValueError(f"strategy must be clenow|weinstein, got {strategy}")
+        if strategy not in ("clenow", "weinstein", "kw_super_value"):
+            raise ValueError(f"strategy must be clenow|weinstein|kw_super_value, got {strategy}")
 
         budget = self._strategy_budget(strategy)
         if budget <= 0:
@@ -375,6 +404,10 @@ class OrderManager:
         budget_per_pos = budget / max_pos
         log.info(f"[{strategy}] 예산 {self._fmt_price(budget)} / {max_pos}종목 = "
                  f"{self._fmt_price(budget_per_pos)}/종목")
+
+        # 실잔여 cash — overflow 매수 시 한도
+        bal = self._get_balance() if allow_overflow else {}
+        remaining_cash = float(bal.get(self._cash_key, 0) or 0) if allow_overflow else 0
 
         results = []
         for sym in symbols[:max_pos]:
@@ -390,13 +423,25 @@ class OrderManager:
             # +0.5% LIMIT, 호가단위 라운딩 (KR 의무, US 0.01)
             raw_price = cur * 1.005
             price = self._adjust_limit_price(raw_price, "BUY")
-            if not self._price_fits(price, budget_per_pos):
+
+            qty = 0
+            if self._price_fits(price, budget_per_pos):
+                qty = self._calc_qty(price, budget_per_pos)
+            elif allow_overflow and price <= remaining_cash:
+                # 예산 초과지만 실잔여 cash 로 1주 매수 가능 (다른 전략 미사용 자본 활용)
+                qty = 1
+                log.info(f"[{strategy}] {sym} 가격 {self._fmt_price(price)} > "
+                         f"예산/종목 {self._fmt_price(budget_per_pos)} — 잔여 cash "
+                         f"{self._fmt_price(remaining_cash)} 로 1주 매수 (overflow)")
+            else:
                 log.warning(f"[{strategy}] {sym} 가격 {self._fmt_price(price)} > "
-                            f"예산 {self._fmt_price(budget_per_pos)} - 스킵")
+                            f"예산 {self._fmt_price(budget_per_pos)}, 잔여 cash 부족 - 스킵")
                 continue
-            qty = self._calc_qty(price, budget_per_pos)
-            r   = self._send(strategy, sym, signal_date, "BUY", qty, price, dry_run)
+
+            r = self._send(strategy, sym, signal_date, "BUY", qty, price, dry_run)
             results.append(r)
+            if r.ok:
+                remaining_cash -= price * qty
             if not dry_run:
                 time.sleep(0.5)
         return results

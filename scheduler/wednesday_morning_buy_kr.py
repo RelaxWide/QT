@@ -27,6 +27,9 @@ except ImportError:
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from scheduler._log_helper import setup_file_logger
+setup_file_logger("wednesday_morning_buy_kr")
+
 from live_trading.orders import OrderManager
 from live_trading.risk_guard import RiskGuard
 
@@ -77,7 +80,7 @@ def main(dry_run: bool = False, no_wait: bool = False):
     om = OrderManager.from_config(allow_prod=True, market=MARKET)
 
     total_orders = []
-    for strategy in ("clenow", "weinstein"):
+    for strategy in ("clenow", "weinstein", "kw_super_value"):
         section = payload.get(strategy)
         if not section:
             continue

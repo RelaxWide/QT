@@ -25,6 +25,9 @@ except ImportError:
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from scheduler._log_helper import setup_file_logger
+setup_file_logger("wednesday_morning_buy")
+
 from live_trading.orders import OrderManager
 from live_trading.risk_guard import RiskGuard
 

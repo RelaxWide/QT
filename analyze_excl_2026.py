@@ -20,6 +20,7 @@ CUTOFF = pd.Timestamp("2025-02-28")   # KOSPI 본격 상승 시작 직전
 STRATS = {
     "KW Super Value":     ("backtest_results/kr/kw_super_value_equity.csv", 50_000_000),
     "KW Super Quality":   ("backtest_results/kr/kw_super_quality_equity.csv", 50_000_000),
+    "KW Soseongbelma":    ("backtest_results/kr/kw_soseongbelma_equity.csv", 50_000_000),
     "Clenow KR":          ("backtest_results/kr/clenow_equity.csv", 50_000_000),
     "Clenow US":          ("backtest_results/clenow_equity.csv", 100_000),
     "Weinstein US":       ("backtest_results/weinstein_equity.csv", 100_000),

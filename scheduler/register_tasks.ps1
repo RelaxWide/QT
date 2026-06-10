@@ -10,20 +10,32 @@ $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interac
 function Register-QTTask {
     param($name, $script, $triggers)
 
+    # daily_close 는 매번 가격 캐시 갱신 (--refresh) — 최신 시점 신호 산출 보장
+    if ($name -eq "QT_DailyClose") {
+        $scriptArg = "$workdir\$script --refresh"
+    } else {
+        $scriptArg = "$workdir\$script"
+    }
     $action   = New-ScheduledTaskAction -Execute $python `
-                    -Argument "$workdir\$script" `
+                    -Argument $scriptArg `
                     -WorkingDirectory $workdir
 
     # wednesday_morning_buy 는 최대 1시간 슬립할 수 있으므로 90분 한도
-    $limit = if ($name -eq "QT_WedMorningBuy") { New-TimeSpan -Minutes 90 } else { New-TimeSpan -Minutes 30 }
+    # PowerShell 5.1: if-else expression 이 New-TimeSpan 출력 캡처 못 함 → 분리
+    if ($name -eq "QT_WedMorningBuy") {
+        $limit = New-TimeSpan -Minutes 90
+    } else {
+        $limit = New-TimeSpan -Minutes 30
+    }
     $settings = New-ScheduledTaskSettingsSet `
         -ExecutionTimeLimit $limit `
         -StartWhenAvailable `
-        -RunOnlyIfNetworkAvailable
+        -RunOnlyIfNetworkAvailable `
+        -WakeToRun
 
     Register-ScheduledTask -TaskName $name `
         -Action $action -Trigger $triggers -Settings $settings `
-        -Principal $principal -Force | Out-Null
+        -Principal $principal -Force -ErrorAction Stop | Out-Null
 
     Write-Host "[OK] $name registered"
 }
@@ -43,7 +55,8 @@ $exitTriggers = @(
     (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "03:00"),
     (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "04:00")
 )
-Register-QTTask "QT_ExitCheck" "scheduler\exit_check.py" $exitTriggers
+# 6개 trigger array — PowerShell 의 array unwrap 방지 위해 (,) 로 wrap
+Register-QTTask "QT_ExitCheck" "scheduler\exit_check.py" (,$exitTriggers)
 
 # 3. 06:00 — 종가 신호:
 #     매도(MA 이탈, rank_exit) 즉시 주문 / KR 수요일엔 매수 후보 pending 저장
