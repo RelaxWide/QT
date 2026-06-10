@@ -26,3 +26,4 @@ live_trading/slippage_log.csv
 live_trading/wed_buy_pending.json
 live_trading/KILL_SWITCH
 logs/
+docs_cache/
