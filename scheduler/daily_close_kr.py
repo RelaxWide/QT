@@ -262,7 +262,10 @@ def main(dry_run: bool = False, force_rebalance: bool = False, refresh: bool = F
     msg = _build_core_message(result, today_str)
     log.info("[daily_close_kr] " + msg.replace("\n", " | "))
     if result is not None:
-        _notify(msg, cfg_live)
+        if dry_run:
+            log.info("[daily_close_kr] [DRY-RUN] 텔레그램 발송 생략")
+        else:
+            _notify(msg, cfg_live)
 
     log.info("[daily_close_kr] 완료")
 
