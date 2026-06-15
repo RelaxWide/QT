@@ -50,23 +50,6 @@
     "shares_remaining": 20.78676777813926,
     "realized_pnl": 0.0
   },
-  "XOM": {
-    "symbol": "XOM",
-    "entry_date": "2026-05-21T00:00:00",
-    "entry_price": 158.57841816711425,
-    "stop_initial": 142.9497252181697,
-    "stop_current": 142.9497252181697,
-    "targets": [
-      205.4644970139479
-    ],
-    "partial_weights": [
-      0.5
-    ],
-    "targets_hit": 0,
-    "shares_total": 44.78941407875526,
-    "shares_remaining": 44.78941407875526,
-    "realized_pnl": 0.0
-  },
   "HPE": {
     "symbol": "HPE",
     "entry_date": "2026-05-22T00:00:00",
@@ -106,17 +89,17 @@
     "entry_date": "2026-06-01T00:00:00",
     "entry_price": 442.47202877807615,
     "stop_initial": 396.87662146355484,
-    "stop_current": 396.87662146355484,
+    "stop_current": 442.47202877807615,
     "targets": [
       579.25825072164
     ],
     "partial_weights": [
       0.5
     ],
-    "targets_hit": 0,
+    "targets_hit": 1,
     "shares_total": 15.352423439741102,
-    "shares_remaining": 15.352423439741102,
-    "realized_pnl": 0.0
+    "shares_remaining": 7.676211719870551,
+    "realized_pnl": 1127.8502165446102
   },
   "JBHT": {
     "symbol": "JBHT",
