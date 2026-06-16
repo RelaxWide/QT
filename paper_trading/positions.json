@@ -151,5 +151,22 @@
     "shares_total": 19.273008662735798,
     "shares_remaining": 19.273008662735798,
     "realized_pnl": 0.0
+  },
+  "APH": {
+    "symbol": "APH",
+    "entry_date": "2026-06-16T00:00:00",
+    "entry_price": 158.7485863342285,
+    "stop_initial": 138.1999969482422,
+    "stop_current": 138.1999969482422,
+    "targets": [
+      220.3943544921874
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 34.06559870612748,
+    "shares_remaining": 34.06559870612748,
+    "realized_pnl": 0.0
   }
 }
