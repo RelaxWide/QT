@@ -1,11 +1,4 @@
 {
-  "LITE": {
-    "symbol": "LITE",
-    "entry_date": "2026-04-29T00:00:00",
-    "entry_price": 858.3200073242188,
-    "shares": 5.825333159350808,
-    "strategy": "clenow"
-  },
   "CIEN": {
     "symbol": "CIEN",
     "entry_date": "2026-04-29T00:00:00",
@@ -25,13 +18,6 @@
     "entry_date": "2026-04-29T00:00:00",
     "entry_price": 1064.2099609375,
     "shares": 4.698320992593721,
-    "strategy": "clenow"
-  },
-  "FIX": {
-    "symbol": "FIX",
-    "entry_date": "2026-04-29T00:00:00",
-    "entry_price": 1724.1400146484375,
-    "shares": 2.8999964953655635,
     "strategy": "clenow"
   },
   "DELL": {
@@ -137,6 +123,20 @@
     "entry_date": "2026-06-10T00:00:00",
     "entry_price": 138.8800048828125,
     "shares": 36.00230288167847,
+    "strategy": "clenow"
+  },
+  "CSCO": {
+    "symbol": "CSCO",
+    "entry_date": "2026-06-17T00:00:00",
+    "entry_price": 117.33000183105469,
+    "shares": 42.614846347650946,
+    "strategy": "clenow"
+  },
+  "QCOM": {
+    "symbol": "QCOM",
+    "entry_date": "2026-06-17T00:00:00",
+    "entry_price": 212.97000122070312,
+    "shares": 23.477484957228533,
     "strategy": "clenow"
   }
 }
