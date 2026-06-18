@@ -1,10 +1,10 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-06-17
+날짜: 2026-06-18
 
 ## 전략별 현황
 
 ### Phase 4 (추세추종)
-보유 9종목: AMAT, APH, DAL, EBAY, ELV, FFIV, HPE, JBHT, TRGP
+보유 10종목: AMAT, APH, CFG, DAL, EBAY, ELV, FFIV, HPE, JBHT, TRGP
 
 누적: 16건 | WR 18.8% | PF 0.33 | PnL $-4,392
 낙폭: 현재 -4.4% | 최대 -4.4%
@@ -16,15 +16,15 @@
 ⚠️ 7연속 손절 중
 
 ### Clenow (모멘텀)
-보유 20종목: AMD, CIEN, COHR, CRWD, CSCO, DDOG, DELL, FTNT, HPE, HUM, INTC, JBL, MU, ON, PANW, QCOM, SNDK, STX, UNH, WDC
+보유 19종목: AMD, COHR, CRWD, CSCO, DDOG, DELL, FTNT, HPE, HUM, INTC, JBL, MU, ON, PANW, QCOM, SNDK, STX, UNH, WDC
 
-누적: 16건 | WR 25.0% | PF 0.4 | PnL $-2,761
-낙폭: 현재 -2.8% | 최대 -3.4%
-스트릭: W 2연속
-최근 10건: L L L L L W L L W W
+누적: 17건 | WR 23.5% | PF 0.36 | PnL $-3,262
+낙폭: 현재 -3.3% | 최대 -3.4%
+스트릭: L 1연속
+최근 10건: L L L L W L L W W L
 
-⚠️ WR 25.0% < 게이트 55%
-⚠️ PF 0.4 < 게이트 1.5
+⚠️ WR 23.5% < 게이트 55%
+⚠️ PF 0.36 < 게이트 1.5
 
 ### Weinstein (Stage 2)
 보유 2종목: CNC, QCOM
@@ -43,16 +43,11 @@
 | FFIV | 2026-06-05T00:00:00 | $405.55 | $372.62 | 0 |
 | ELV | 2026-06-09T00:00:00 | $420.62 | $384.30 | 0 |
 | APH | 2026-06-16T00:00:00 | $158.75 | $138.20 | 0 |
-
-## 내일 진입 예정 (Phase 4)
-| 종목 | 예상가 | stop | R |
-|------|--------|------|---|
-| CFG | $67.27 | $60.56 | $6.71 |
+| CFG | 2026-06-18T00:00:00 | $67.22 | $60.56 | 0 |
 
 ## 최근 거래 내역 (최근 20건)
 | 날짜 | 전략 | 종목 | PnL | R | 사유 |
 |------|------|------|-----|---|------|
-| 2026-05-20T00:00:00 | Clenow | CF | ❌ $-142 | - | rank_exit |
 | 2026-05-21T00:00:00 | Phase4 | CASY | ✅ $+317 | 0.4532 | stop |
 | 2026-05-21T00:00:00 | Phase4 | WMT | ❌ $-572 | -0.8177 | stop_gap |
 | 2026-05-27T00:00:00 | Clenow | LYB | ❌ $-388 | - | rank_exit |
@@ -72,3 +67,4 @@
 | 2026-06-17T00:00:00 | Phase4 | VRSN | ❌ $-707 | -1.0097 | stop |
 | 2026-06-17T00:00:00 | Clenow | FIX | ✅ $+597 | - | rank_exit |
 | 2026-06-17T00:00:00 | Clenow | LITE | ✅ $+63 | - | rank_exit |
+| 2026-06-18T00:00:00 | Clenow | CIEN | ❌ $-501 | - | ma100_exit |

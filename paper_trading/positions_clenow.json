@@ -1,11 +1,4 @@
 {
-  "CIEN": {
-    "symbol": "CIEN",
-    "entry_date": "2026-04-29T00:00:00",
-    "entry_price": 475.3900146484375,
-    "shares": 10.517679896363877,
-    "strategy": "clenow"
-  },
   "STX": {
     "symbol": "STX",
     "entry_date": "2026-04-29T00:00:00",
