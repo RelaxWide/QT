@@ -48,13 +48,6 @@
     "shares": 45.36793432116491,
     "strategy": "clenow"
   },
-  "JBL": {
-    "symbol": "JBL",
-    "entry_date": "2026-05-20T00:00:00",
-    "entry_price": 345.1499938964844,
-    "shares": 14.486455420594835,
-    "strategy": "clenow"
-  },
   "AMD": {
     "symbol": "AMD",
     "entry_date": "2026-05-27T00:00:00",
@@ -97,13 +90,6 @@
     "shares": 18.995516969881137,
     "strategy": "clenow"
   },
-  "UNH": {
-    "symbol": "UNH",
-    "entry_date": "2026-06-10T00:00:00",
-    "entry_price": 407.4599914550781,
-    "shares": 12.271143437039125,
-    "strategy": "clenow"
-  },
   "CRWD": {
     "symbol": "CRWD",
     "entry_date": "2026-06-10T00:00:00",
@@ -130,6 +116,27 @@
     "entry_date": "2026-06-17T00:00:00",
     "entry_price": 212.97000122070312,
     "shares": 23.477484957228533,
+    "strategy": "clenow"
+  },
+  "FLEX": {
+    "symbol": "FLEX",
+    "entry_date": "2026-06-24T00:00:00",
+    "entry_price": 150.72000122070312,
+    "shares": 33.1740973958617,
+    "strategy": "clenow"
+  },
+  "KLAC": {
+    "symbol": "KLAC",
+    "entry_date": "2026-06-24T00:00:00",
+    "entry_price": 240.47999572753906,
+    "shares": 20.7917502030603,
+    "strategy": "clenow"
+  },
+  "MRVL": {
+    "symbol": "MRVL",
+    "entry_date": "2026-06-24T00:00:00",
+    "entry_price": 276.70001220703125,
+    "shares": 18.070111237504833,
     "strategy": "clenow"
   }
 }
