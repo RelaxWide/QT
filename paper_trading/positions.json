@@ -151,5 +151,22 @@
     "shares_total": 105.15009933604053,
     "shares_remaining": 105.15009933604053,
     "realized_pnl": 0.0
+  },
+  "C": {
+    "symbol": "C",
+    "entry_date": "2026-06-25T00:00:00",
+    "entry_price": 145.03488938903806,
+    "stop_initial": 131.9199981689453,
+    "stop_current": 131.9199981689453,
+    "targets": [
+      184.3795630493163
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 53.37444194181046,
+    "shares_remaining": 53.37444194181046,
+    "realized_pnl": 0.0
   }
 }
