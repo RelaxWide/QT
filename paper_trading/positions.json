@@ -151,5 +151,22 @@
     "shares_total": 53.37444194181046,
     "shares_remaining": 53.37444194181046,
     "realized_pnl": 0.0
+  },
+  "CAT": {
+    "symbol": "CAT",
+    "entry_date": "2026-07-01T00:00:00",
+    "entry_price": 1034.9539639892578,
+    "stop_initial": 899.2000122070312,
+    "stop_current": 899.2000122070312,
+    "targets": [
+      1442.2158193359373
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 5.1563876469903756,
+    "shares_remaining": 5.1563876469903756,
+    "realized_pnl": 0.0
   }
 }

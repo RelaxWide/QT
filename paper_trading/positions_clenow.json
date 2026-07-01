@@ -27,13 +27,6 @@
     "shares": 12.113576610387037,
     "strategy": "clenow"
   },
-  "COHR": {
-    "symbol": "COHR",
-    "entry_date": "2026-04-29T00:00:00",
-    "entry_price": 304.92999267578125,
-    "shares": 16.397206309962044,
-    "strategy": "clenow"
-  },
   "INTC": {
     "symbol": "INTC",
     "entry_date": "2026-05-13T00:00:00",
@@ -111,13 +104,6 @@
     "shares": 42.614846347650946,
     "strategy": "clenow"
   },
-  "QCOM": {
-    "symbol": "QCOM",
-    "entry_date": "2026-06-17T00:00:00",
-    "entry_price": 212.97000122070312,
-    "shares": 23.477484957228533,
-    "strategy": "clenow"
-  },
   "FLEX": {
     "symbol": "FLEX",
     "entry_date": "2026-06-24T00:00:00",
@@ -137,6 +123,20 @@
     "entry_date": "2026-06-24T00:00:00",
     "entry_price": 276.70001220703125,
     "shares": 18.070111237504833,
+    "strategy": "clenow"
+  },
+  "CNC": {
+    "symbol": "CNC",
+    "entry_date": "2026-07-01T00:00:00",
+    "entry_price": 68.3499984741211,
+    "shares": 73.1528911722378,
+    "strategy": "clenow"
+  },
+  "LRCX": {
+    "symbol": "LRCX",
+    "entry_date": "2026-07-01T00:00:00",
+    "entry_price": 391.260009765625,
+    "shares": 12.779225771105846,
     "strategy": "clenow"
   }
 }

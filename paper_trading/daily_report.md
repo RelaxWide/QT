@@ -1,10 +1,10 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-06-30
+날짜: 2026-07-01
 
 ## 전략별 현황
 
 ### Phase 4 (추세추종)
-보유 9종목: AMAT, APH, C, CFG, DAL, EBAY, FFIV, JBHT, TRGP
+보유 10종목: AMAT, APH, C, CAT, CFG, DAL, EBAY, FFIV, JBHT, TRGP
 
 누적: 18건 | WR 22.2% | PF 0.63 | PnL $-2,708
 낙폭: 현재 -2.8% | 최대 -5.2%
@@ -15,15 +15,15 @@
 ⚠️ PF 0.63 < 게이트 1.5
 
 ### Clenow (모멘텀)
-보유 20종목: AMD, COHR, CRWD, CSCO, DDOG, DELL, FLEX, FTNT, HPE, HUM, INTC, KLAC, MRVL, MU, ON, PANW, QCOM, SNDK, STX, WDC
+보유 20종목: AMD, CNC, CRWD, CSCO, DDOG, DELL, FLEX, FTNT, HPE, HUM, INTC, KLAC, LRCX, MRVL, MU, ON, PANW, SNDK, STX, WDC
 
-누적: 19건 | WR 26.3% | PF 0.43 | PnL $-2,907
-낙폭: 현재 -2.9% | 최대 -3.4%
-스트릭: W 1연속
-최근 10건: L L W L L W W L L W
+누적: 21건 | WR 28.6% | PF 0.55 | PnL $-2,601
+낙폭: 현재 -2.6% | 최대 -3.4%
+스트릭: L 1연속
+최근 10건: W L L W W L L W W L
 
-⚠️ WR 26.3% < 게이트 55%
-⚠️ PF 0.43 < 게이트 1.5
+⚠️ WR 28.6% < 게이트 55%
+⚠️ PF 0.55 < 게이트 1.5
 
 ### Weinstein (Stage 2)
 보유 2종목: CNC, QCOM
@@ -42,17 +42,11 @@
 | APH | 2026-06-16T00:00:00 | $158.75 | $138.20 | 0 |
 | CFG | 2026-06-18T00:00:00 | $67.22 | $60.56 | 0 |
 | C | 2026-06-25T00:00:00 | $145.03 | $131.92 | 0 |
-
-## 내일 진입 예정 (Phase 4)
-| 종목 | 예상가 | stop | R |
-|------|--------|------|---|
-| CAT | $1045.00 | $899.20 | $145.80 |
+| CAT | 2026-07-01T00:00:00 | $1034.95 | $899.20 | 0 |
 
 ## 최근 거래 내역 (최근 20건)
 | 날짜 | 전략 | 종목 | PnL | R | 사유 |
 |------|------|------|-----|---|------|
-| 2026-05-27T00:00:00 | Clenow | CASY | ❌ $-404 | - | rank_exit |
-| 2026-05-29T00:00:00 | Phase4 | OKE | ❌ $-705 | -1.0073 | stop |
 | 2026-06-01T00:00:00 | Phase4 | KMI | ❌ $-706 | -1.0089 | stop |
 | 2026-06-03T00:00:00 | Clenow | GEV | ❌ $-492 | - | rank_exit |
 | 2026-06-03T00:00:00 | Clenow | APA | ❌ $-252 | - | rank_exit |
@@ -71,3 +65,5 @@
 | 2026-06-24T00:00:00 | Clenow | UNH | ❌ $-25 | - | rank_exit |
 | 2026-06-24T00:00:00 | Clenow | JBL | ✅ $+381 | - | rank_exit |
 | 2026-06-26T00:00:00 | Phase4 | HPE | ✅ $+2,391 | 3.4155 | trail |
+| 2026-07-01T00:00:00 | Clenow | COHR | ✅ $+1,039 | - | rank_exit |
+| 2026-07-01T00:00:00 | Clenow | QCOM | ❌ $-733 | - | rank_exit |
