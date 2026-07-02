@@ -73,6 +73,15 @@ Register-QTTask "QT_WedMorningBuy" "scheduler\wednesday_morning_buy.py" $t4
 $t5 = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "07:00"
 Register-QTTask "QT_Summary" "scheduler\summary.py" $t5
 
+# 6. 05:40 — GHA 페이퍼 커밋 로컬 동기화 (git pull --ff-only)
+#    로컬이 원격보다 뒤처지면 페이퍼 상태 파일이 낡아 신호가 어긋난다 (2026-05~06 divergence 사고)
+$git = (Get-Command git).Source
+$t6  = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "05:40"
+$action6 = New-ScheduledTaskAction -Execute $git -Argument "pull --ff-only origin master" -WorkingDirectory $workdir
+$settings6 = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -StartWhenAvailable -RunOnlyIfNetworkAvailable
+Register-ScheduledTask -TaskName "QT_GitSync" -Action $action6 -Trigger $t6 -Settings $settings6 -Principal $principal -Force -ErrorAction Stop | Out-Null
+Write-Host "[OK] QT_GitSync registered"
+
 Write-Host ""
 Write-Host "Registered tasks:"
 Get-ScheduledTask | Where-Object { $_.TaskName -like "QT_*" } |
