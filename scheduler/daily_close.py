@@ -70,12 +70,33 @@ def main(dry_run: bool = False, refresh: bool = False):
     today = max(latest_dates)
     log.info(f"[daily_close] data_today={today.date()} | KR_is_wed={is_wed}")
 
+    # 데이터 신선도 가드 — 스케줄 인자에서 --refresh 가 빠져도 캐시 정체로
+    # 옛 데이터 신호가 나가지 않게 보호 (2026-06 한 달 정체 사고 재발 방지)
+    stale_cutoff = pd.Timestamp.today().normalize() - pd.offsets.BDay(3)
+    if today < stale_cutoff and not refresh:
+        log.warning(f"[daily_close] 가격 데이터 정체 감지 (data_today={today.date()}) "
+                    f"— 캐시 무시하고 강제 재다운로드")
+        price_data = fetch_all(tickers, cfg["data"]["start_date"],
+                               cfg["data"]["end_date"], min_bars=150,
+                               refresh=True)
+        latest_dates = [df.index.max() for df in price_data.values() if not df.empty]
+        if latest_dates:
+            today = max(latest_dates)
+        log.info(f"[daily_close] refresh 후 data_today={today.date()}")
+    data_stale = today < stale_cutoff
+    if data_stale:
+        log.error(f"[daily_close] refresh 후에도 데이터 정체 (data_today={today.date()}) "
+                  f"— 신호 신뢰 불가, 텔레그램 경고 포함")
+
     om = OrderManager.from_config(allow_prod=True)
 
     # ── 2. Clenow 신호 ────────────────────────────────────────────────────
+    # 보유 기준은 실계좌 포지션 (positions_live_*.json).
+    # 페이퍼 positions_clenow.json 은 GHA(run_daily.py)가 관리하는 가상 포트폴리오라
+    # 실계좌와 다르다 — 이걸 쓰면 미보유 종목 매도/보유 종목 방치가 발생 (2026-07-02 사고).
     from paper_trading.live_signals import get_clenow_signals
-    from paper_trading.simple_tracker import load_simple_positions
-    cl_pos  = load_simple_positions("clenow")
+    from live_trading.tracker_live import load_live_positions
+    cl_pos  = load_live_positions("clenow")
     cl_sigs = get_clenow_signals(price_data, set(cl_pos.keys()), cfg, today, is_wed)
 
     # 매도 (MA100 이탈 + rank 탈락) 는 즉시 주문
@@ -98,7 +119,7 @@ def main(dry_run: bool = False, refresh: bool = False):
 
     # ── 3. Weinstein 신호 ────────────────────────────────────────────────
     from paper_trading.live_signals import get_weinstein_signals
-    w_pos  = load_simple_positions("weinstein")
+    w_pos  = load_live_positions("weinstein")
     w_sigs = get_weinstein_signals(price_data, set(w_pos.keys()), cfg, today, is_wed)
 
     w_sell_only = {
@@ -138,6 +159,9 @@ def main(dry_run: bool = False, refresh: bool = False):
         report = sync_all(kis)
         msg = _build_core_message(report, today, cl_sell_orders, w_sell_orders,
                                   pending_payload)
+        if data_stale:
+            msg = (f"⚠️ <b>가격 데이터 정체</b> (data_today={today.date()}) — "
+                   f"신호 신뢰 불가, 캐시/네트워크 점검 필요\n") + msg
         log.info("[daily_close] " + msg.replace("\n", " | "))
         _notify(msg, cfg_live)
 

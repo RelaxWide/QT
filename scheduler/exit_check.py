@@ -32,6 +32,17 @@ def main(dry_run: bool = False):
         log.warning(f"[exit_check] 전면 정지: {reason}")
         return
 
+    # Phase 4 는 실거래 자본 배분이 있을 때만 의미가 있다.
+    # 배분 0 이면 여기서 종료 — 페이퍼 positions.json 은 GHA(run_daily.py)가 관리하므로
+    # 로컬에서 트레일 스탑을 덮어쓰면 두 기록이 갈라진다 (2026-05~06 divergence 원인).
+    cfg_live = yaml.safe_load(Path("config_live.yaml").read_text(encoding="utf-8"))
+    cap = cfg_live.get("capital", {}) or {}
+    phase4_live = (float(cap.get("phase4_pct", 0) or 0) > 0
+                   or (not cap.get("auto_allocate") and float(cap.get("phase4_usd", 0) or 0) > 0))
+    if not phase4_live:
+        log.info("[exit_check] Phase 4 실거래 배분 0 — 페이퍼 전용 (GHA 관리), 종료")
+        return
+
     om = OrderManager.from_config(allow_prod=True)
     cfg = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
 

@@ -405,12 +405,36 @@ class OrderManager:
         log.info(f"[{strategy}] 예산 {self._fmt_price(budget)} / {max_pos}종목 = "
                  f"{self._fmt_price(budget_per_pos)}/종목")
 
-        # 실잔여 cash — overflow 매수 시 한도
-        bal = self._get_balance() if allow_overflow else {}
-        remaining_cash = float(bal.get(self._cash_key, 0) or 0) if allow_overflow else 0
+        # 현재 실계좌 보유 — 이미 보유한 종목은 재매수하지 않는다
+        from live_trading.tracker_live import load_live_positions
+        try:
+            held = set(load_live_positions(strategy).keys())
+        except Exception as e:
+            log.warning(f"[{strategy}] positions_live 로드 실패: {e} — 보유 필터 없이 진행")
+            held = set()
+
+        candidates = [s for s in symbols if s not in held]
+        if strategy in ("clenow", "weinstein"):
+            # 주간 전략: max_positions 는 신규+기보유 합산 총한도.
+            # 슬롯 무시하고 계속 사면 현금 고갈 + 한도 초과 보유가 됨 (2026-06 8종목 사고).
+            slots = max(0, max_pos - len(held))
+            if slots < len(candidates):
+                log.info(f"[{strategy}] 보유 {len(held)} / 한도 {max_pos} — "
+                         f"신규 매수 {slots}종목으로 제한 (후보 {len(candidates)})")
+            candidates = candidates[:slots]
+        else:
+            # 분기 전략 (kw_super_value): 리밸런싱 목록 전체가 목표 포트폴리오
+            candidates = candidates[:max_pos]
+
+        # 실잔여 cash — 예산/종목이 맞아도 결제가능 현금을 넘는 주문은 거부됨 (APBK0952)
+        bal = self._get_balance()
+        if bal.get("_failed"):
+            remaining_cash = float("inf")   # 잔고 조회 실패 시 기존 동작 유지
+        else:
+            remaining_cash = float(bal.get(self._cash_key, 0) or 0)
 
         results = []
-        for sym in symbols[:max_pos]:
+        for sym in candidates:
             try:
                 price_info = self.kis.get_price(sym)
             except Exception as e:
@@ -427,20 +451,26 @@ class OrderManager:
             qty = 0
             if self._price_fits(price, budget_per_pos):
                 qty = self._calc_qty(price, budget_per_pos)
-            elif allow_overflow and price <= remaining_cash:
-                # 예산 초과지만 실잔여 cash 로 1주 매수 가능 (다른 전략 미사용 자본 활용)
-                qty = 1
-                log.info(f"[{strategy}] {sym} 가격 {self._fmt_price(price)} > "
-                         f"예산/종목 {self._fmt_price(budget_per_pos)} — 잔여 cash "
-                         f"{self._fmt_price(remaining_cash)} 로 1주 매수 (overflow)")
-            else:
-                log.warning(f"[{strategy}] {sym} 가격 {self._fmt_price(price)} > "
-                            f"예산 {self._fmt_price(budget_per_pos)}, 잔여 cash 부족 - 스킵")
-                continue
+                affordable = int(remaining_cash // price) if remaining_cash != float("inf") else qty
+                if qty > affordable:
+                    log.info(f"[{strategy}] {sym} 잔여 cash {self._fmt_price(remaining_cash)} 한도로 "
+                             f"{qty}주 → {affordable}주 축소")
+                    qty = affordable
+            if qty < 1:
+                if allow_overflow and price <= remaining_cash:
+                    # 예산 초과지만 실잔여 cash 로 1주 매수 가능 (다른 전략 미사용 자본 활용)
+                    qty = 1
+                    log.info(f"[{strategy}] {sym} 가격 {self._fmt_price(price)} > "
+                             f"예산/종목 {self._fmt_price(budget_per_pos)} — 잔여 cash "
+                             f"{self._fmt_price(remaining_cash)} 로 1주 매수 (overflow)")
+                else:
+                    log.warning(f"[{strategy}] {sym} 가격 {self._fmt_price(price)} > "
+                                f"예산 {self._fmt_price(budget_per_pos)}, 잔여 cash 부족 - 스킵")
+                    continue
 
             r = self._send(strategy, sym, signal_date, "BUY", qty, price, dry_run)
             results.append(r)
-            if r.ok:
+            if r.ok and not r.dry_run:
                 remaining_cash -= price * qty
             if not dry_run:
                 time.sleep(0.5)

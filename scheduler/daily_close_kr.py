@@ -171,9 +171,21 @@ def kw_super_value_rebalance(cfg, cfg_live, dry_run=False, force=False, refresh=
 
     orders = []
     total_spent = 0
+    skipped_halt = []
     for ticker in sorted(sig.weights.keys()):
         px_df = price_data.get(ticker)
         if px_df is None or px_df.empty:
+            continue
+        # 거래정지/관리종목 가드 — 시세가 오래됐거나 최근 거래량이 없으면 매수 제외
+        # (2026-05 분기 008500 거래정지 편입 사고 재발 방지)
+        last_bar = px_df.index.max()
+        if (today - last_bar).days > 7:
+            log.warning(f"[kw_sv] {ticker} 최근 시세 없음 (last={last_bar.date()}) — 거래정지 의심, 제외")
+            skipped_halt.append(ticker)
+            continue
+        if "volume" in px_df.columns and float(px_df["volume"].tail(5).sum()) <= 0:
+            log.warning(f"[kw_sv] {ticker} 최근 5일 거래량 0 — 거래정지 의심, 제외")
+            skipped_halt.append(ticker)
             continue
         last_close = float(px_df.iloc[-1]["close"])
         if last_close <= 0:
@@ -214,6 +226,7 @@ def kw_super_value_rebalance(cfg, cfg_live, dry_run=False, force=False, refresh=
         "universe":    sig.universe_size,
         "small_cap_pct": small_cap_pct,
         "top_n":       top_n,
+        "skipped_halt": skipped_halt,
     }
 
 
@@ -234,6 +247,8 @@ def _build_core_message(result, today_str) -> str:
         L.append("종목: " + ", ".join(result["symbols"]))
         L.append("→ 다음 수 09:00 KST QT_KR_WedMorningBuy 자동 매수")
         L.append("⚠️ 직전 분기 보유 중 top-18 탈락분은 수동 매도 검토 필요 (KR 자동매도 미구현)")
+    if result.get("skipped_halt"):
+        L.append("🚫 거래정지 의심 제외: " + ", ".join(result["skipped_halt"]))
     return "\n".join(L)
 
 
