@@ -39,6 +39,7 @@ from paper_trading.tracker import (
     append_trade, get_trade_summary,
     PaperPosition, PendingEntry,
 )
+from paper_trading.splits import adjust_simple_positions, adjust_paper_positions
 
 
 def check_market_closed(force: bool = False) -> bool:
@@ -388,6 +389,10 @@ def main():
 
     # ── 2. 대기 진입 처리 ─────────────────────────────────────────────────
     positions  = load_positions()
+    p4_split_msgs = adjust_paper_positions(positions, str(today.date()))
+    if p4_split_msgs:
+        save_positions(positions)
+        print(f"  [분할 보정] Phase4: {', '.join(p4_split_msgs)}")
     pending    = load_pending()
     p4_entries = []  # (sym, entry_px, stop, r)
 
@@ -518,6 +523,10 @@ def main():
     cap          = initial_capital
     cl_cfg       = cfg.get("clenow_strategy", {})
     cl_pos       = load_simple_positions("clenow")
+    cl_split_msgs = adjust_simple_positions(cl_pos, str(today.date()))
+    if cl_split_msgs:
+        save_simple_positions("clenow", cl_pos)
+        print(f"  [분할 보정] Clenow: {', '.join(cl_split_msgs)}")
     cl_sigs      = get_clenow_signals(price_data, set(cl_pos.keys()), cfg, today, is_wednesday)
     cl_exits     = []  # (sym, pnl, reason)
     cl_buys      = []  # (sym, entry_px, shares, alloc)
@@ -557,6 +566,10 @@ def main():
     # ── 6. Weinstein 신호 ─────────────────────────────────────────────────
     w_cfg   = cfg.get("weinstein_strategy", {})
     w_pos   = load_simple_positions("weinstein")
+    w_split_msgs = adjust_simple_positions(w_pos, str(today.date()))
+    if w_split_msgs:
+        save_simple_positions("weinstein", w_pos)
+        print(f"  [분할 보정] Weinstein: {', '.join(w_split_msgs)}")
     w_sigs  = get_weinstein_signals(price_data, set(w_pos.keys()), cfg, today, is_wednesday)
     w_exits = []  # (sym, pnl)
     w_buys  = []  # (sym, entry_px, shares, alloc_w)

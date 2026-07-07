@@ -31,6 +31,7 @@ class PaperPosition:
     shares_total:     float
     shares_remaining: float
     realized_pnl:     float = 0.0
+    split_adjusted_through: str = ""   # 주식분할 보정 완료 기준일 (paper_trading/splits.py)
 
 
 @dataclass

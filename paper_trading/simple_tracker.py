@@ -17,6 +17,7 @@ class SimplePosition:
     entry_price: float
     shares:      float
     strategy:    str
+    split_adjusted_through: str = ""   # 주식분할 보정 완료 기준일 (paper_trading/splits.py)
 
 
 def _suffix(market: str) -> str:

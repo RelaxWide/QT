@@ -86,9 +86,10 @@
   "CRWD": {
     "symbol": "CRWD",
     "entry_date": "2026-06-10T00:00:00",
-    "entry_price": 647.739990234375,
-    "shares": 7.7191466875324855,
-    "strategy": "clenow"
+    "entry_price": 161.93499755859375,
+    "shares": 30.876586750129942,
+    "strategy": "clenow",
+    "split_adjusted_through": "2026-07-06"
   },
   "FTNT": {
     "symbol": "FTNT",
