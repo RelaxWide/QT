@@ -14,7 +14,8 @@
     "targets_hit": 0,
     "shares_total": 35.99783879569822,
     "shares_remaining": 35.99783879569822,
-    "realized_pnl": 0.0
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-07-07"
   },
   "TRGP": {
     "symbol": "TRGP",
@@ -31,7 +32,8 @@
     "targets_hit": 0,
     "shares_total": 20.78676777813926,
     "shares_remaining": 20.78676777813926,
-    "realized_pnl": 0.0
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-07-07"
   },
   "DAL": {
     "symbol": "DAL",
@@ -48,24 +50,8 @@
     "targets_hit": 0,
     "shares_total": 53.554701482714094,
     "shares_remaining": 53.554701482714094,
-    "realized_pnl": 0.0
-  },
-  "AMAT": {
-    "symbol": "AMAT",
-    "entry_date": "2026-06-01T00:00:00",
-    "entry_price": 442.47202877807615,
-    "stop_initial": 396.87662146355484,
-    "stop_current": 442.47202877807615,
-    "targets": [
-      579.25825072164
-    ],
-    "partial_weights": [
-      0.5
-    ],
-    "targets_hit": 1,
-    "shares_total": 15.352423439741102,
-    "shares_remaining": 7.676211719870551,
-    "realized_pnl": 1127.8502165446102
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-07-07"
   },
   "JBHT": {
     "symbol": "JBHT",
@@ -82,7 +68,8 @@
     "targets_hit": 0,
     "shares_total": 15.71287671637513,
     "shares_remaining": 15.71287671637513,
-    "realized_pnl": 0.0
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-07-07"
   },
   "FFIV": {
     "symbol": "FFIV",
@@ -99,7 +86,8 @@
     "targets_hit": 0,
     "shares_total": 21.260337372828353,
     "shares_remaining": 21.260337372828353,
-    "realized_pnl": 0.0
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-07-07"
   },
   "APH": {
     "symbol": "APH",
@@ -116,7 +104,8 @@
     "targets_hit": 0,
     "shares_total": 34.06559870612748,
     "shares_remaining": 34.06559870612748,
-    "realized_pnl": 0.0
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-07-07"
   },
   "CFG": {
     "symbol": "CFG",
@@ -133,7 +122,8 @@
     "targets_hit": 0,
     "shares_total": 105.15009933604053,
     "shares_remaining": 105.15009933604053,
-    "realized_pnl": 0.0
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-07-07"
   },
   "C": {
     "symbol": "C",
@@ -150,7 +140,8 @@
     "targets_hit": 0,
     "shares_total": 53.37444194181046,
     "shares_remaining": 53.37444194181046,
-    "realized_pnl": 0.0
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-07-07"
   },
   "CAT": {
     "symbol": "CAT",
@@ -167,6 +158,7 @@
     "targets_hit": 0,
     "shares_total": 5.1563876469903756,
     "shares_remaining": 5.1563876469903756,
-    "realized_pnl": 0.0
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-07-07"
   }
 }
