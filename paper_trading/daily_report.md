@@ -1,10 +1,10 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-07-07
+날짜: 2026-07-08
 
 ## 전략별 현황
 
 ### Phase 4 (추세추종)
-보유 9종목: APH, C, CAT, CFG, DAL, EBAY, FFIV, JBHT, TRGP
+보유 10종목: APH, AVB, C, CAT, CFG, DAL, EBAY, FFIV, JBHT, TRGP
 
 누적: 19건 | WR 26.3% | PF 0.87 | PnL $-931
 낙폭: 현재 -1.0% | 최대 -5.2%
@@ -15,15 +15,15 @@
 ⚠️ PF 0.87 < 게이트 1.5
 
 ### Clenow (모멘텀)
-보유 20종목: AMD, CNC, CRWD, CSCO, DDOG, DELL, FLEX, FTNT, HPE, HUM, INTC, KLAC, LRCX, MRVL, MU, ON, PANW, SNDK, STX, WDC
+보유 20종목: AMAT, AMD, CNC, CRWD, DDOG, DELL, FLEX, FTNT, HPE, HUM, INTC, KLAC, LRCX, MRVL, MU, NTAP, ON, PANW, STX, WDC
 
-누적: 21건 | WR 28.6% | PF 0.55 | PnL $-2,601
-낙폭: 현재 -2.6% | 최대 -3.4%
+누적: 23건 | WR 30.4% | PF 1.06 | PnL $+351
+낙폭: 현재 -0.1% | 최대 -3.4%
 스트릭: L 1연속
-최근 10건: W L L W W L L W W L
+최근 10건: L W W L L W W L W L
 
-⚠️ WR 28.6% < 게이트 55%
-⚠️ PF 0.55 < 게이트 1.5
+⚠️ WR 30.4% < 게이트 55%
+⚠️ PF 1.06 < 게이트 1.5
 
 ### Weinstein (Stage 2)
 보유 2종목: CNC, QCOM
@@ -42,17 +42,11 @@
 | CFG | 2026-06-18T00:00:00 | $67.22 | $60.56 | 0 |
 | C | 2026-06-25T00:00:00 | $145.03 | $131.92 | 0 |
 | CAT | 2026-07-01T00:00:00 | $1034.95 | $899.20 | 0 |
-
-## 내일 진입 예정 (Phase 4)
-| 종목 | 예상가 | stop | R |
-|------|--------|------|---|
-| AVB | $195.79 | $174.50 | $21.29 |
+| AVB | 2026-07-08T00:00:00 | $194.58 | $174.50 | 0 |
 
 ## 최근 거래 내역 (최근 20건)
 | 날짜 | 전략 | 종목 | PnL | R | 사유 |
 |------|------|------|-----|---|------|
-| 2026-06-03T00:00:00 | Clenow | GEV | ❌ $-492 | - | rank_exit |
-| 2026-06-03T00:00:00 | Clenow | APA | ❌ $-252 | - | rank_exit |
 | 2026-06-04T00:00:00 | Phase4 | KO | ❌ $-198 | -0.2825 | stop |
 | 2026-06-08T00:00:00 | Phase4 | CIEN | ❌ $-704 | -1.0062 | stop |
 | 2026-06-10T00:00:00 | Clenow | VRT | ❌ $-416 | - | rank_exit |
@@ -71,3 +65,5 @@
 | 2026-07-01T00:00:00 | Clenow | COHR | ✅ $+1,039 | - | rank_exit |
 | 2026-07-01T00:00:00 | Clenow | QCOM | ❌ $-733 | - | rank_exit |
 | 2026-07-07T00:00:00 | Phase4 | AMAT | ✅ $+1,778 | 2.5396 | trail |
+| 2026-07-08T00:00:00 | Clenow | SNDK | ✅ $+3,107 | - | rank_exit |
+| 2026-07-08T00:00:00 | Clenow | CSCO | ❌ $-154 | - | rank_exit |
