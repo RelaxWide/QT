@@ -5,7 +5,7 @@
     "entry_price": 53.25,
     "shares": 125.19561815336463,
     "strategy": "weinstein",
-    "split_adjusted_through": "2026-07-16"
+    "split_adjusted_through": "2026-07-17"
   },
   "QCOM": {
     "symbol": "QCOM",
@@ -13,6 +13,6 @@
     "entry_price": 182.36500549316406,
     "shares": 36.55672122312176,
     "strategy": "weinstein",
-    "split_adjusted_through": "2026-07-16"
+    "split_adjusted_through": "2026-07-17"
   }
 }
