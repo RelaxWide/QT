@@ -15,7 +15,7 @@
     "shares_total": 35.99783879569822,
     "shares_remaining": 35.99783879569822,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-07-21"
+    "split_adjusted_through": "2026-07-22"
   },
   "TRGP": {
     "symbol": "TRGP",
@@ -33,7 +33,7 @@
     "shares_total": 20.78676777813926,
     "shares_remaining": 20.78676777813926,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-07-21"
+    "split_adjusted_through": "2026-07-22"
   },
   "DAL": {
     "symbol": "DAL",
@@ -51,7 +51,7 @@
     "shares_total": 53.554701482714094,
     "shares_remaining": 53.554701482714094,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-07-21"
+    "split_adjusted_through": "2026-07-22"
   },
   "JBHT": {
     "symbol": "JBHT",
@@ -69,7 +69,7 @@
     "shares_total": 15.71287671637513,
     "shares_remaining": 15.71287671637513,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-07-21"
+    "split_adjusted_through": "2026-07-22"
   },
   "FFIV": {
     "symbol": "FFIV",
@@ -87,7 +87,7 @@
     "shares_total": 21.260337372828353,
     "shares_remaining": 21.260337372828353,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-07-21"
+    "split_adjusted_through": "2026-07-22"
   },
   "APH": {
     "symbol": "APH",
@@ -105,7 +105,7 @@
     "shares_total": 34.06559870612748,
     "shares_remaining": 34.06559870612748,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-07-21"
+    "split_adjusted_through": "2026-07-22"
   },
   "CFG": {
     "symbol": "CFG",
@@ -123,7 +123,7 @@
     "shares_total": 105.15009933604053,
     "shares_remaining": 105.15009933604053,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-07-21"
+    "split_adjusted_through": "2026-07-22"
   },
   "AVB": {
     "symbol": "AVB",
@@ -141,7 +141,7 @@
     "shares_total": 34.85738487448441,
     "shares_remaining": 34.85738487448441,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-07-21"
+    "split_adjusted_through": "2026-07-22"
   },
   "BNY": {
     "symbol": "BNY",
@@ -159,7 +159,7 @@
     "shares_total": 36.05877580456145,
     "shares_remaining": 36.05877580456145,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-07-21"
+    "split_adjusted_through": "2026-07-22"
   },
   "CHRW": {
     "symbol": "CHRW",
@@ -177,6 +177,6 @@
     "shares_total": 31.7882758032608,
     "shares_remaining": 31.7882758032608,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-07-21"
+    "split_adjusted_through": "2026-07-22"
   }
 }
