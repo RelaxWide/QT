@@ -1,0 +1,2 @@
+date,symbol,entry_price,exit_price,shares,pnl,reason
+2026-07-24T00:00:00,QCOM,182.36500549316406,166.803,36.55672122312176,-568.89,ma30_exit
