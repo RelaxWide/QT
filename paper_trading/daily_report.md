@@ -1,18 +1,18 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-07-24
+날짜: 2026-07-27
 
 ## 전략별 현황
 
 ### Phase 4 (추세추종)
-보유 10종목: APH, AVB, BNY, CFG, CHRW, DAL, EBAY, FFIV, JBHT, TRGP
+보유 9종목: APH, AVB, BNY, CFG, DAL, EBAY, FFIV, JBHT, TRGP
 
-누적: 21건 | WR 23.8% | PF 0.73 | PnL $-2,342
-낙폭: 현재 -2.4% | 최대 -5.2%
-스트릭: L 2연속
-최근 10건: L L L L L L W W L L
+누적: 22건 | WR 22.7% | PF 0.68 | PnL $-3,048
+낙폭: 현재 -3.1% | 최대 -5.2%
+스트릭: L 3연속
+최근 10건: L L L L L W W L L L
 
-⚠️ WR 23.8% < 게이트 33%
-⚠️ PF 0.73 < 게이트 1.5
+⚠️ WR 22.7% < 게이트 33%
+⚠️ PF 0.68 < 게이트 1.5
 
 ### Clenow (모멘텀)
 보유 20종목: AMAT, AMD, CNC, CRWD, CVS, DDOG, DELL, DVA, FLEX, FTNT, HPE, HUM, INTC, LRCX, MRVL, MU, NTAP, PANW, STX, WDC
@@ -45,12 +45,10 @@
 | CFG | 2026-06-18T00:00:00 | $67.22 | $60.56 | 0 |
 | AVB | 2026-07-08T00:00:00 | $194.58 | $174.50 | 0 |
 | BNY | 2026-07-16T00:00:00 | $162.91 | $143.50 | 0 |
-| CHRW | 2026-07-16T00:00:00 | $200.89 | $178.87 | 0 |
 
 ## 최근 거래 내역 (최근 20건)
 | 날짜 | 전략 | 종목 | PnL | R | 사유 |
 |------|------|------|-----|---|------|
-| 2026-06-15T00:00:00 | Phase4 | XOM | ❌ $-850 | -1.2143 | stop_gap |
 | 2026-06-17T00:00:00 | Phase4 | VRSN | ❌ $-707 | -1.0097 | stop |
 | 2026-06-17T00:00:00 | Clenow | FIX | ✅ $+597 | - | rank_exit |
 | 2026-06-17T00:00:00 | Clenow | LITE | ✅ $+63 | - | rank_exit |
@@ -70,3 +68,4 @@
 | 2026-07-22T00:00:00 | Clenow | CSCO | ✅ $+15 | - | rank_exit |
 | 2026-07-22T00:00:00 | Clenow | KLAC | ❌ $-541 | - | rank_exit |
 | 2026-07-24T00:00:00 | Weinstein | QCOM | ❌ $-569 | - | ma30_exit |
+| 2026-07-27T00:00:00 | Phase4 | CHRW | ❌ $-706 | -1.0081 | stop |
