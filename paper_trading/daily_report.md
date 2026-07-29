@@ -1,5 +1,5 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-07-28
+날짜: 2026-07-29
 
 ## 전략별 현황
 
@@ -15,15 +15,16 @@
 ⚠️ PF 0.63 < 게이트 1.5
 
 ### Clenow (모멘텀)
-보유 17종목: AMAT, AMD, CNC, CRWD, CVS, DDOG, DELL, DVA, FLEX, FTNT, HPE, HUM, MU, NTAP, PANW, STX, WDC
+보유 20종목: AMD, CNC, CRWD, CVS, DDOG, DELL, DVA, FFIV, FTNT, HPE, HUM, MU, NTAP, PANW, STT, STX, UNH, URI, WDC, WST
 
-누적: 29건 | WR 27.6% | PF 0.52 | PnL $-5,806
-낙폭: 현재 -6.3% | 최대 -6.3%
-스트릭: L 4연속
-최근 10건: W L W L L W L L L L
+누적: 31건 | WR 25.8% | PF 0.43 | PnL $-8,570
+낙폭: 현재 -9.0% | 최대 -9.0%
+스트릭: L 6연속
+최근 10건: W L L W L L L L L L
 
-⚠️ WR 27.6% < 게이트 55%
-⚠️ PF 0.52 < 게이트 1.5
+⚠️ WR 25.8% < 게이트 55%
+⚠️ PF 0.43 < 게이트 1.5
+⚠️ 6연속 손절 중
 
 ### Weinstein (Stage 2)
 보유 1종목: CNC
@@ -48,8 +49,6 @@
 ## 최근 거래 내역 (최근 20건)
 | 날짜 | 전략 | 종목 | PnL | R | 사유 |
 |------|------|------|-----|---|------|
-| 2026-06-24T00:00:00 | Phase4 | ELV | ❌ $-707 | -1.0106 | stop |
-| 2026-06-24T00:00:00 | Clenow | UNH | ❌ $-25 | - | rank_exit |
 | 2026-06-24T00:00:00 | Clenow | JBL | ✅ $+381 | - | rank_exit |
 | 2026-06-26T00:00:00 | Phase4 | HPE | ✅ $+2,391 | 3.4155 | trail |
 | 2026-07-01T00:00:00 | Clenow | COHR | ✅ $+1,039 | - | rank_exit |
@@ -68,3 +67,5 @@
 | 2026-07-28T00:00:00 | Clenow | INTC | ❌ $-1,416 | - | ma100_exit |
 | 2026-07-28T00:00:00 | Clenow | MRVL | ❌ $-1,850 | - | ma100_exit |
 | 2026-07-28T00:00:00 | Clenow | LRCX | ❌ $-1,558 | - | ma100_exit |
+| 2026-07-29T00:00:00 | Clenow | FLEX | ❌ $-1,586 | - | ma100_exit |
+| 2026-07-29T00:00:00 | Clenow | AMAT | ❌ $-1,179 | - | ma100_exit |
