@@ -5,7 +5,7 @@
     "entry_price": 643.2999877929688,
     "shares": 7.772423589115837,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "DELL": {
     "symbol": "DELL",
@@ -13,7 +13,7 @@
     "entry_price": 205.66000366210938,
     "shares": 24.311970781712066,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "WDC": {
     "symbol": "WDC",
@@ -21,7 +21,7 @@
     "entry_price": 412.760009765625,
     "shares": 12.113576610387037,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "AMD": {
     "symbol": "AMD",
@@ -29,7 +29,7 @@
     "entry_price": 495.5400085449219,
     "shares": 10.090002651212245,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "MU": {
     "symbol": "MU",
@@ -37,7 +37,7 @@
     "entry_price": 928.4099731445312,
     "shares": 5.385551797838797,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "HPE": {
     "symbol": "HPE",
@@ -45,7 +45,7 @@
     "entry_price": 37.20000076293945,
     "shares": 134.40859939393485,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "DDOG": {
     "symbol": "DDOG",
@@ -53,7 +53,7 @@
     "entry_price": 250.3300018310547,
     "shares": 19.973634655962858,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "HUM": {
     "symbol": "HUM",
@@ -61,7 +61,7 @@
     "entry_price": 327.5400085449219,
     "shares": 15.265310708796216,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "PANW": {
     "symbol": "PANW",
@@ -69,7 +69,7 @@
     "entry_price": 263.2200012207031,
     "shares": 18.995516969881137,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "CRWD": {
     "symbol": "CRWD",
@@ -77,7 +77,7 @@
     "entry_price": 161.93499755859375,
     "shares": 30.876586750129942,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "FTNT": {
     "symbol": "FTNT",
@@ -85,7 +85,7 @@
     "entry_price": 138.8800048828125,
     "shares": 36.00230288167847,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "CNC": {
     "symbol": "CNC",
@@ -93,7 +93,7 @@
     "entry_price": 68.3499984741211,
     "shares": 73.1528911722378,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "NTAP": {
     "symbol": "NTAP",
@@ -101,7 +101,7 @@
     "entry_price": 165.39999389648438,
     "shares": 30.229747185657402,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "DVA": {
     "symbol": "DVA",
@@ -109,7 +109,7 @@
     "entry_price": 232.0800018310547,
     "shares": 21.544294900686047,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "CVS": {
     "symbol": "CVS",
@@ -117,7 +117,7 @@
     "entry_price": 108.08000183105469,
     "shares": 46.262027343557534,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "UNH": {
     "symbol": "UNH",
@@ -125,7 +125,7 @@
     "entry_price": 420.57000732421875,
     "shares": 11.888627132047208,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "URI": {
     "symbol": "URI",
@@ -133,7 +133,7 @@
     "entry_price": 1055.1099853515625,
     "shares": 4.738842461370509,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "FFIV": {
     "symbol": "FFIV",
@@ -141,7 +141,7 @@
     "entry_price": 386.95001220703125,
     "shares": 12.921565686176622,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "STT": {
     "symbol": "STT",
@@ -149,7 +149,7 @@
     "entry_price": 176.0399932861328,
     "shares": 28.402636847827377,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   },
   "WST": {
     "symbol": "WST",
@@ -157,6 +157,6 @@
     "entry_price": 337.4599914550781,
     "shares": 14.816571228016487,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-08-03"
+    "split_adjusted_through": "2026-08-04"
   }
 }
