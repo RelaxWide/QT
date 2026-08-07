@@ -1,5 +1,5 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-08-05
+날짜: 2026-08-07
 
 ## 전략별 현황
 
@@ -15,15 +15,15 @@
 ⚠️ PF 0.63 < 게이트 1.5
 
 ### Clenow (모멘텀)
-보유 20종목: AMAT, AMD, BAX, CNC, CRWD, CVS, DDOG, DELL, DOC, FTNT, GEN, HPE, HUM, MRVL, MU, NTAP, PANW, STT, STX, WDC
+보유 19종목: AMAT, AMD, BAX, CNC, CRWD, CVS, DDOG, DELL, DOC, FTNT, GEN, HPE, HUM, MRVL, MU, NTAP, PANW, STT, STX
 
-누적: 36건 | WR 30.6% | PF 0.46 | PnL $-8,600
-낙폭: 현재 -9.1% | 최대 -10.0%
-스트릭: W 2연속
-최근 10건: L L L L L L W L W W
+누적: 37건 | WR 32.4% | PF 0.49 | PnL $-8,136
+낙폭: 현재 -8.6% | 최대 -10.0%
+스트릭: W 3연속
+최근 10건: L L L L L W L W W W
 
-⚠️ WR 30.6% < 게이트 55%
-⚠️ PF 0.46 < 게이트 1.5
+⚠️ WR 32.4% < 게이트 55%
+⚠️ PF 0.49 < 게이트 1.5
 
 ### Weinstein (Stage 2)
 보유 1종목: CNC
@@ -50,7 +50,6 @@
 ## 최근 거래 내역 (최근 20건)
 | 날짜 | 전략 | 종목 | PnL | R | 사유 |
 |------|------|------|-----|---|------|
-| 2026-07-08T00:00:00 | Clenow | SNDK | ✅ $+3,107 | - | rank_exit |
 | 2026-07-08T00:00:00 | Clenow | CSCO | ❌ $-154 | - | rank_exit |
 | 2026-07-15T00:00:00 | Phase4 | C | ❌ $-707 | -1.0101 | stop |
 | 2026-07-15T00:00:00 | Phase4 | CAT | ❌ $-705 | -1.0066 | stop |
@@ -70,3 +69,4 @@
 | 2026-08-05T00:00:00 | Clenow | UNH | ❌ $-98 | - | rank_exit |
 | 2026-08-05T00:00:00 | Clenow | WST | ✅ $+196 | - | rank_exit |
 | 2026-08-05T00:00:00 | Clenow | URI | ✅ $+501 | - | rank_exit |
+| 2026-08-06T00:00:00 | Clenow | WDC | ✅ $+464 | - | ma100_exit |
