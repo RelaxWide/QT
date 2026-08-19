@@ -1,5 +1,5 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-08-18
+날짜: 2026-08-19
 
 ## 전략별 현황
 
@@ -15,15 +15,15 @@
 ⚠️ PF 0.63 < 게이트 1.5
 
 ### Clenow (모멘텀)
-보유 20종목: AMD, AXON, BAX, BBY, CNC, CRL, CRWD, DDOG, DELL, FTNT, GEN, HPE, HUM, MU, NTAP, PANW, PAYX, STT, SWK, UAL
+보유 20종목: ADP, AXON, BAX, BBY, CRL, CRWD, DDOG, DELL, FTNT, GEN, HPE, HUM, IQV, MPC, MU, NTAP, PANW, PAYX, SWK, VLO
 
-누적: 42건 | WR 35.7% | PF 0.59 | PnL $-6,940
-낙폭: 현재 -7.4% | 최대 -10.0%
-스트릭: W 3연속
-최근 10건: W L W W W L L W W W
+누적: 46건 | WR 34.8% | PF 0.57 | PnL $-7,616
+낙폭: 현재 -8.1% | 최대 -10.0%
+스트릭: W 1연속
+최근 10건: W L L W W W L L L W
 
-⚠️ WR 35.7% < 게이트 55%
-⚠️ PF 0.59 < 게이트 1.5
+⚠️ WR 34.8% < 게이트 55%
+⚠️ PF 0.57 < 게이트 1.5
 
 ### Weinstein (Stage 2)
 보유 1종목: CNC
@@ -50,10 +50,6 @@
 ## 최근 거래 내역 (최근 20건)
 | 날짜 | 전략 | 종목 | PnL | R | 사유 |
 |------|------|------|-----|---|------|
-| 2026-07-22T00:00:00 | Clenow | KLAC | ❌ $-541 | - | rank_exit |
-| 2026-07-24T00:00:00 | Weinstein | QCOM | ❌ $-569 | - | ma30_exit |
-| 2026-07-27T00:00:00 | Phase4 | CHRW | ❌ $-706 | -1.0081 | stop |
-| 2026-07-28T00:00:00 | Phase4 | FFIV | ❌ $-708 | -1.0113 | stop |
 | 2026-07-28T00:00:00 | Clenow | INTC | ❌ $-1,416 | - | ma100_exit |
 | 2026-07-28T00:00:00 | Clenow | MRVL | ❌ $-1,850 | - | ma100_exit |
 | 2026-07-28T00:00:00 | Clenow | LRCX | ❌ $-1,558 | - | ma100_exit |
@@ -70,3 +66,7 @@
 | 2026-08-12T00:00:00 | Clenow | MRVL | ✅ $+138 | - | rank_exit |
 | 2026-08-12T00:00:00 | Clenow | AMAT | ✅ $+125 | - | rank_exit |
 | 2026-08-12T00:00:00 | Clenow | STX | ✅ $+1,819 | - | rank_exit |
+| 2026-08-19T00:00:00 | Clenow | AMD | ❌ $-299 | - | rank_exit |
+| 2026-08-19T00:00:00 | Clenow | CNC | ❌ $-272 | - | rank_exit |
+| 2026-08-19T00:00:00 | Clenow | UAL | ❌ $-378 | - | rank_exit |
+| 2026-08-19T00:00:00 | Clenow | STT | ✅ $+272 | - | rank_exit |
