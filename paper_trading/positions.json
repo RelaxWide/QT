@@ -15,7 +15,7 @@
     "shares_total": 35.99783879569822,
     "shares_remaining": 35.99783879569822,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-08-24"
+    "split_adjusted_through": "2026-08-25"
   },
   "TRGP": {
     "symbol": "TRGP",
@@ -33,7 +33,7 @@
     "shares_total": 20.78676777813926,
     "shares_remaining": 20.78676777813926,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-08-24"
+    "split_adjusted_through": "2026-08-25"
   },
   "DAL": {
     "symbol": "DAL",
@@ -51,7 +51,7 @@
     "shares_total": 53.554701482714094,
     "shares_remaining": 53.554701482714094,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-08-24"
+    "split_adjusted_through": "2026-08-25"
   },
   "JBHT": {
     "symbol": "JBHT",
@@ -69,7 +69,7 @@
     "shares_total": 15.71287671637513,
     "shares_remaining": 15.71287671637513,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-08-24"
+    "split_adjusted_through": "2026-08-25"
   },
   "APH": {
     "symbol": "APH",
@@ -87,7 +87,7 @@
     "shares_total": 34.06559870612748,
     "shares_remaining": 34.06559870612748,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-08-24"
+    "split_adjusted_through": "2026-08-25"
   },
   "CFG": {
     "symbol": "CFG",
@@ -105,7 +105,7 @@
     "shares_total": 105.15009933604053,
     "shares_remaining": 105.15009933604053,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-08-24"
+    "split_adjusted_through": "2026-08-25"
   },
   "AVB": {
     "symbol": "AVB",
@@ -123,7 +123,7 @@
     "shares_total": 34.85738487448441,
     "shares_remaining": 34.85738487448441,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-08-24"
+    "split_adjusted_through": "2026-08-25"
   },
   "BNY": {
     "symbol": "BNY",
@@ -141,7 +141,7 @@
     "shares_total": 36.05877580456145,
     "shares_remaining": 36.05877580456145,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-08-24"
+    "split_adjusted_through": "2026-08-25"
   },
   "CPAY": {
     "symbol": "CPAY",
@@ -159,7 +159,7 @@
     "shares_total": 19.699080282786007,
     "shares_remaining": 19.699080282786007,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-08-24"
+    "split_adjusted_through": "2026-08-25"
   },
   "GEN": {
     "symbol": "GEN",
@@ -177,6 +177,6 @@
     "shares_total": 216.84106925807816,
     "shares_remaining": 216.84106925807816,
     "realized_pnl": 0.0,
-    "split_adjusted_through": "2026-08-24"
+    "split_adjusted_through": "2026-08-25"
   }
 }
