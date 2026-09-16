@@ -1,5 +1,5 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-09-15
+날짜: 2026-09-16
 
 ## 전략별 현황
 
@@ -15,15 +15,15 @@
 ⚠️ PF 0.63 < 게이트 1.5
 
 ### Clenow (모멘텀)
-보유 20종목: BAX, BBY, CRL, DELL, EXPE, GPC, HPE, IQV, MPC, NTAP, PANW, PAYX, PSX, TECH, TMO, VEEV, VLO, WDAY, WTW, ZBRA
+보유 20종목: BAX, BBY, CRL, DASH, DELL, EXPE, GPC, GPN, HPQ, IQV, MPC, PANW, PSX, TECH, TMO, VEEV, VLO, WDAY, WTW, ZBRA
 
-누적: 57건 | WR 38.6% | PF 0.69 | PnL $-6,179
-낙폭: 현재 -6.7% | 최대 -10.0%
-스트릭: L 1연속
-최근 10건: W W L L W W W L W L
+누적: 60건 | WR 40.0% | PF 0.85 | PnL $-2,942
+낙폭: 현재 -3.4% | 최대 -10.0%
+스트릭: W 1연속
+최근 10건: L W W W L W L W L W
 
-⚠️ WR 38.6% < 게이트 55%
-⚠️ PF 0.69 < 게이트 1.5
+⚠️ WR 40.0% < 게이트 55%
+⚠️ PF 0.85 < 게이트 1.5
 
 ### Weinstein (Stage 2)
 보유 1종목: CNC
@@ -50,9 +50,6 @@
 ## 최근 거래 내역 (최근 20건)
 | 날짜 | 전략 | 종목 | PnL | R | 사유 |
 |------|------|------|-----|---|------|
-| 2026-08-12T00:00:00 | Clenow | CVS | ❌ $-622 | - | rank_exit |
-| 2026-08-12T00:00:00 | Clenow | DOC | ❌ $-264 | - | rank_exit |
-| 2026-08-12T00:00:00 | Clenow | MRVL | ✅ $+138 | - | rank_exit |
 | 2026-08-12T00:00:00 | Clenow | AMAT | ✅ $+125 | - | rank_exit |
 | 2026-08-12T00:00:00 | Clenow | STX | ✅ $+1,819 | - | rank_exit |
 | 2026-08-19T00:00:00 | Clenow | AMD | ❌ $-299 | - | rank_exit |
@@ -70,3 +67,6 @@
 | 2026-09-09T00:00:00 | Clenow | AXON | ❌ $-919 | - | ma100_exit |
 | 2026-09-09T00:00:00 | Clenow | CRWD | ✅ $+1,410 | - | rank_exit |
 | 2026-09-09T00:00:00 | Clenow | MRNA | ❌ $-508 | - | rank_exit |
+| 2026-09-16T00:00:00 | Clenow | NTAP | ✅ $+783 | - | rank_exit |
+| 2026-09-16T00:00:00 | Clenow | PAYX | ❌ $-156 | - | rank_exit |
+| 2026-09-16T00:00:00 | Clenow | HPE | ✅ $+2,611 | - | rank_exit |
