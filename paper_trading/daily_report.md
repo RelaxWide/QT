@@ -1,5 +1,5 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-09-22
+날짜: 2026-09-23
 
 ## 전략별 현황
 
@@ -16,15 +16,15 @@
 ⚠️ 5연속 손절 중
 
 ### Clenow (모멘텀)
-보유 20종목: BAX, BBY, CRL, DASH, DELL, EXPE, GPC, GPN, HPQ, IQV, MPC, PANW, PSX, TECH, TMO, VEEV, VLO, WDAY, WTW, ZBRA
+보유 20종목: BDX, CRL, DELL, GPC, GPN, HPQ, ILMN, IQV, MPC, MRNA, PANW, PSX, RVTY, TECH, TGT, TMO, VEEV, VLO, WDAY, ZBRA
 
-누적: 60건 | WR 40.0% | PF 0.85 | PnL $-2,942
-낙폭: 현재 -3.4% | 최대 -10.0%
-스트릭: W 1연속
-최근 10건: L W W W L W L W L W
+누적: 65건 | WR 38.5% | PF 0.8 | PnL $-4,419
+낙폭: 현재 -4.9% | 최대 -10.0%
+스트릭: L 3연속
+최근 10건: W L W L W L W L L L
 
-⚠️ WR 40.0% < 게이트 55%
-⚠️ PF 0.85 < 게이트 1.5
+⚠️ WR 38.5% < 게이트 55%
+⚠️ PF 0.8 < 게이트 1.5
 
 ### Weinstein (Stage 2)
 보유 1종목: CNC
@@ -51,11 +51,6 @@
 ## 최근 거래 내역 (최근 20건)
 | 날짜 | 전략 | 종목 | PnL | R | 사유 |
 |------|------|------|-----|---|------|
-| 2026-08-12T00:00:00 | Clenow | STX | ✅ $+1,819 | - | rank_exit |
-| 2026-08-19T00:00:00 | Clenow | AMD | ❌ $-299 | - | rank_exit |
-| 2026-08-19T00:00:00 | Clenow | CNC | ❌ $-272 | - | rank_exit |
-| 2026-08-19T00:00:00 | Clenow | UAL | ❌ $-378 | - | rank_exit |
-| 2026-08-19T00:00:00 | Clenow | STT | ✅ $+272 | - | rank_exit |
 | 2026-08-26T00:00:00 | Clenow | DDOG | ❌ $-457 | - | rank_exit |
 | 2026-08-26T00:00:00 | Clenow | GEN | ✅ $+297 | - | rank_exit |
 | 2026-08-26T00:00:00 | Clenow | MU | ✅ $+49 | - | rank_exit |
@@ -71,3 +66,8 @@
 | 2026-09-16T00:00:00 | Clenow | PAYX | ❌ $-156 | - | rank_exit |
 | 2026-09-16T00:00:00 | Clenow | HPE | ✅ $+2,611 | - | rank_exit |
 | 2026-09-18T00:00:00 | Phase4 | JBHT | ❌ $-704 | -1.0053 | stop |
+| 2026-09-23T00:00:00 | Clenow | EXPE | ❌ $-800 | - | ma100_exit |
+| 2026-09-23T00:00:00 | Clenow | BBY | ✅ $+464 | - | rank_exit |
+| 2026-09-23T00:00:00 | Clenow | WTW | ❌ $-240 | - | rank_exit |
+| 2026-09-23T00:00:00 | Clenow | BAX | ❌ $-707 | - | rank_exit |
+| 2026-09-23T00:00:00 | Clenow | DASH | ❌ $-195 | - | rank_exit |
