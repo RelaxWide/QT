@@ -1,5 +1,5 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-09-30
+날짜: 2026-10-01
 
 ## 전략별 현황
 
@@ -16,15 +16,16 @@
 ⚠️ 6연속 손절 중
 
 ### Clenow (모멘텀)
-보유 20종목: BDX, CRL, DELL, GPC, GPN, HPQ, ILMN, IQV, MPC, MRNA, PANW, PSX, RVTY, TECH, TGT, TMO, VEEV, VLO, WDAY, ZBRA
+보유 0종목
 
-누적: 65건 | WR 38.5% | PF 0.8 | PnL $-4,419
-낙폭: 현재 -4.9% | 최대 -10.0%
-스트릭: L 3연속
-최근 10건: W L W L W L W L L L
+누적: 85건 | WR 29.4% | PF 0.8 | PnL $+nan
+낙폭: 현재 +nan% | 최대 -10.0%
+스트릭: L 23연속
+최근 10건: L L L L L L L L L L
 
-⚠️ WR 38.5% < 게이트 55%
+⚠️ WR 29.4% < 게이트 55%
 ⚠️ PF 0.8 < 게이트 1.5
+⚠️ 23연속 손절 중
 
 ### Weinstein (Stage 2)
 보유 1종목: CNC
@@ -51,23 +52,23 @@
 ## 최근 거래 내역 (최근 20건)
 | 날짜 | 전략 | 종목 | PnL | R | 사유 |
 |------|------|------|-----|---|------|
-| 2026-08-26T00:00:00 | Clenow | GEN | ✅ $+297 | - | rank_exit |
-| 2026-08-26T00:00:00 | Clenow | MU | ✅ $+49 | - | rank_exit |
-| 2026-08-26T00:00:00 | Clenow | SWK | ❌ $-157 | - | rank_exit |
-| 2026-09-02T00:00:00 | Clenow | DLTR | ❌ $-15 | - | rank_exit |
-| 2026-09-02T00:00:00 | Clenow | FTNT | ✅ $+558 | - | rank_exit |
-| 2026-09-02T00:00:00 | Clenow | HUM | ✅ $+1,115 | - | rank_exit |
-| 2026-09-02T00:00:00 | Clenow | ADP | ✅ $+66 | - | rank_exit |
-| 2026-09-09T00:00:00 | Clenow | AXON | ❌ $-919 | - | ma100_exit |
-| 2026-09-09T00:00:00 | Clenow | CRWD | ✅ $+1,410 | - | rank_exit |
-| 2026-09-09T00:00:00 | Clenow | MRNA | ❌ $-508 | - | rank_exit |
-| 2026-09-16T00:00:00 | Clenow | NTAP | ✅ $+783 | - | rank_exit |
-| 2026-09-16T00:00:00 | Clenow | PAYX | ❌ $-156 | - | rank_exit |
-| 2026-09-16T00:00:00 | Clenow | HPE | ✅ $+2,611 | - | rank_exit |
-| 2026-09-18T00:00:00 | Phase4 | JBHT | ❌ $-704 | -1.0053 | stop |
-| 2026-09-23T00:00:00 | Clenow | EXPE | ❌ $-800 | - | ma100_exit |
-| 2026-09-23T00:00:00 | Clenow | BBY | ✅ $+464 | - | rank_exit |
-| 2026-09-23T00:00:00 | Clenow | WTW | ❌ $-240 | - | rank_exit |
-| 2026-09-23T00:00:00 | Clenow | BAX | ❌ $-707 | - | rank_exit |
-| 2026-09-23T00:00:00 | Clenow | DASH | ❌ $-195 | - | rank_exit |
-| 2026-09-24T00:00:00 | Phase4 | GEN | ❌ $-705 | -1.0077 | stop |
+| 2026-09-30T00:00:00 | Clenow | IQV | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | GPN | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | WDAY | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | PANW | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | MPC | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | ZBRA | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | VEEV | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | MRNA | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | ILMN | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | BDX | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | PSX | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | TMO | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | GPC | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | TGT | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | CRL | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | TECH | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | HPQ | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | DELL | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | VLO | ❌ $+nan | - | rank_exit |
+| 2026-09-30T00:00:00 | Clenow | RVTY | ❌ $+nan | - | rank_exit |
