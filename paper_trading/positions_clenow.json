@@ -1,1 +1,154 @@
-{}
+{
+  "CRL": {
+    "symbol": "CRL",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 302.0,
+    "shares": 16.556291390728475,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "APA": {
+    "symbol": "APA",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 47.369998931884766,
+    "shares": 105.55203953434118,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "A": {
+    "symbol": "A",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 174.0,
+    "shares": 28.735632183908045,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "ACN": {
+    "symbol": "ACN",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 214.9600067138672,
+    "shares": 23.260140695173543,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "BDX": {
+    "symbol": "BDX",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 188.88999938964844,
+    "shares": 26.47043261240018,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "ANET": {
+    "symbol": "ANET",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 195.4199981689453,
+    "shares": 25.585917750737973,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "CVX": {
+    "symbol": "CVX",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 222.0399932861328,
+    "shares": 22.518465822311246,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "ADP": {
+    "symbol": "ADP",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 280.32000732421875,
+    "shares": 17.836757524827647,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "BBY": {
+    "symbol": "BBY",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 89.0999984741211,
+    "shares": 56.11672374441442,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "AMGN": {
+    "symbol": "AMGN",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 426.1099853515625,
+    "shares": 11.734059683850743,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "BR": {
+    "symbol": "BR",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 168.25999450683594,
+    "shares": 29.715916814658303,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "ABBV": {
+    "symbol": "ABBV",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 283.4800109863281,
+    "shares": 17.637927918103347,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "BIIB": {
+    "symbol": "BIIB",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 232.8300018310547,
+    "shares": 21.474895677869224,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "ABNB": {
+    "symbol": "ABNB",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 167.05999755859375,
+    "shares": 29.929367131986975,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "TECH": {
+    "symbol": "TECH",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 72.5,
+    "shares": 68.96551724137932,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "COR": {
+    "symbol": "COR",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 336.1700134277344,
+    "shares": 14.873426540986939,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "AAPL": {
+    "symbol": "AAPL",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 342.9599914550781,
+    "shares": 14.578960008677614,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "ALLE": {
+    "symbol": "ALLE",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 152.5,
+    "shares": 32.78688524590164,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  },
+  "BAX": {
+    "symbol": "BAX",
+    "entry_date": "2026-10-14T00:00:00",
+    "entry_price": 24.799999237060547,
+    "shares": 201.61290942816302,
+    "strategy": "clenow",
+    "split_adjusted_through": ""
+  }
+}

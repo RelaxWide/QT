@@ -1,5 +1,5 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-10-14
+날짜: 2026-10-15
 
 ## 전략별 현황
 
@@ -16,7 +16,7 @@
 ⚠️ 7연속 손절 중
 
 ### Clenow (모멘텀)
-보유 0종목
+보유 19종목: A, AAPL, ABBV, ABNB, ACN, ADP, ALLE, AMGN, ANET, APA, BAX, BBY, BDX, BIIB, BR, COR, CRL, CVX, TECH
 
 누적: 85건 | WR 29.4% | PF 0.8 | PnL $+nan
 낙폭: 현재 +nan% | 최대 -10.0%
