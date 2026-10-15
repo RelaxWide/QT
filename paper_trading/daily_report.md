@@ -4,16 +4,16 @@
 ## 전략별 현황
 
 ### Phase 4 (추세추종)
-보유 10종목: AAPL, APH, AVB, CFG, CPAY, DAL, EBAY, SMCI, TMO, TRGP
+보유 9종목: AAPL, APH, AVB, CFG, CPAY, DAL, EBAY, TMO, TRGP
 
-누적: 26건 | WR 19.2% | PF 0.52 | PnL $-5,870
-낙폭: 현재 -5.9% | 최대 -5.9%
-스트릭: L 7연속
-최근 10건: L W W L L L L L L L
+누적: 27건 | WR 18.5% | PF 0.47 | PnL $-7,081
+낙폭: 현재 -7.1% | 최대 -7.1%
+스트릭: L 8연속
+최근 10건: W W L L L L L L L L
 
-⚠️ WR 19.2% < 게이트 33%
-⚠️ PF 0.52 < 게이트 1.5
-⚠️ 7연속 손절 중
+⚠️ WR 18.5% < 게이트 33%
+⚠️ PF 0.47 < 게이트 1.5
+⚠️ 8연속 손절 중
 
 ### Clenow (모멘텀)
 보유 19종목: A, AAPL, ABBV, ABNB, ACN, ADP, ALLE, AMGN, ANET, APA, BAX, BBY, BDX, BIIB, BR, COR, CRL, CVX, TECH
@@ -47,12 +47,15 @@
 | CPAY | 2026-08-03T00:00:00 | $385.04 | $349.51 | 0 |
 | AAPL | 2026-09-21T00:00:00 | $nan | $309.90 | 0 |
 | TMO | 2026-09-25T00:00:00 | $nan | $594.36 | 0 |
-| SMCI | 2026-10-06T00:00:00 | $43.91 | $38.32 | 0 |
+
+## 내일 진입 예정 (Phase 4)
+| 종목 | 예상가 | stop | R |
+|------|--------|------|---|
+| BDX | $192.00 | $175.71 | $16.29 |
 
 ## 최근 거래 내역 (최근 20건)
 | 날짜 | 전략 | 종목 | PnL | R | 사유 |
 |------|------|------|-----|---|------|
-| 2026-09-30T00:00:00 | Clenow | GPN | ❌ $+nan | - | rank_exit |
 | 2026-09-30T00:00:00 | Clenow | WDAY | ❌ $+nan | - | rank_exit |
 | 2026-09-30T00:00:00 | Clenow | PANW | ❌ $+nan | - | rank_exit |
 | 2026-09-30T00:00:00 | Clenow | MPC | ❌ $+nan | - | rank_exit |
@@ -72,3 +75,4 @@
 | 2026-09-30T00:00:00 | Clenow | VLO | ❌ $+nan | - | rank_exit |
 | 2026-09-30T00:00:00 | Clenow | RVTY | ❌ $+nan | - | rank_exit |
 | 2026-10-05T00:00:00 | Phase4 | BNY | ❌ $-705 | -1.0074 | stop |
+| 2026-10-15T00:00:00 | Phase4 | SMCI | ❌ $-1,210 | -1.7292 | stop_gap |
