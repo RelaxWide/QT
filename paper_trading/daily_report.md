@@ -1,10 +1,10 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-10-15
+날짜: 2026-10-16
 
 ## 전략별 현황
 
 ### Phase 4 (추세추종)
-보유 9종목: AAPL, APH, AVB, CFG, CPAY, DAL, EBAY, TMO, TRGP
+보유 10종목: AAPL, APH, AVB, BDX, CFG, CPAY, DAL, EBAY, TMO, TRGP
 
 누적: 27건 | WR 18.5% | PF 0.47 | PnL $-7,081
 낙폭: 현재 -7.1% | 최대 -7.1%
@@ -16,16 +16,16 @@
 ⚠️ 8연속 손절 중
 
 ### Clenow (모멘텀)
-보유 19종목: A, AAPL, ABBV, ABNB, ACN, ADP, ALLE, AMGN, ANET, APA, BAX, BBY, BDX, BIIB, BR, COR, CRL, CVX, TECH
+보유 18종목: A, AAPL, ABBV, ABNB, ACN, ADP, ALLE, AMGN, APA, BAX, BBY, BDX, BIIB, BR, COR, CRL, CVX, TECH
 
-누적: 85건 | WR 29.4% | PF 0.8 | PnL $+nan
+누적: 86건 | WR 29.1% | PF 0.78 | PnL $+nan
 낙폭: 현재 +nan% | 최대 -10.0%
-스트릭: L 23연속
+스트릭: L 24연속
 최근 10건: L L L L L L L L L L
 
-⚠️ WR 29.4% < 게이트 55%
-⚠️ PF 0.8 < 게이트 1.5
-⚠️ 23연속 손절 중
+⚠️ WR 29.1% < 게이트 55%
+⚠️ PF 0.78 < 게이트 1.5
+⚠️ 24연속 손절 중
 
 ### Weinstein (Stage 2)
 보유 1종목: CNC
@@ -47,16 +47,11 @@
 | CPAY | 2026-08-03T00:00:00 | $385.04 | $349.51 | 0 |
 | AAPL | 2026-09-21T00:00:00 | $nan | $309.90 | 0 |
 | TMO | 2026-09-25T00:00:00 | $nan | $594.36 | 0 |
-
-## 내일 진입 예정 (Phase 4)
-| 종목 | 예상가 | stop | R |
-|------|--------|------|---|
-| BDX | $192.00 | $175.71 | $16.29 |
+| BDX | 2026-10-16T00:00:00 | $194.61 | $175.71 | 0 |
 
 ## 최근 거래 내역 (최근 20건)
 | 날짜 | 전략 | 종목 | PnL | R | 사유 |
 |------|------|------|-----|---|------|
-| 2026-09-30T00:00:00 | Clenow | WDAY | ❌ $+nan | - | rank_exit |
 | 2026-09-30T00:00:00 | Clenow | PANW | ❌ $+nan | - | rank_exit |
 | 2026-09-30T00:00:00 | Clenow | MPC | ❌ $+nan | - | rank_exit |
 | 2026-09-30T00:00:00 | Clenow | ZBRA | ❌ $+nan | - | rank_exit |
@@ -76,3 +71,4 @@
 | 2026-09-30T00:00:00 | Clenow | RVTY | ❌ $+nan | - | rank_exit |
 | 2026-10-05T00:00:00 | Phase4 | BNY | ❌ $-705 | -1.0074 | stop |
 | 2026-10-15T00:00:00 | Phase4 | SMCI | ❌ $-1,210 | -1.7292 | stop_gap |
+| 2026-10-16T00:00:00 | Clenow | ANET | ❌ $-476 | - | ma100_exit |
