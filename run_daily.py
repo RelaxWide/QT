@@ -41,6 +41,19 @@ from paper_trading.tracker import (
 )
 from paper_trading.splits import adjust_simple_positions, adjust_paper_positions
 
+NAV_FILE           = Path("paper_trading/daily_nav.csv")
+MIN_TODAY_COVERAGE = 0.90   # 당일 봉이 있어야 하는 종목 비율 (미만이면 데이터 장애로 보고 건너뜀)
+
+
+def _last_nav_date() -> pd.Timestamp | None:
+    if not NAV_FILE.exists() or NAV_FILE.stat().st_size == 0:
+        return None
+    try:
+        dates = pd.read_csv(NAV_FILE, usecols=["date"], parse_dates=["date"])["date"]
+        return dates.max() if len(dates) else None
+    except Exception:
+        return None
+
 
 def check_market_closed(force: bool = False) -> bool:
     now_et = datetime.now(ZoneInfo("America/New_York"))
@@ -85,8 +98,13 @@ def reset_paper_trading() -> None:
 
 def _get_cur(sym, today, price_data, fallback):
     df = price_data.get(sym)
-    if df is not None and today in df.index:
-        return df.at[today, "close"]
+    if df is not None:
+        if today in df.index:
+            return df.at[today, "close"]
+        # 당일 봉이 빠진 종목(불량 봉 제거)은 직전 종가로 평가 — 진입가로 두면 손익이 0 으로 보인다
+        prior = df["close"].loc[:today]
+        if len(prior):
+            return prior.iloc[-1]
     return fallback
 
 
@@ -369,8 +387,25 @@ def main():
     price_data = fetch_all(tickers, "2015-01-01", None, min_bars=300, refresh=args.refresh)
     print(f"  {len(price_data)} 종목 로드")
 
-    end_date = max(df.index[-1] for df in price_data.values())
-    today    = end_date
+    last_dates = pd.Series([df.index[-1] for df in price_data.values()])
+    end_date   = last_dates.max()
+    today      = end_date
+
+    # 당일 봉 커버리지 — 불량 봉(NaN) 제거 후 당일 데이터가 있는 종목이 적으면 데이터 장애.
+    # 그대로 돌리면 순위·청산이 일부 종목만으로 계산된다 → 상태를 건드리지 않고 종료
+    coverage = float((last_dates == end_date).mean())
+    if coverage < MIN_TODAY_COVERAGE:
+        msg = (f"⚠️ <b>페이퍼 실행 건너뜀</b> — {today.date()} 봉이 {coverage:.0%} 종목에만 있음 "
+               f"(기준 {MIN_TODAY_COVERAGE:.0%}). yfinance 데이터 장애 추정, 상태 파일 미변경")
+        print(msg)
+        telegram.send(msg, token=tg.get("bot_token", ""), chat_id=tg.get("chat_id", ""))
+        return
+
+    # 같은 봉을 두 번 처리하지 않는다 (수동 재실행·휴장일 — 5/22, 9/04 NAV 중복 기록 이력)
+    last_nav = _last_nav_date()
+    if last_nav is not None and today <= last_nav:
+        print(f"  {today.date()} 봉은 이미 처리됨 (NAV 마지막 {last_nav.date()}) — 종료")
+        return
 
     regime = compute_regime(
         "2015-01-01", None,
@@ -632,7 +667,7 @@ def main():
     combined = round(p4_t + cl_t + w_t, 2)
     combo_6040 = round(0.6 * cl_t + 0.4 * w_t, 2)  # Clenow 60% / Weinstein 40% 합성
 
-    nav_file = Path("paper_trading/daily_nav.csv")
+    nav_file = NAV_FILE
     nav_file.parent.mkdir(exist_ok=True)
     write_header = not nav_file.exists() or nav_file.stat().st_size == 0
     import csv as _csv

@@ -14,6 +14,17 @@ from tqdm import tqdm
 CACHE_DIR = Path("data/raw")
 
 
+def _drop_bad_bars(df: pd.DataFrame) -> pd.DataFrame:
+    """OHLC 중 하나라도 NaN 인 봉 제거.
+
+    yfinance 가 장 마감 직후 받은 당일 봉을 NaN 으로 주는 일이 있다 (GHA 21:30 UTC).
+    그대로 쓰면 NaN 진입가·청산가가 상태 파일에 박히고, 모멘텀 순위가 깨져
+    전량 rank_exit 가 난다 (2026-09-21 AAPL 진입가 NaN, 09-30 Clenow 20종목 NaN 청산).
+    """
+    cols = [c for c in ("open", "high", "low", "close") if c in df.columns]
+    return df.dropna(subset=cols) if cols else df
+
+
 def _last_trading_day() -> pd.Timestamp:
     """오늘 또는 가장 최근 거래일 (주말 → 금요일)."""
     today = pd.Timestamp.today().normalize()
@@ -41,7 +52,7 @@ def fetch_prices(
     cache_path = _cache / f"{safe}.parquet"
 
     if cache_path.exists() and not refresh:
-        cached = pd.read_parquet(cache_path)
+        cached = _drop_bad_bars(pd.read_parquet(cache_path))
         # 30 거래일 이내 캐시는 유효 (백테스트 리서치 중에는 최신성 불필요)
         # 실시간 페이퍼/실거래에서는 --refresh 명시
         if not cached.empty and cached.index[-1] >= _last_trading_day() - pd.offsets.BDay(30):
@@ -56,6 +67,7 @@ def fetch_prices(
     raw.columns = [c.lower() for c in raw.columns]
     raw.index.name = "date"
     raw.index = pd.to_datetime(raw.index).tz_localize(None)
+    raw = _drop_bad_bars(raw)
     raw.to_parquet(cache_path)
     return raw
 
