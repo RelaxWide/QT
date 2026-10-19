@@ -32,8 +32,18 @@ CONFIG_PATH   = Path("config_live.yaml")
 PAPER_DIR     = Path("paper_trading")
 LIVE_DIR      = Path("live_trading")
 ORDER_MAP     = LIVE_DIR / "order_map.json"
+# 실계좌 Phase 4 진입 대기. paper_trading/pending.json 은 GHA(run_daily.py) 소유라
+# 로컬이 쓰면 QT_GitSync 의 pull --ff-only 가 막힌다 (2026-10 73커밋 정체 사고).
+PHASE4_LIVE_PENDING = LIVE_DIR / "pending_phase4_live.json"
 
 log = logging.getLogger("kis")
+
+
+def phase4_live_enabled(cfg_live: dict, market: str = "us") -> bool:
+    """Phase 4 에 실거래 자본이 배분돼 있는지. 0 이면 페이퍼 전용 (GHA 관리)."""
+    cap = (cfg_live.get(market, {}) or {}).get("capital") or cfg_live.get("capital", {}) or {}
+    return (float(cap.get("phase4_pct", 0) or 0) > 0
+            or (not cap.get("auto_allocate") and float(cap.get("phase4_usd", 0) or 0) > 0))
 
 
 # ── 주문 결과 ─────────────────────────────────────────────────────────────
@@ -261,12 +271,12 @@ class OrderManager:
     # ── Phase 4: pending → 장개시 MOO 주문 ───────────────────────────────
     def place_phase4_entries(self, dry_run: bool = False) -> list[OrderResult]:
         """
-        paper_trading/pending.json 읽어 각 신호를 LIMIT 주문 전송.
+        live_trading/pending_phase4_live.json 읽어 각 신호를 LIMIT 주문 전송.
         Phase 4 진입은 장개시 시가 근사 — 전날 종가 +1% LIMIT으로 체결 유도.
         (KIS 모의투자는 MOO 직접 미지원, LIMIT으로 대체)
         """
         from paper_trading.tracker import load_pending
-        pending = load_pending()
+        pending = load_pending(PHASE4_LIVE_PENDING)
         if not pending:
             log.info("[phase4] pending 진입 신호 없음")
             return []

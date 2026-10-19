@@ -278,7 +278,7 @@ Clenow 비중(%)을 0~100%로 5%씩 변화시킨 Sharpe 스윕 분석.
 | 파일 | 전략 | 역할 |
 |---|---|---|
 | `paper_trading/positions.json` | Phase 4 | 현재 보유 포지션 (스톱·목표가 포함) |
-| `paper_trading/pending.json` | Phase 4 | 내일 진입 대기 목록 |
+| `paper_trading/pending.json` | Phase 4 | 내일 진입 대기 목록 (페이퍼 — GHA 전용. 실계좌는 `live_trading/pending_phase4_live.json`) |
 | `paper_trading/trades.csv` | Phase 4 | 청산 거래 누적 기록 |
 | `paper_trading/positions_clenow.json` | Clenow | 현재 보유 포지션 |
 | `paper_trading/trades_clenow.csv` | Clenow | 청산 거래 누적 기록 |
@@ -320,9 +320,10 @@ Clenow 비중(%)을 0~100%로 5%씩 변화시킨 Sharpe 스윕 분석.
 
 | 시각 | 스크립트 | 역할 |
 |---|---|---|
-| 22:29 평일 | `scheduler/morning_entry.py` | Phase 4 pending → MOO 주문 |
-| 23:00~04:00 매시 | `scheduler/exit_check.py` | 손절·트레일 체크 |
-| 06:00 평일 | `scheduler/daily_close.py` | ① 실계좌 NAV 기록 ② 리스크 가드 판정 ③ 전날 주문 체결 확정(reconcile) ④ Clenow/Weinstein 매도 + 미체결 매도 재주문 ⑤ 수요일 매수 후보 pending 저장 / Phase 4 pending |
+| 22:29 평일 | `scheduler/morning_entry.py` | Phase 4 실계좌 pending → MOO 주문 (배분 0 이면 no-op) |
+| 23:00~04:00 매시 | `scheduler/exit_check.py` | 손절·트레일 체크 (배분 0 이면 no-op) |
+| 05:40 평일 | `scheduler/git_sync.py` | GHA 페이퍼 커밋 `pull --ff-only`, **실패 시 텔레그램** |
+| 06:00 평일 | `scheduler/daily_close.py` | ① 실계좌 NAV 기록 ② 리스크 가드 판정 ③ 전날 주문 체결 확정(reconcile) ④ Clenow/Weinstein 매도 + 미체결 매도 재주문 ⑤ 수요일 매수 후보 pending 저장 / Phase 4 실계좌 pending (배분 > 0 일 때만) |
 | **목 00:00** | `scheduler/wednesday_morning_buy.py` | **Wed 11 AM ET 매수 실행** (스크립트가 ET 11:00 까지 대기) |
 | 07:00 평일 | `scheduler/summary.py` | 텔레그램 일일 리포트 |
 

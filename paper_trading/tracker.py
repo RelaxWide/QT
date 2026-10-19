@@ -60,16 +60,16 @@ def save_positions(positions: dict[str, PaperPosition]) -> None:
     )
 
 
-def load_pending() -> list[PendingEntry]:
-    if not PENDING_FILE.exists():
+def load_pending(path: Path = PENDING_FILE) -> list[PendingEntry]:
+    if not path.exists():
         return []
-    data = json.loads(PENDING_FILE.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8"))
     return [PendingEntry(**e) for e in data]
 
 
-def save_pending(pending: list[PendingEntry]) -> None:
-    PENDING_FILE.parent.mkdir(exist_ok=True)
-    PENDING_FILE.write_text(
+def save_pending(pending: list[PendingEntry], path: Path = PENDING_FILE) -> None:
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(
         json.dumps([asdict(e) for e in pending], indent=2, ensure_ascii=False),
         encoding="utf-8",
     )

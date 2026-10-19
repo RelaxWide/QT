@@ -73,14 +73,11 @@ Register-QTTask "QT_WedMorningBuy" "scheduler\wednesday_morning_buy.py" $t4
 $t5 = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "07:00"
 Register-QTTask "QT_Summary" "scheduler\summary.py" $t5
 
-# 6. 05:40 — GHA 페이퍼 커밋 로컬 동기화 (git pull --ff-only)
+# 6. 05:40 — GHA 페이퍼 커밋 로컬 동기화 (git pull --ff-only, 실패 시 텔레그램)
 #    로컬이 원격보다 뒤처지면 페이퍼 상태 파일이 낡아 신호가 어긋난다 (2026-05~06 divergence 사고)
-$git = (Get-Command git).Source
+#    git 을 직접 실행하면 실패가 아무 데도 안 보여서 73커밋 정체를 놓쳤다 (2026-10) → 스크립트 경유
 $t6  = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "05:40"
-$action6 = New-ScheduledTaskAction -Execute $git -Argument "pull --ff-only origin master" -WorkingDirectory $workdir
-$settings6 = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -StartWhenAvailable -RunOnlyIfNetworkAvailable
-Register-ScheduledTask -TaskName "QT_GitSync" -Action $action6 -Trigger $t6 -Settings $settings6 -Principal $principal -Force -ErrorAction Stop | Out-Null
-Write-Host "[OK] QT_GitSync registered"
+Register-QTTask "QT_GitSync" "scheduler\git_sync.py" $t6
 
 Write-Host ""
 Write-Host "Registered tasks:"

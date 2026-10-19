@@ -16,7 +16,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from live_trading.kis_client import KISClient
-from live_trading.orders import OrderManager, _get_live_qty
+from live_trading.orders import OrderManager, _get_live_qty, phase4_live_enabled
 from live_trading.tracker_live import load_live_positions, append_live_trade
 from live_trading.risk_guard import RiskGuard
 
@@ -36,10 +36,7 @@ def main(dry_run: bool = False):
     # 배분 0 이면 여기서 종료 — 페이퍼 positions.json 은 GHA(run_daily.py)가 관리하므로
     # 로컬에서 트레일 스탑을 덮어쓰면 두 기록이 갈라진다 (2026-05~06 divergence 원인).
     cfg_live = yaml.safe_load(Path("config_live.yaml").read_text(encoding="utf-8"))
-    cap = cfg_live.get("capital", {}) or {}
-    phase4_live = (float(cap.get("phase4_pct", 0) or 0) > 0
-                   or (not cap.get("auto_allocate") and float(cap.get("phase4_usd", 0) or 0) > 0))
-    if not phase4_live:
+    if not phase4_live_enabled(cfg_live):
         log.info("[exit_check] Phase 4 실거래 배분 0 — 페이퍼 전용 (GHA 관리), 종료")
         return
 

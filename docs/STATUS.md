@@ -70,7 +70,7 @@
 
 | # | 항목 | 우선 | 메모 |
 |---|---|---|---|
-| 1 | **로컬 git 동기화 깨짐** | 🚨 | 로컬 daily_close 가 GHA 소유 `paper_trading/pending.json` 을 덮어써서 `QT_GitSync` 의 `pull --ff-only` 가 조용히 실패 (10/19 기준 73커밋 뒤). pending.json 소유권 분리 필요 (로컬 Phase 4 pending 을 `live_trading/` 아래 별도 파일로) |
+| 1 | ~~로컬 git 동기화 깨짐~~ ✅ 10/19 해결 | — | 로컬 daily_close 가 GHA 소유 `paper_trading/pending.json` 을 덮어써서 `QT_GitSync` 가 조용히 실패하던 문제. Phase 4 실계좌 pending 을 `live_trading/pending_phase4_live.json` 으로 분리(배분 0 이면 아예 안 씀), `QT_GitSync` 는 `scheduler/git_sync.py` 경유로 바꿔 실패 시 텔레그램. **사용자 조치 필요: QT_GitSync 재등록** (7장) |
 | 2 | 데이터 정체 가드 | ⚠️ | 현재 `BDay(3)` 초과 시 재다운로드. 1거래일 기준 + refresh 실패 시 신호 생성 중단으로 강화 (7월 3회 재발 이력) |
 | 3 | 텔레그램 메시지 정확성 | ⚠️ | 헤더 날짜=데이터일(실행일 별도 표기 필요), stale 데이터에서 "매도: 없음"이 정상처럼 보임, "KIS N종목 추적" 카운트가 미할당 포함, T+2 미정산 미표기 |
 | 4 | `summary.py` 07:00 스케줄 | 보통 | 7월 감사 때 로그 자체가 없었음 — 등록 여부 확인 |
@@ -106,4 +106,7 @@
 - 실주문 스크립트는 Claude 가 직접 실행하지 않음 — 미리보기/dry-run 후 사용자가 `!` 로 실행
 - 소유권: 페이퍼 상태 파일 = GHA, 실계좌 신호 기준 = `live_trading/positions_live_*.json` (gitignore, 로컬 전용)
 - 스케줄 등록/변경은 사용자가 직접 (`scheduler/register_tasks*.ps1`)
-- 커밋하면 바로 푸시 (안 하면 `QT_GitSync` ff-only 실패)
+- 커밋하면 바로 푸시 (안 하면 `QT_GitSync` ff-only 실패 → 이제 텔레그램 "🚨 로컬 git 동기화 실패"로 알려줌)
+- 로컬 스크립트는 `paper_trading/` 의 GHA 소유 파일(positions*.json, pending.json, trades*.csv, daily_nav.csv, daily_report.md)에 쓰지 말 것.
+  실계좌 상태는 전부 `live_trading/` 아래 (gitignore)
+- QT_GitSync 재등록 (10/19 변경 후 1회): `.\scheduler\register_tasks.ps1` 재실행 — US 작업 전부 같은 설정으로 덮어씀

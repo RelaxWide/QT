@@ -5,7 +5,8 @@ scheduler/daily_close.py
   1. Clenow / Weinstein 매도 신호 (MA 이탈, rank_exit) → 즉시 주문
   2. KR 수요일: 매수 후보를 live_trading/wed_buy_pending.json 으로 저장
      (wednesday_morning_buy.py 가 Wed 11 AM ET 에 KIS 주문 전송)
-  3. Phase 4 신규 신호 생성 → pending.json 저장 (다음날 morning_entry가 주문)
+  3. Phase 4 신규 신호 생성 → live_trading/pending_phase4_live.json 저장
+     (다음날 morning_entry가 주문). Phase 4 실거래 배분 0 이면 생략 — 페이퍼는 GHA 담당
   4. KIS 잔고 동기화
 
 수동 실행:
@@ -26,7 +27,7 @@ from scheduler._log_helper import setup_file_logger
 setup_file_logger("daily_close")
 
 from live_trading.kis_client import KISClient
-from live_trading.orders import OrderManager
+from live_trading.orders import OrderManager, PHASE4_LIVE_PENDING, phase4_live_enabled
 from live_trading.account import sync_all, reconcile_fills
 from live_trading.risk_guard import RiskGuard, record_nav
 
@@ -179,8 +180,10 @@ def main(dry_run: bool = False, refresh: bool = False):
         WED_BUY_PENDING.unlink()
         log.info(f"[daily_close] 매수 후보 없음 - 이전 pending 삭제")
 
-    # ── 4. Phase 4 신규 신호 → pending.json 저장 (익일 MOO) ─────────────
-    if allow_new:
+    # ── 4. Phase 4 신규 신호 → 실계좌 pending 저장 (익일 MOO) ────────────
+    # 배분 0 이면 생략. 예전엔 GHA 소유 paper_trading/pending.json 을 덮어써서
+    # 로컬 git 동기화가 조용히 멈췄다 (2026-10, 73커밋 정체).
+    if allow_new and phase4_live_enabled(cfg_live):
         _update_phase4_pending(cfg, cfg_live, price_data, today)
 
     # ── 5. KIS 잔고 동기화 + 핵심정보 텔레그램 1건 ───────────────────────
@@ -262,7 +265,7 @@ def _build_recon_message(recon, error: str) -> str:
 
 
 def _update_phase4_pending(cfg, cfg_live, price_data, today):
-    """Phase 4 신호 재생성 → pending.json 업데이트."""
+    """Phase 4 신호 재생성 → live_trading/pending_phase4_live.json 업데이트."""
     from src.indicators.regime import compute_regime
     from src.indicators.factors import build_factor_matrices
     from src.strategy.factor_stack import generate_factor_signals
@@ -309,7 +312,7 @@ def _update_phase4_pending(cfg, cfg_live, price_data, today):
                     partial_weights=s.partial_weights,
                 ))
 
-    save_pending(new_pending)
+    save_pending(new_pending, PHASE4_LIVE_PENDING)
     log.info(f"[phase4] pending {len(new_pending)}건 저장")
 
 
