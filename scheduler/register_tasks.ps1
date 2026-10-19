@@ -33,11 +33,18 @@ function Register-QTTask {
         -RunOnlyIfNetworkAvailable `
         -WakeToRun
 
-    Register-ScheduledTask -TaskName $name `
-        -Action $action -Trigger $triggers -Settings $settings `
-        -Principal $principal -Force -ErrorAction Stop | Out-Null
-
-    Write-Host "[OK] $name registered"
+    # 인자 변환 오류는 -ErrorAction Stop 으로 안 멈춰서 실패해도 [OK] 가 찍혔다 → try/catch
+    try {
+        Register-ScheduledTask -TaskName $name `
+            -Action $action -Trigger $triggers -Settings $settings `
+            -Principal $principal -Force -ErrorAction Stop | Out-Null
+        Write-Host "[OK] $name registered"
+    } catch {
+        Write-Host "[FAIL] $name : $($_.Exception.Message)" -ForegroundColor Red
+        if ($_.Exception.HResult -eq -2147024891) {   # 0x80070005 액세스 거부
+            Write-Host "       관리자 권한으로 만든 작업 — 관리자 PowerShell 에서 Unregister-ScheduledTask $name -Confirm:`$false 후 재실행" -ForegroundColor Yellow
+        }
+    }
 }
 
 $weekdays = @("Monday","Tuesday","Wednesday","Thursday","Friday")
@@ -55,8 +62,8 @@ $exitTriggers = @(
     (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "03:00"),
     (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "04:00")
 )
-# 6개 trigger array — PowerShell 의 array unwrap 방지 위해 (,) 로 wrap
-Register-QTTask "QT_ExitCheck" "scheduler\exit_check.py" (,$exitTriggers)
+# 함수 인자로는 배열이 그대로 전달된다. (,) 로 감싸면 배열 안의 배열이 돼 등록 실패
+Register-QTTask "QT_ExitCheck" "scheduler\exit_check.py" $exitTriggers
 
 # 3. 06:00 — 종가 신호:
 #     매도(MA 이탈, rank_exit) 즉시 주문 / KR 수요일엔 매수 후보 pending 저장
