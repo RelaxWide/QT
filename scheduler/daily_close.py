@@ -30,6 +30,7 @@ from live_trading.kis_client import KISClient
 from live_trading.orders import OrderManager, PHASE4_LIVE_PENDING, phase4_live_enabled
 from live_trading.account import sync_all, reconcile_fills
 from live_trading.risk_guard import RiskGuard, record_nav
+from live_trading.freshness import expected_us_session, is_stale
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 log = logging.getLogger("kis")
@@ -82,11 +83,13 @@ def main(dry_run: bool = False, refresh: bool = False):
     today = max(latest_dates)
     log.info(f"[daily_close] data_today={today.date()} | KR_is_wed={is_wed}")
 
-    # 데이터 신선도 가드 — 스케줄 인자에서 --refresh 가 빠져도 캐시 정체로
-    # 옛 데이터 신호가 나가지 않게 보호 (2026-06 한 달 정체 사고 재발 방지)
-    stale_cutoff = pd.Timestamp.today().normalize() - pd.offsets.BDay(3)
-    if today < stale_cutoff and not refresh:
-        log.warning(f"[daily_close] 가격 데이터 정체 감지 (data_today={today.date()}) "
+    # 데이터 신선도 가드 — NYSE 달력상 "지금 있어야 할 마지막 거래일" 과 비교.
+    # 하루라도 밀리면 강제 재다운로드, 그래도 밀리면 신호 판정 중단.
+    # (2026-06 한 달 정체, 07 3회 재발 — 예전 BDay(3) 허용폭 안에서 낡은 신호·지정가가 나갔다)
+    expected = expected_us_session()
+    if is_stale(today, expected) and not refresh:
+        log.warning(f"[daily_close] 가격 데이터 정체 감지 (data_today={today.date()}, "
+                    f"expected={expected.date() if expected is not None else '?'}) "
                     f"— 캐시 무시하고 강제 재다운로드")
         price_data = fetch_all(tickers, cfg["data"]["start_date"],
                                cfg["data"]["end_date"], min_bars=150,
@@ -95,10 +98,11 @@ def main(dry_run: bool = False, refresh: bool = False):
         if latest_dates:
             today = max(latest_dates)
         log.info(f"[daily_close] refresh 후 data_today={today.date()}")
-    data_stale = today < stale_cutoff
+    data_stale = is_stale(today, expected)
     if data_stale:
-        log.error(f"[daily_close] refresh 후에도 데이터 정체 (data_today={today.date()}) "
-                  f"— 신호 신뢰 불가, 텔레그램 경고 포함")
+        log.error(f"[daily_close] 데이터 정체 (data_today={today.date()}, "
+                  f"expected={expected.date() if expected is not None else '?'}) "
+                  f"— 신호 판정 중단, 미체결 재매도만 KIS 종가로")
 
     om = OrderManager.from_config(allow_prod=True)
 
@@ -123,8 +127,15 @@ def main(dry_run: bool = False, refresh: bool = False):
     # 실계좌와 다르다 — 이걸 쓰면 미보유 종목 매도/보유 종목 방치가 발생 (2026-07-02 사고).
     from paper_trading.live_signals import get_clenow_signals
     from live_trading.tracker_live import load_live_positions
-    cl_pos  = load_live_positions("clenow")
-    cl_sigs = get_clenow_signals(price_data, set(cl_pos.keys()), cfg, today, is_wed)
+    # 데이터 정체면 낡은 종가로 신호도 매도 지정가도 만들지 않는다.
+    # 이미 청산이 결정된 미체결 재매도만 KIS 시세(장 마감 후 = 종가)로 낸다.
+    if data_stale:
+        sell_px = _kis_close_frames(om.kis, retry_sells["clenow"] + retry_sells["weinstein"], today)
+        cl_sigs = {"sell_ma100": [], "sell_ranked": [], "buy": []}
+    else:
+        sell_px = price_data
+        cl_pos  = load_live_positions("clenow")
+        cl_sigs = get_clenow_signals(price_data, set(cl_pos.keys()), cfg, today, is_wed)
 
     # 매도 (MA100 이탈 + rank 탈락) 는 즉시 주문
     cl_ma100  = cl_sigs.get("sell_ma100", [])
@@ -135,7 +146,7 @@ def main(dry_run: bool = False, refresh: bool = False):
         "sell_ranked": cl_ranked,
         "buy":         [],
     }
-    cl_sell_orders = om.place_clenow_orders(cl_sell_only, price_data, today, dry_run)
+    cl_sell_orders = om.place_clenow_orders(cl_sell_only, sell_px, today, dry_run)
     log.info(f"[daily_close] Clenow 매도 주문 {len(cl_sell_orders)}건")
 
     # 매수 후보는 pending 저장 (수요일 + allow_new 인 경우만)
@@ -149,15 +160,18 @@ def main(dry_run: bool = False, refresh: bool = False):
 
     # ── 3. Weinstein 신호 ────────────────────────────────────────────────
     from paper_trading.live_signals import get_weinstein_signals
-    w_pos  = load_live_positions("weinstein")
-    w_sigs = get_weinstein_signals(price_data, set(w_pos.keys()), cfg, today, is_wed)
+    if data_stale:
+        w_sigs = {"sell_ma30": [], "buy": []}
+    else:
+        w_pos  = load_live_positions("weinstein")
+        w_sigs = get_weinstein_signals(price_data, set(w_pos.keys()), cfg, today, is_wed)
 
     w_ma30 = w_sigs.get("sell_ma30", [])
     w_sell_only = {
         "sell_ma30": w_ma30 + [s for s in retry_sells["weinstein"] if s not in w_ma30],
         "buy":       [],
     }
-    w_sell_orders = om.place_weinstein_orders(w_sell_only, price_data, today, dry_run)
+    w_sell_orders = om.place_weinstein_orders(w_sell_only, sell_px, today, dry_run)
     log.info(f"[daily_close] Weinstein 매도 주문 {len(w_sell_orders)}건")
 
     if is_wed and allow_new and w_sigs.get("buy"):
@@ -183,7 +197,7 @@ def main(dry_run: bool = False, refresh: bool = False):
     # ── 4. Phase 4 신규 신호 → 실계좌 pending 저장 (익일 MOO) ────────────
     # 배분 0 이면 생략. 예전엔 GHA 소유 paper_trading/pending.json 을 덮어써서
     # 로컬 git 동기화가 조용히 멈췄다 (2026-10, 73커밋 정체).
-    if allow_new and phase4_live_enabled(cfg_live):
+    if allow_new and not data_stale and phase4_live_enabled(cfg_live):
         _update_phase4_pending(cfg, cfg_live, price_data, today)
 
     # ── 5. KIS 잔고 동기화 + 핵심정보 텔레그램 1건 ───────────────────────
@@ -191,7 +205,7 @@ def main(dry_run: bool = False, refresh: bool = False):
         kis = KISClient.from_config(allow_prod=True)
         report = sync_all(kis)
         msg = _build_core_message(report, today, cl_sell_orders, w_sell_orders,
-                                  pending_payload)
+                                  pending_payload, data_stale, now_kst)
         msg += _build_recon_message(recon, recon_error)
         msg += "\n" + guard.summary_line()
         if nav_error:
@@ -199,35 +213,52 @@ def main(dry_run: bool = False, refresh: bool = False):
         if not allow_new:
             msg += f"\n🛑 <b>신규 매수 중단</b>: {reason} (청산은 계속)"
         if data_stale:
-            msg = (f"⚠️ <b>가격 데이터 정체</b> (data_today={today.date()}) — "
-                   f"신호 신뢰 불가, 캐시/네트워크 점검 필요\n") + msg
+            exp = f"{expected:%m/%d}" if expected is not None else "?"
+            msg = (f"⚠️ <b>가격 데이터 정체</b> — 데이터 {today:%m/%d}, 있어야 할 날 {exp}\n"
+                   f"신호 판정 중단 (신규 매도·매수 없음, 미체결 재매도만 KIS 종가로). "
+                   f"캐시/네트워크 점검 필요\n") + msg
         log.info("[daily_close] " + msg.replace("\n", " | "))
         _notify(msg, cfg_live)
 
     log.info("[daily_close] 완료")
 
 
-def _build_core_message(report, today, cl_sells, w_sells, pending) -> str:
+def _build_core_message(report, today, cl_sells, w_sells, pending,
+                        data_stale=False, now_kst=None) -> str:
     """daily_close 핵심정보 텔레그램. 종목별 스팸 대신 요약 1건."""
-    L = [f"🇺🇸 <b>{today.date()} US 장마감 처리</b>"]
+    # 헤더 날짜는 데이터 기준일. 실행일과 다를 수 있어(주말·휴장·정체) 둘 다 표기
+    run = f" · 실행 {now_kst:%m/%d %H:%M} KST" if now_kst is not None else ""
+    L = [f"🇺🇸 <b>US 장마감 처리</b> · 데이터 {today:%m/%d}{run}"]
 
     bal = report.get("balance") or {}
     cash = bal.get("cash_usd", 0.0)
     sum_eval = sum(p.get("eval_amt", 0) for p in bal.get("positions", []))
     pnl = bal.get("total_pnl_usd", 0.0)
-    L.append(f"잔고: 예수금 ${cash:,.2f} | 평가 ${sum_eval:,.2f} | 손익 ${pnl:+,.2f}")
+    # cash_usd 는 KIS 주문가능금액(inquire-psamount) — 예수금·미정산 구분값이 아니다
+    L.append(f"잔고: 주문가능 ${cash:,.2f} | 평가 ${sum_eval:,.2f} | 평가손익 ${pnl:+,.2f}")
 
     n_sells = len(cl_sells) + len(w_sells)
-    if n_sells:
+    if data_stale:
+        L.append(f"💸 미체결 재매도 {n_sells}건 (신호 판정 중단)" if n_sells
+                 else "매도: 판정 안 함 (데이터 정체)")
+    elif n_sells:
         L.append(f"💸 매도 {n_sells}건 (Clenow {len(cl_sells)} / Weinstein {len(w_sells)})")
     else:
-        L.append("매도: 없음")
+        L.append("매도: 신호 없음")
 
     if pending:
         parts = [f"{k} {len(v.get('symbols', []))}종목" for k, v in pending.items()]
         L.append("🔔 매수대기 (목 00:00 KST 실행): " + ", ".join(parts))
 
-    L.append(f"보유: KIS {report.get('kis_count', 0)}종목 추적 중")
+    # 전략별 추적 수 — 예전 "KIS N종목 추적" 은 미할당 보유까지 세서 추적 중인 것처럼 보였다
+    by = report.get("by_strategy", {})
+    parts = [f"{k.capitalize()} {n}" for k, n in by.items() if n]
+    line = f"보유: KIS {report.get('kis_count', 0)}종목"
+    if parts:
+        line += " = " + " · ".join(parts)
+    if report.get("untracked"):
+        line += f" + 미할당 {len(report['untracked'])}"
+    L.append(line)
 
     # 진짜 이상만 경고 (거짓 '미기록' 스팸 제거됨)
     if report.get("untracked"):
@@ -241,6 +272,20 @@ def _build_core_message(report, today, cl_sells, w_sells, pending) -> str:
         L.append(f"⚠️ 수량 불일치: {items}")
 
     return "\n".join(L)
+
+
+def _kis_close_frames(kis, symbols, today) -> dict:
+    """데이터 정체 시 재매도 지정가용 — KIS 현재가(장 마감 후 = 종가)를 1행 프레임으로."""
+    out = {}
+    for sym in symbols:
+        try:
+            last = float(kis.get_price(sym).get("last", 0) or 0)
+        except Exception as e:
+            log.warning(f"[daily_close] {sym} KIS 시세 조회 실패 — 재매도 보류: {e}")
+            continue
+        if last > 0:
+            out[sym] = pd.DataFrame({"close": [last]}, index=[today])
+    return out
 
 
 def _build_recon_message(recon, error: str) -> str:

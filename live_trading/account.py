@@ -206,6 +206,7 @@ def sync_all(kis: KISClient) -> dict:
         "missing":   missing,
         "mismatch":  mismatch,
         "kis_count": len(kis_syms),
+        "by_strategy": {s: sum(1 for t in tracked.values() if s in t) for s in STRATEGIES},
         "balance":   balance,
     }
 
