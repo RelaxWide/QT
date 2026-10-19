@@ -75,6 +75,8 @@
 | 3 | ~~텔레그램 메시지 정확성~~ ✅ 10/19 | — | 헤더 "데이터 MM/DD · 실행 MM/DD HH:MM KST", 정체 시 "매도: 판정 안 함", 보유 "KIS N = Clenow a · Weinstein b + 미할당 c", 현금 라벨 "주문가능"(psamount 값 — 미정산 구분은 KIS 응답에 없음) |
 | 3-1 | ~~겨울철 daily_close 시각~~ ✅ 10/19 | — | 06:00 → **06:30 KST** (표준시에 06:00 = 16:00 ET 마감 정각이라 일봉 미확정). 재등록 필요 |
 | 4 | ~~`summary.py` 07:00 스케줄~~ ✅ 10/19 | — | 등록·정상 실행 확인 (LastTaskResult 0). 로그가 없던 건 summary.py 가 파일 로거를 안 쓰기 때문 |
+| 4-1 | ~~페이퍼 NaN 오염~~ ✅ 10/19 | — | GHA 21:30 UTC 의 yfinance 당일 봉 NaN → 9/21 AAPL 진입가 NaN, 9/30 Clenow 20종목 NaN 청산·10/14 알파벳순 재매수. `prices._drop_bad_bars` + `run_daily` 커버리지 90% 미만 시 상태 미변경·알림 + NAV 날짜 멱등. 9/21~10/16 재실행본으로 교체(4881e38). 실계좌 무관 |
+| 4-2 | Clenow 페이퍼 현금 음수 | 낮음 | 고정 슬롯(cap/20) 매수에 현금 확인 없음 → cl_cash -3,016. 페이퍼 수익률 소폭 과대 |
 | 5 | `kw_sv_morning_sell.py` dry-run 도 텔레그램 발송 | 낮음 | 10/19 모의실행이 "매도 완료 16건"으로 발송됨 |
 | 6 | KR 매도 "접수=삭제" 버그 | KR 재개 전 필수 | `orders._update_live_positions` KR 분기. US reconcile 구조 이식 |
 | 7 | KR 새 전략 설계 | 다음 과제 | 2장 방향 참고. 거래정지·급락 사전 필터 포함 |
