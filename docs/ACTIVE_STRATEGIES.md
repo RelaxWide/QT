@@ -323,15 +323,15 @@ Clenow 비중(%)을 0~100%로 5%씩 변화시킨 Sharpe 스윕 분석.
 | 22:29 평일 | `scheduler/morning_entry.py` | Phase 4 실계좌 pending → MOO 주문 (배분 0 이면 no-op) |
 | 23:00~04:00 매시 | `scheduler/exit_check.py` | 손절·트레일 체크 (배분 0 이면 no-op) |
 | 05:40 평일 | `scheduler/git_sync.py` | GHA 페이퍼 커밋 `pull --ff-only`, **실패 시 텔레그램** |
-| 06:00 평일 | `scheduler/daily_close.py` | ① 실계좌 NAV 기록 ② 리스크 가드 판정 ③ 전날 주문 체결 확정(reconcile) ④ Clenow/Weinstein 매도 + 미체결 매도 재주문 ⑤ 수요일 매수 후보 pending 저장 / Phase 4 실계좌 pending (배분 > 0 일 때만) |
+| 06:30 평일 | `scheduler/daily_close.py` | ① 실계좌 NAV 기록 ② 리스크 가드 판정 ③ 전날 주문 체결 확정(reconcile) ④ Clenow/Weinstein 매도 + 미체결 매도 재주문 ⑤ 수요일 매수 후보 pending 저장 / Phase 4 실계좌 pending (배분 > 0 일 때만) |
 | **목 00:00** | `scheduler/wednesday_morning_buy.py` | **Wed 11 AM ET 매수 실행** (스크립트가 ET 11:00 까지 대기) |
 | 07:00 평일 | `scheduler/summary.py` | 텔레그램 일일 리포트 |
 
 **Clenow / Weinstein 매수 시점 (Wed 11 AM ET 매수 정책)**:
-- KR 수요일 06:00: 화요일 종가 데이터로 매수 후보 계산 → `live_trading/wed_buy_pending.json` 저장
+- KR 수요일 06:30: 화요일 종가 데이터로 매수 후보 계산 → `live_trading/wed_buy_pending.json` 저장
 - KR 목요일 00:00: 매수 후보 읽어 KIS 현재가 조회 + LIMIT 매수 주문 전송 (Wed 11 AM ET 부근 체결)
 - 표준시 기간(11~3월)에는 스크립트가 1시간 슬립 후 Wed 11 AM ET 정각에 실행
-- 매도(MA100/MA30 이탈, Clenow rank_exit)는 06:00 KR 에 즉시 → Wed 시초가 체결
+- 매도(MA100/MA30 이탈, Clenow rank_exit)는 06:30 KR 에 즉시 → Wed 시초가 체결
 - 페이퍼 트레이딩(run_daily.py)은 변경 없음 (Wed 종가 매수 가정 유지 → 백테스트와 동일)
 
 등록: `.\scheduler\register_tasks.ps1`
@@ -1160,7 +1160,7 @@ KR 트랙은 미국과 시간 충돌 없음 — 단일 PC 에서 두 시장 모�
 | 22:29 평일 | morning_entry (US Phase 4 진입) | US |
 | 23:00~04:00 평일 매시 | exit_check (US 손절) | US |
 | 00:00 목 | wednesday_morning_buy (US Wed 11 AM ET 매수) | US |
-| 06:00 평일 | daily_close (US 매도 + pending) | US |
+| 06:30 평일 | daily_close (US 매도 + pending) | US |
 | 07:00 평일 | summary (US 텔레그램 요약) | US |
 
 ### 10.5 KR 시장 특수 위험

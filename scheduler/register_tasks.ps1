@@ -66,9 +66,10 @@ $exitTriggers = @(
 # 함수 인자로는 배열이 그대로 전달된다. (,) 로 감싸면 배열 안의 배열이 돼 등록 실패
 Register-QTTask "QT_ExitCheck" "scheduler\exit_check.py" $exitTriggers
 
-# 3. 06:00 — 종가 신호:
+# 3. 06:30 — 종가 신호:
 #     매도(MA 이탈, rank_exit) 즉시 주문 / KR 수요일엔 매수 후보 pending 저장
-$t3 = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "06:00"
+#     06:00 이면 표준시(11~3월)에 16:00 ET 마감 정각이라 당일 일봉 미확정 → 06:30 (2026-10)
+$t3 = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "06:30"
 Register-QTTask "QT_DailyClose" "scheduler\daily_close.py" $t3
 
 # 4. 목 00:00 — Wed 11 AM ET 매수 실행 (스크립트가 ET 11:00 까지 대기)

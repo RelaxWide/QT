@@ -1,6 +1,6 @@
 """
 scheduler/daily_close.py
-실행 시각: 평일 06:00 KR (미국장 마감 직후)
+실행 시각: 평일 06:30 KR (미국장 마감 후 — 서머타임 1.5h / 표준시 0.5h)
 역할:
   1. Clenow / Weinstein 매도 신호 (MA 이탈, rank_exit) → 즉시 주문
   2. KR 수요일: 매수 후보를 live_trading/wed_buy_pending.json 으로 저장
@@ -62,7 +62,7 @@ def main(dry_run: bool = False, refresh: bool = False):
     else:
         allow_new = True
 
-    # KR 시간 기준 요일 (Wed 06:00 KR = Tue close 처리 → 그날 11 AM ET 매수 준비)
+    # KR 시간 기준 요일 (Wed 06:30 KR = Tue close 처리 → 그날 11 AM ET 매수 준비)
     now_kst = pd.Timestamp.now(tz="Asia/Seoul")
     is_wed  = now_kst.weekday() == 2
 

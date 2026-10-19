@@ -1,6 +1,6 @@
 """
 scheduler/git_sync.py
-실행 시각: 평일 05:40 KR (daily_close 06:00 직전)
+실행 시각: 평일 05:40 KR (daily_close 06:30 전)
 역할:
   GHA 페이퍼 커밋을 로컬로 당겨온다 (git pull --ff-only origin master).
   실패하면 텔레그램 경고 — 예전엔 git 을 직접 실행해서 실패가 아무 데도 안 보였고,

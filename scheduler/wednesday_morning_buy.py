@@ -2,7 +2,7 @@
 scheduler/wednesday_morning_buy.py
 실행 시각: 매주 목 00:00 KR (= Wed 11 AM ET 서머타임 / Wed 10 AM ET 표준시)
 역할:
-  Wed 06:00 KR 에 daily_close 가 저장한 매수 후보를 11 AM ET 정각에 KIS LIMIT 주문 전송.
+  Wed 06:30 KR 에 daily_close 가 저장한 매수 후보를 11 AM ET 정각에 KIS LIMIT 주문 전송.
   표준시(11월 초~3월)에는 시작 시 ET 10:00 → 1시간 슬립 후 11:00 ET 에 실행.
 
 수동 실행:

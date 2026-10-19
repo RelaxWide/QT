@@ -54,7 +54,7 @@
 
 ---
 
-## 4. 첫 실전 검증 대기 ⚠️ (다음 US daily_close 06:00 KST 이후 확인)
+## 4. 첫 실전 검증 대기 ⚠️ (다음 US daily_close 06:30 KST 이후 확인)
 
 | 항목 | 정상 신호 | 이상 신호 → 조치 |
 |---|---|---|
@@ -73,7 +73,7 @@
 | 1 | ~~로컬 git 동기화 깨짐~~ ✅ 10/19 해결 | — | 로컬 daily_close 가 GHA 소유 `paper_trading/pending.json` 을 덮어써서 `QT_GitSync` 가 조용히 실패하던 문제. Phase 4 실계좌 pending 을 `live_trading/pending_phase4_live.json` 으로 분리(배분 0 이면 아예 안 씀), `QT_GitSync` 는 `scheduler/git_sync.py` 경유로 바꿔 실패 시 텔레그램. **사용자 조치 필요: QT_GitSync 재등록** (7장) |
 | 2 | ~~데이터 정체 가드~~ ✅ 10/19 | — | `live_trading/freshness.py`: NYSE 휴장 달력으로 "있어야 할 마지막 세션"(마감+30분) 계산, 하루라도 밀리면 재다운로드 → 그래도 밀리면 **신호 판정 중단** (미체결 재매도만 KIS 종가 지정가). 달력 실패 시 예전 BDay(3) fallback |
 | 3 | ~~텔레그램 메시지 정확성~~ ✅ 10/19 | — | 헤더 "데이터 MM/DD · 실행 MM/DD HH:MM KST", 정체 시 "매도: 판정 안 함", 보유 "KIS N = Clenow a · Weinstein b + 미할당 c", 현금 라벨 "주문가능"(psamount 값 — 미정산 구분은 KIS 응답에 없음) |
-| 3-1 | **겨울철 daily_close 시각** | ⚠️ 11/1 전 | 서머타임 종료(11/1) 후 06:00 KST = 16:00 ET **정각 마감** → 당일 일봉 미확정 가능, 신선도 판정도 전일 세션까지만 요구하게 됨. 06:30 이후로 이동 권장 (`register_tasks.ps1` 수정 + 재등록) |
+| 3-1 | ~~겨울철 daily_close 시각~~ ✅ 10/19 | — | 06:00 → **06:30 KST** (표준시에 06:00 = 16:00 ET 마감 정각이라 일봉 미확정). 재등록 필요 |
 | 4 | `summary.py` 07:00 스케줄 | 보통 | 7월 감사 때 로그 자체가 없었음 — 등록 여부 확인 |
 | 5 | `kw_sv_morning_sell.py` dry-run 도 텔레그램 발송 | 낮음 | 10/19 모의실행이 "매도 완료 16건"으로 발송됨 |
 | 6 | KR 매도 "접수=삭제" 버그 | KR 재개 전 필수 | `orders._update_live_positions` KR 분기. US reconcile 구조 이식 |
