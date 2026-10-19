@@ -8,7 +8,8 @@ scheduler/daily_close_kr.py
 
   1. KW SV 리밸런싱일(5/16, 8/16, 11/16, 4/1 영업일 보정) 감지
      → 해당 분기 후보를 한 번만 생성해 live_trading/wed_buy_pending_kr.json 저장
-       (wednesday_morning_buy_kr.py 가 수 09:00 KST 에 LIMIT 매수)
+       (wednesday_morning_buy_kr.py = QT_KR_KWSVMorningBuy 가 다음 영업일
+        09:00 KST 에 LIMIT 매수 — 리밸런싱일이 화요일이 아닐 때도 지연 없음)
   2. 비리밸런싱일 → 인덱스 1종목만 확인 후 즉시 종료 (불필요한 universe fetch 제거)
   3. 핵심 정보 텔레그램 1건 발송
 
@@ -39,8 +40,51 @@ log = logging.getLogger("kis")
 
 WED_BUY_PENDING_KR = Path("live_trading/wed_buy_pending_kr.json")
 KW_STATE_PATH      = Path("paper_trading/positions_kw_super_value_kr.json")
+OVERDUE_ALERT_PATH = Path("paper_trading/kw_sv_overdue_alert.json")
+KW_SELL_PENDING_PATH = Path("live_trading/kw_sv_pending_sells.json")
 MARKET             = "kr"
 TRIGGER_WINDOW_DAYS = 7   # 리밸런싱일 이후 며칠 이내까지 후보 생성 허용
+OVERDUE_ALERT_INTERVAL_DAYS = 3   # 처리 윈도우 초과 후 재알림 주기 (매일 스팸 방지)
+
+
+def _overdue_alert(actual_rebal, days_since, today) -> dict | None:
+    """처리 윈도우(TRIGGER_WINDOW_DAYS) 초과 — 이 분기가 결국 처리되지 못했다는 뜻.
+    기존 코드는 이 경우 조용히 None 을 반환해 daily_close_kr.main() 이 텔레그램을
+    아예 보내지 않았다 (2026-08-18 분기가 5주 넘게 무음으로 누락된 사고 원인).
+    최초 1회는 반드시 알리고, 이후 OVERDUE_ALERT_INTERVAL_DAYS 마다 재알림한다.
+    """
+    from src.fetch.fundamentals_kr import krx_login_status
+    rebal_str = str(actual_rebal.date())
+
+    state = {}
+    if OVERDUE_ALERT_PATH.exists():
+        try:
+            state = json.loads(OVERDUE_ALERT_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            state = {}
+
+    last_alert = state.get("last_alert_date") if state.get("rebal_date") == rebal_str else None
+    should_alert = True
+    if last_alert:
+        gap = (today - pd.Timestamp(last_alert)).days
+        should_alert = gap >= OVERDUE_ALERT_INTERVAL_DAYS
+
+    login_status = krx_login_status()
+    msg = (f"리밸런싱 {rebal_str} 처리 윈도우({TRIGGER_WINDOW_DAYS}일) 초과 "
+           f"({days_since}일 경과) — 끝내 처리되지 못함. 직전 분기 보유 종목 그대로 "
+           f"유지 중 (수동 확인 필요). KRX 로그인 상태: {login_status}")
+    log.error(f"[kw_sv] {msg}")
+
+    if not should_alert:
+        log.info(f"[kw_sv] 재알림 주기({OVERDUE_ALERT_INTERVAL_DAYS}일) 미도달 — 텔레그램 생략")
+        return None
+
+    OVERDUE_ALERT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    OVERDUE_ALERT_PATH.write_text(json.dumps({
+        "rebal_date": rebal_str,
+        "last_alert_date": str(today.date()),
+    }, indent=2, ensure_ascii=False), encoding="utf-8")
+    return {"rebal_date": rebal_str, "error": msg, "overdue": True}
 
 
 def _notify(msg: str, cfg_live: dict):
@@ -49,7 +93,8 @@ def _notify(msg: str, cfg_live: dict):
         chat_id = cfg_live.get("notify", {}).get("telegram_chat_id", "")
         if token and chat_id:
             from src.notify import telegram
-            telegram.send(msg, token=token, chat_id=chat_id)
+            if not telegram.send(msg, token=token, chat_id=chat_id):
+                log.warning("[daily_close_kr] 텔레그램 전송 실패 (토큰/chat_id 확인 필요)")
     except Exception as e:
         log.warning(f"[daily_close_kr] 텔레그램 실패: {e}")
 
@@ -123,39 +168,48 @@ def kw_super_value_rebalance(cfg, cfg_live, dry_run=False, force=False, refresh=
             log.info(f"[kw_sv] 다음 리밸런싱 {actual_rebal.date()} 미래 — 스킵 "
                      f"(다음 분기 대기)")
             return None
-        if days_since > TRIGGER_WINDOW_DAYS:
-            log.info(f"[kw_sv] 최근 리밸런싱 {actual_rebal.date()} "
-                     f"({days_since}일 경과) 처리 윈도우({TRIGGER_WINDOW_DAYS}일) 밖 — 스킵")
-            return None
         if done_rebal == str(actual_rebal.date()):
             log.info(f"[kw_sv] {actual_rebal.date()} 이미 처리됨 — 스킵 (재생성 안 함)")
             return None
+        if days_since > TRIGGER_WINDOW_DAYS:
+            return _overdue_alert(actual_rebal, days_since, today)
 
     log.info(f"[kw_sv] 리밸런싱 트리거: {actual_rebal.date()} "
              f"(today={today.date()}, {days_since}일 경과)")
 
     # 4) 전체 universe 가격 + 펀더멘털 (여기서부터 무거운 작업 — 리밸런싱일만)
     from src.fetch.universe import get_kospi_all_tickers
-    from src.fetch.fundamentals_kr import build_fundamentals_panel
+    from src.fetch.fundamentals_kr import build_fundamentals_panel_kis
     from src.strategy.kw_super_value import generate_super_value_signals
     from src.markets.tick_size import round_buy_to_tick
 
-    tickers = [profile.index_ticker] + get_kospi_all_tickers()
+    kospi_tickers = get_kospi_all_tickers()
+    tickers = [profile.index_ticker] + kospi_tickers
     start_dt = (actual_rebal - pd.Timedelta(days=365)).strftime("%Y-%m-%d")
     end_dt   = today.strftime("%Y-%m-%d")
     price_data = fetch_all(tickers, start_dt, end_dt, min_bars=60,
                            market=MARKET, refresh=refresh)
     log.info(f"[kw_sv] {len(price_data)} 종목 가격 로드")
 
-    panel = build_fundamentals_panel([actual_rebal])
+    # pykrx 는 KRX 로그인 구조적 불가(2026-08 KW SV 리밸런싱 실패 원인)로 더 이상
+    # 쓰지 않음 — 이미 인증된 KIS 세션으로 종목별 PER/PBR/시총을 직접 조회.
+    try:
+        panel = build_fundamentals_panel_kis(actual_rebal, kospi_tickers)
+    except Exception as e:
+        log.exception(f"[kw_sv] KIS fundamentals panel 빌드 실패: {e}")
+        return {"rebal_date": str(actual_rebal.date()),
+                "error": f"KIS fundamentals panel 빌드 실패: {e}"}
     start_window = (actual_rebal - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
     end_window   = (actual_rebal + pd.Timedelta(days=30)).strftime("%Y-%m-%d")
     sigs = generate_super_value_signals(panel, price_data, params,
                                         start_window, end_window)
     sigs = [s for s in sigs if s.date <= today]
     if not sigs:
-        log.error("[kw_sv] 신호 생성 실패 — panel 에 리밸런싱일 데이터 없음")
-        return {"rebal_date": str(actual_rebal.date()), "error": "신호 생성 실패"}
+        log.error(f"[kw_sv] 신호 생성 실패 — KIS panel {len(panel)}종목 확보했지만 "
+                  f"조건(소형주∩저PER/PBR) 통과 종목 없음")
+        return {"rebal_date": str(actual_rebal.date()),
+                "error": f"신호 생성 실패 — KIS panel {len(panel)}종목 확보, "
+                         f"조건 통과 종목 0개"}
     sig = sigs[-1]
     log.info(f"[kw_sv] 신호일 {sig.date.date()}, 진입 {len(sig.weights)}종목 "
              f"(universe {sig.universe_size})")
@@ -213,9 +267,32 @@ def kw_super_value_rebalance(cfg, cfg_live, dry_run=False, force=False, refresh=
         }, indent=2, ensure_ascii=False), encoding="utf-8")
         if symbols:
             _save_pending_kw(symbols, str(actual_rebal.date()))
-            log.info(f"[kw_sv] pending 저장 {len(symbols)}종목 → 수 09:00 KST 자동 매수")
+            log.info(f"[kw_sv] pending 저장 {len(symbols)}종목 → 다음 영업일 09:00 KST 자동 매수")
     else:
         log.info(f"[kw_sv] [DRY-RUN] 저장 생략 ({len(symbols)}종목 후보)")
+
+    # 7) 탈락분 매도 — top-18 에서 빠진 기존 보유 종목.
+    # KIS 는 정규장(09:00~15:30 KST) 밖에는 매도 주문 자체를 거부함(APBK0918,
+    # "증시시간이 아닙니다") — daily_close_kr 는 16:00 실행이라 장마감 후라
+    # 즉시 매도가 구조적으로 불가능. 매수가 수 09:00 에 자동 실행되는 것과
+    # 동일하게, 다음 영업일 09:00 KST 매도 예약 파일에 저장만 하고
+    # kw_sv_morning_sell.py 가 실제 주문을 낸다.
+    sell_scheduled: list[str] = []
+    if not dry_run:
+        from live_trading.tracker_live import load_live_positions
+        try:
+            held = set(load_live_positions("kw_super_value").keys())
+        except Exception as e:
+            log.warning(f"[kw_sv] positions_live 로드 실패: {e} — 매도 예약 생략")
+            held = set()
+        sell_scheduled = sorted(held - set(symbols))
+        if sell_scheduled:
+            KW_SELL_PENDING_PATH.write_text(json.dumps({
+                "keep_symbols": symbols,
+                "signal_date":  str(actual_rebal.date()),
+            }, indent=2, ensure_ascii=False), encoding="utf-8")
+            log.info(f"[kw_sv] 매도 예약 {len(sell_scheduled)}종목 → "
+                     f"다음 영업일 09:00 KST 자동 매도")
 
     return {
         "rebal_date":  str(actual_rebal.date()),
@@ -227,6 +304,7 @@ def kw_super_value_rebalance(cfg, cfg_live, dry_run=False, force=False, refresh=
         "small_cap_pct": small_cap_pct,
         "top_n":       top_n,
         "skipped_halt": skipped_halt,
+        "sell_scheduled": sell_scheduled,
     }
 
 
@@ -236,7 +314,8 @@ def _build_core_message(result, today_str) -> str:
         L.append("리밸런싱일 아님 — 분기 사이 매매 없음 (정상)")
         return "\n".join(L)
     if result.get("error"):
-        L.append(f"⚠️ 리밸런싱 {result['rebal_date']} 처리 실패: {result['error']}")
+        icon = "🚨" if result.get("overdue") else "⚠️"
+        L.append(f"{icon} 리밸런싱 {result['rebal_date']} 처리 실패: {result['error']}")
         return "\n".join(L)
     L.append(f"📦 분기 리밸런싱 {result['rebal_date']} — 후보 {result['n_candidates']}종목")
     L.append(f"파라미터: 시총하위 {result['small_cap_pct']:.0%} / top {result['top_n']} "
@@ -245,10 +324,14 @@ def _build_core_message(result, today_str) -> str:
              f"(잔여 ₩{result['capital'] - result['total_spent']:,})")
     if result["symbols"]:
         L.append("종목: " + ", ".join(result["symbols"]))
-        L.append("→ 다음 수 09:00 KST QT_KR_WedMorningBuy 자동 매수")
-        L.append("⚠️ 직전 분기 보유 중 top-18 탈락분은 수동 매도 검토 필요 (KR 자동매도 미구현)")
+        L.append("→ 다음 영업일 09:00 KST QT_KR_KWSVMorningBuy 자동 매수")
     if result.get("skipped_halt"):
-        L.append("🚫 거래정지 의심 제외: " + ", ".join(result["skipped_halt"]))
+        L.append("🚫 매수 제외(거래정지 의심): " + ", ".join(result["skipped_halt"]))
+    if result.get("sell_scheduled"):
+        L.append(f"📤 탈락분 매도 예약 {len(result['sell_scheduled'])}종목: " +
+                  ", ".join(result["sell_scheduled"]))
+        L.append("→ 다음 영업일 09:00 KST QT_KR_KWSVMorningSell 자동 매도 "
+                  "(거래정지 종목은 자동 스킵, 수동 확인 필요)")
     return "\n".join(L)
 
 
@@ -256,7 +339,7 @@ def main(dry_run: bool = False, force_rebalance: bool = False, refresh: bool = F
     cfg_live = yaml.safe_load(Path("config_live.yaml").read_text(encoding="utf-8"))
     cfg      = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
 
-    guard = RiskGuard.from_config()
+    guard = RiskGuard.from_config(market="kr")
     ok, reason = guard.check()
     if not ok:
         log.warning(f"[daily_close_kr] 리스크 가드: {reason} — 후보 생성은 진행, 매수는 wed_buy 에서 차단됨")

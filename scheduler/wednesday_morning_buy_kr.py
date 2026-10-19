@@ -1,8 +1,14 @@
 """
 scheduler/wednesday_morning_buy_kr.py
-실행 시각: 매주 수요일 KST 09:00 (KOSPI 정규장 개장 직후, 시초가 +0.5% LIMIT 매수)
+실행 시각: 평일 KST 09:00 (KOSPI 정규장 개장 직후, 시초가 +0.5% LIMIT 매수)
 역할:
-  화요일 16:00 KST 에 daily_close_kr 가 저장한 매수 후보를 즉시 LIMIT 매수.
+  daily_close_kr 가 저장한 매수 후보(wed_buy_pending_kr.json)를 다음 영업일
+  개장 직후 즉시 LIMIT 매수. pending 없으면 즉시 종료 (no-op).
+
+  이름은 "수요일"이지만 실제로는 매일 실행된다 — 분기 리밸런싱일(5/16, 8/16,
+  11/16, 4/1 영업일 보정)이 화요일에만 걸리는 게 아니라 요일이 매번 달라서
+  "다음 수요일" 고정으로는 최대 6일(4/1→목 리밸런싱 시) 지연될 수 있었던
+  버그를 수정 (2026-10). kw_sv_morning_sell.py 와 동일한 패턴.
 
 수동:
     python scheduler/wednesday_morning_buy_kr.py [--dry-run] [--no-wait]
@@ -67,7 +73,7 @@ def main(dry_run: bool = False, no_wait: bool = False):
 
     cfg_live = yaml.safe_load(Path("config_live.yaml").read_text(encoding="utf-8"))
 
-    guard = RiskGuard.from_config()
+    guard = RiskGuard.from_config(market="kr")
     ok, reason = guard.check()
     if not ok:
         log.warning(f"[wed_buy_kr] 신규 주문 차단: {reason} - pending 삭제, 종료")
@@ -96,7 +102,7 @@ def main(dry_run: bool = False, no_wait: bool = False):
         log.info("[wed_buy_kr] pending 파일 삭제")
 
     if total_orders:
-        lines = [f"🇰🇷 KR 수요일 09:00 매수 실행 ({len(total_orders)}건)"]
+        lines = [f"🇰🇷 KR 09:00 매수 실행 ({len(total_orders)}건)"]
         for r in total_orders:
             status = "OK" if r.ok else "FAIL"
             lines.append(f"  [{status}] {r.symbol} x{r.qty} @₩{r.price:,.0f}")

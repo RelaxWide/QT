@@ -27,8 +27,8 @@ setup_file_logger("daily_close")
 
 from live_trading.kis_client import KISClient
 from live_trading.orders import OrderManager
-from live_trading.account import sync_all
-from live_trading.risk_guard import RiskGuard
+from live_trading.account import sync_all, reconcile_fills
+from live_trading.risk_guard import RiskGuard, record_nav
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 log = logging.getLogger("kis")
@@ -40,7 +40,18 @@ def main(dry_run: bool = False, refresh: bool = False):
     cfg_live = yaml.safe_load(Path("config_live.yaml").read_text(encoding="utf-8"))
     cfg      = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
 
-    guard = RiskGuard.from_config()
+    # 실계좌 NAV 를 먼저 기록해야 가드가 오늘 기준으로 판단한다
+    nav_error = ""
+    if not dry_run:
+        try:
+            if record_nav("us", KISClient.from_config(allow_prod=True).get_balance()) is None:
+                nav_error = "KIS 잔고 조회 실패"
+        except Exception as e:
+            nav_error = str(e)
+        if nav_error:
+            log.error(f"[daily_close] NAV 기록 실패: {nav_error}")
+
+    guard = RiskGuard.from_config(market="us")
     ok, reason = guard.check()
     if not ok:
         log.warning(f"[daily_close] 신규 주문 차단: {reason}")
@@ -90,6 +101,21 @@ def main(dry_run: bool = False, refresh: bool = False):
 
     om = OrderManager.from_config(allow_prod=True)
 
+    # ── 1-b. 어제 낸 주문 체결 확정 (신호 생성 전에 보유 상태를 실잔고에 맞춘다) ──
+    # 미체결 매도는 신호 재발생 여부와 무관하게 아래에서 재매도한다 (전략이 이미 청산 결정함).
+    recon, recon_error = None, ""
+    retry_sells: dict[str, list[str]] = {"clenow": [], "weinstein": []}
+    if not dry_run:
+        try:
+            recon = reconcile_fills(KISClient.from_config(allow_prod=True))
+            for strat, sym in recon["sells_unfilled"]:
+                if strat in retry_sells:
+                    retry_sells[strat].append(sym)
+            log.info(f"[daily_close] reconcile: {recon}")
+        except Exception as e:
+            recon_error = str(e)
+            log.error(f"[daily_close] 체결 확정 실패: {e}")
+
     # ── 2. Clenow 신호 ────────────────────────────────────────────────────
     # 보유 기준은 실계좌 포지션 (positions_live_*.json).
     # 페이퍼 positions_clenow.json 은 GHA(run_daily.py)가 관리하는 가상 포트폴리오라
@@ -100,9 +126,12 @@ def main(dry_run: bool = False, refresh: bool = False):
     cl_sigs = get_clenow_signals(price_data, set(cl_pos.keys()), cfg, today, is_wed)
 
     # 매도 (MA100 이탈 + rank 탈락) 는 즉시 주문
+    cl_ma100  = cl_sigs.get("sell_ma100", [])
+    cl_ranked = cl_sigs.get("sell_ranked", [])
     cl_sell_only = {
-        "sell_ma100":  cl_sigs.get("sell_ma100", []),
-        "sell_ranked": cl_sigs.get("sell_ranked", []),
+        "sell_ma100":  cl_ma100 + [s for s in retry_sells["clenow"]
+                                   if s not in cl_ma100 and s not in cl_ranked],
+        "sell_ranked": cl_ranked,
         "buy":         [],
     }
     cl_sell_orders = om.place_clenow_orders(cl_sell_only, price_data, today, dry_run)
@@ -122,8 +151,9 @@ def main(dry_run: bool = False, refresh: bool = False):
     w_pos  = load_live_positions("weinstein")
     w_sigs = get_weinstein_signals(price_data, set(w_pos.keys()), cfg, today, is_wed)
 
+    w_ma30 = w_sigs.get("sell_ma30", [])
     w_sell_only = {
-        "sell_ma30": w_sigs.get("sell_ma30", []),
+        "sell_ma30": w_ma30 + [s for s in retry_sells["weinstein"] if s not in w_ma30],
         "buy":       [],
     }
     w_sell_orders = om.place_weinstein_orders(w_sell_only, price_data, today, dry_run)
@@ -159,6 +189,12 @@ def main(dry_run: bool = False, refresh: bool = False):
         report = sync_all(kis)
         msg = _build_core_message(report, today, cl_sell_orders, w_sell_orders,
                                   pending_payload)
+        msg += _build_recon_message(recon, recon_error)
+        msg += "\n" + guard.summary_line()
+        if nav_error:
+            msg += f"\n🚨 NAV 기록 실패: {nav_error}"
+        if not allow_new:
+            msg += f"\n🛑 <b>신규 매수 중단</b>: {reason} (청산은 계속)"
         if data_stale:
             msg = (f"⚠️ <b>가격 데이터 정체</b> (data_today={today.date()}) — "
                    f"신호 신뢰 불가, 캐시/네트워크 점검 필요\n") + msg
@@ -202,6 +238,27 @@ def _build_core_message(report, today, cl_sells, w_sells, pending) -> str:
         L.append(f"⚠️ 수량 불일치: {items}")
 
     return "\n".join(L)
+
+
+def _build_recon_message(recon, error: str) -> str:
+    """체결 확정 결과. 정상(전부 체결)이면 한 줄, 이상만 상세."""
+    if error:
+        return f"\n🚨 <b>체결 확정 실패</b> — 포지션 미갱신: {error}"
+    if not recon:
+        return ""
+    L = []
+    if recon["buys_filled"] or recon["sells_filled"]:
+        L.append(f"✅ 체결 확정: 매수 {len(recon['buys_filled'])} / 매도 {len(recon['sells_filled'])}")
+    if recon["sells_unfilled"]:
+        items = ", ".join(f"{s}({st})" for st, s in recon["sells_unfilled"])
+        L.append(f"⚠️ 매도 미체결 → 재매도(-3% LIMIT): {items}")
+    if recon["buys_expired"]:
+        L.append("⚠️ 매수 미체결 (추적 삭제): " + ", ".join(recon["buys_expired"]))
+    if recon["skipped"]:
+        L.append("ℹ️ 판정 보류: " + ", ".join(recon["skipped"]))
+    if recon["price_fallback"]:
+        L.append("ℹ️ 체결가 추정: " + ", ".join(recon["price_fallback"]))
+    return ("\n" + "\n".join(L)) if L else ""
 
 
 def _update_phase4_pending(cfg, cfg_live, price_data, today):

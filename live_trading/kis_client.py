@@ -393,6 +393,46 @@ class KISClient:
             return {"NAS": "NASD", "NYS": "NYSE", "AMS": "AMEX"}.get(info["exchange"], "NASD")
         return self.exchange   # fallback 기본값
 
+    def get_fundamentals_kr(self, symbol: str) -> dict:
+        """국내 주식 현재가 조회 1회로 PER/PBR/EPS/BPS/시가총액까지 함께 추출.
+
+        pykrx 는 KRX 로그인이 필요해 2026-08 KW SV 리밸런싱이 통째로 실패했다
+        (KRX가 로그인 폼에 클라이언트 측 비밀번호 암호화를 추가했는데 pykrx 가
+        이를 구현 안 해 평문 비밀번호를 보내 CD006 거부됨 — 어떤 비밀번호를
+        넣어도 로그인 불가). KIS 는 이미 인증돼 있고 이 한 엔드포인트
+        (inquire-price) 응답에 per/pbr/eps/bps/상장주식수가 전부 포함돼 있어
+        pykrx·KRX 로그인 의존을 완전히 제거할 수 있다.
+        """
+        url    = f"{self.base_url}/uapi/domestic-stock/v1/quotations/inquire-price"
+        params = {
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_INPUT_ISCD":         symbol.zfill(6),
+        }
+        r = requests.get(url, headers=self._headers(self.tr["price"]),
+                         params=params, timeout=10)
+        r.raise_for_status()
+        d = r.json()
+        if d.get("rt_cd") != "0":
+            log.warning(f"[fundamentals_kr] {symbol} 조회 실패: {d.get('msg1')}")
+            return {}
+        out = d.get("output", {})
+        close  = float(out.get("stck_prpr", 0) or 0)
+        shares = float(out.get("lstn_stcn", 0) or 0)
+        per = float(out.get("per", 0) or 0)
+        pbr = float(out.get("pbr", 0) or 0)
+        eps = float(out.get("eps", 0) or 0)
+        bps = float(out.get("bps", 0) or 0)
+        return {
+            "symbol": symbol,
+            "close":  close,
+            "per":    per if per > 0 else float("nan"),
+            "pbr":    pbr if pbr > 0 else float("nan"),
+            "eps":    eps,
+            "bps":    bps,
+            "shares": shares,
+            "mcap":   close * shares,
+        }
+
     def _get_price_kr(self, symbol: str) -> dict:
         """국내 주식 현재가 조회 (KOSPI/KOSDAQ 6자리 종목코드)."""
         url    = f"{self.base_url}/uapi/domestic-stock/v1/quotations/inquire-price"
@@ -474,7 +514,9 @@ class KISClient:
         d = r.json()
         if d.get("rt_cd") != "0":
             log.error(f"[balance] 실패: {d.get('msg1')}")
-            return {"cash_usd": 0.0, "positions": [], "total_pnl_usd": 0.0, "fx_rate": 0.0}
+            # _failed: 빈 positions 를 "전량 매도됨" 으로 오판하지 않도록 표시
+            return {"cash_usd": 0.0, "positions": [], "total_pnl_usd": 0.0, "fx_rate": 0.0,
+                    "_failed": True}
 
         positions = []
         for it in d.get("output1", []):
@@ -572,6 +614,61 @@ class KISClient:
             "fx_rate":        0.0,
             "positions":      positions,
         }
+
+    def get_order_fills_us(self, start: str, end: str) -> dict[str, dict]:
+        """
+        해외주식 주문체결내역 (inquire-ccnl). start/end = "YYYYMMDD".
+        반환: {order_no: {symbol, side, ord_qty, filled_qty, filled_price, unfilled_qty}}
+        실패 시 예외 — 호출측이 체결가 폴백 여부를 결정한다 (조용히 빈 dict 반환 금지).
+        """
+        if self.market != "us":
+            raise RuntimeError("get_order_fills_us 는 US 전용")
+        url = f"{self.base_url}/uapi/overseas-stock/v1/trading/inquire-ccnl"
+        params = {
+            "CANO":            self.cano,
+            "ACNT_PRDT_CD":    self.acnt_prdt,
+            "PDNO":            "%",
+            "ORD_STRT_DT":     start,
+            "ORD_END_DT":      end,
+            "SLL_BUY_DVSN":    "00",    # 전체
+            "CCLD_NCCS_DVSN":  "00",    # 체결+미체결
+            "OVRS_EXCG_CD":    "%",
+            "SORT_SQN":        "DS",
+            "ORD_DT":          "",
+            "ORD_GNO_BRNO":    "",
+            "ODNO":            "",
+            "CTX_AREA_NK200":  "",
+            "CTX_AREA_FK200":  "",
+        }
+        out: dict[str, dict] = {}
+        for page in range(10):
+            headers = self._headers(self.tr["ccnl"])
+            if page > 0:
+                headers["tr_cont"] = "N"
+            r = requests.get(url, headers=headers, params=params, timeout=10)
+            r.raise_for_status()
+            d = r.json()
+            if d.get("rt_cd") != "0":
+                raise RuntimeError(f"[ccnl] 실패: {d.get('msg1')} / {d.get('msg_cd')}")
+            for it in d.get("output", []) or []:
+                odno = (it.get("odno") or "").lstrip("0")
+                if not odno:
+                    continue
+                out[odno] = {
+                    "symbol":       it.get("pdno", ""),
+                    "side":         "SELL" if it.get("sll_buy_dvsn_cd") == "01" else "BUY",
+                    "ord_qty":      int(float(it.get("ft_ord_qty", 0) or 0)),
+                    "filled_qty":   int(float(it.get("ft_ccld_qty", 0) or 0)),
+                    "filled_price": float(it.get("ft_ccld_unpr3", 0) or 0),
+                    "unfilled_qty": int(float(it.get("nccs_qty", 0) or 0)),
+                }
+            # 연속조회: tr_cont 헤더 F/M 이면 다음 페이지
+            if r.headers.get("tr_cont", "") not in ("F", "M"):
+                break
+            params["CTX_AREA_NK200"] = d.get("ctx_area_nk200", "")
+            params["CTX_AREA_FK200"] = d.get("ctx_area_fk200", "")
+            time.sleep(0.5)
+        return out
 
     def _get_psamount(self) -> tuple[float, float]:
         """해외주식 매수가능금액 조회. 반환: (orderable_usd, fx_rate). 초당 한도 시 1회 재시도."""
@@ -712,6 +809,65 @@ class KISClient:
             "ksd_order_no": out.get("KRX_FWDG_ORD_ORGNO", ""),
             "raw":          d,
         }
+
+    # KIS 가 2024 년 TR 코드를 개편 — 구코드가 막히면 신코드로 재시도
+    _KR_OPEN_ORDERS_TR = {"prod": ("TTTC8036R", "TTTC0084R"), "mock": ("VTTC8036R", "VTTC0084R")}
+
+    def get_open_orders_kr(self) -> list[dict]:
+        """국내 정정·취소 가능 주문(미체결) 조회. 실패 시 예외."""
+        if self.market != "kr":
+            raise RuntimeError("get_open_orders_kr 는 KR 전용")
+        url = f"{self.base_url}/uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl"
+        params = {
+            "CANO": self.cano, "ACNT_PRDT_CD": self.acnt_prdt,
+            "CTX_AREA_FK100": "", "CTX_AREA_NK100": "",
+            "INQR_DVSN_1": "0", "INQR_DVSN_2": "0",
+        }
+        last_err = ""
+        for tr_id in self._KR_OPEN_ORDERS_TR[self.mode]:
+            r = requests.get(url, headers=self._headers(tr_id), params=params, timeout=10)
+            d = r.json() if r.ok else {}
+            if r.ok and d.get("rt_cd") == "0":
+                return [{
+                    "symbol":    it.get("pdno", ""),
+                    "order_no":  it.get("odno", ""),
+                    "orgno":     it.get("ord_gno_brno", ""),
+                    "side":      "SELL" if it.get("sll_buy_dvsn_cd") == "01" else "BUY",
+                    "open_qty":  int(float(it.get("psbl_qty", 0) or 0)),
+                    "price":     float(it.get("ord_unpr", 0) or 0),
+                } for it in d.get("output", []) or []]
+            last_err = f"{tr_id}: HTTP {r.status_code} {d.get('msg1', r.text[:200])}"
+            time.sleep(0.5)
+        raise RuntimeError(f"[open_orders KR] 실패 — {last_err}")
+
+    _KR_RVSE_TR = {"prod": ("TTTC0803U", "TTTC0013U"), "mock": ("VTTC0803U", "VTTC0013U")}
+
+    def revise_order_to_market_kr(self, orgno: str, order_no: str) -> dict:
+        """미체결 지정가 주문 잔량 전부를 시장가로 정정. 반환: {order_no, raw}"""
+        url  = f"{self.base_url}/uapi/domestic-stock/v1/trading/order-rvsecncl"
+        body = {
+            "CANO": self.cano, "ACNT_PRDT_CD": self.acnt_prdt,
+            "KRX_FWDG_ORD_ORGNO": orgno, "ORGN_ODNO": order_no,
+            "ORD_DVSN": "01",            # 시장가
+            "RVSE_CNCL_DVSN_CD": "01",   # 정정
+            "ORD_QTY": "0", "ORD_UNPR": "0",
+            "QTY_ALL_ORD_YN": "Y",       # 잔량 전부
+        }
+        d = {}
+        for tr_id in self._KR_RVSE_TR[self.mode]:
+            hashkey = self._hashkey(body)
+            time.sleep(0.5)
+            headers = self._headers(tr_id)
+            headers["hashkey"] = hashkey
+            log.info(f"[revise KR] {order_no} → 시장가 (tr_id={tr_id})")
+            r = requests.post(url, headers=headers, data=json.dumps(body), timeout=10)
+            d = r.json() if r.ok else {"msg1": r.text[:200]}
+            if d.get("rt_cd") == "0":
+                out = d.get("output", {})
+                log.info(f"[revise KR] 성공 order_no={out.get('ODNO', '')}")
+                return {"order_no": out.get("ODNO", ""), "raw": d}
+            log.warning(f"[revise KR] {tr_id} 실패: {d.get('msg1')} / {d.get('msg_cd')}")
+        return {"order_no": "", "raw": d}
 
     def _place_order_kr(self, symbol, qty, side, order_type, price) -> dict:
         """국내 주식 주문 (현금 매수/매도). KOSPI/KOSDAQ 6자리 종목코드."""

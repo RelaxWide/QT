@@ -125,6 +125,15 @@ class OrderManager:
 
     def _save_map(self) -> None:
         LIVE_DIR.mkdir(exist_ok=True)
+        # 저장 직전 디스크 최신 상태와 병합 — 동시에 실행 중인 다른 프로세스
+        # (예: KR 매도·매수 스크립트가 같은 09:00대에 겹쳐 실행)가 그 사이에
+        # 쓴 내용을 덮어쓰지 않도록 한다. self._map 하나를 그대로 덤프하면
+        # 나중에 저장한 프로세스가 먼저 저장한 프로세스의 기록을 통째로
+        # 지워버린다 (2026-10 발견: KW SV 매수 11건이 order_map 에서만 소실됨,
+        # positions_live 는 각자 자기 파일이라 영향 없었음).
+        on_disk = self._load_map()
+        on_disk.update(self._map)
+        self._map = on_disk
         ORDER_MAP.write_text(json.dumps(self._map, indent=2, ensure_ascii=False),
                              encoding="utf-8")
 
@@ -132,7 +141,10 @@ class OrderManager:
         return f"{strategy}:{symbol}:{signal_date}:{side}"
 
     def _already_sent(self, key: str) -> bool:
-        return key in self._map
+        if key in self._map:
+            return True
+        # 다른 프로세스가 동시에 기록했을 수 있으니 디스크 최신 상태도 확인
+        return key in self._load_map()
 
     def _record(self, key: str, result: OrderResult) -> None:
         self._map[key] = {
@@ -206,10 +218,18 @@ class OrderManager:
 
     def _update_live_positions(self, strategy: str, symbol: str, signal_date: str,
                                 side: str, qty: int, price: float, order_no: str) -> None:
-        """매수/매도 체결 시 positions_live_{strategy}.json 자동 갱신."""
+        """매수/매도 주문 접수 시 positions_live_{strategy}.json 자동 갱신.
+
+        US: 접수 ≠ 체결. 매수는 pending_buy 로 추가, 매도는 삭제하지 않고 pending_sell
+        로 표시 → 다음 daily_close 의 account.reconcile_fills() 가 KIS 실잔고로 확정.
+        (2026-10: 접수 즉시 삭제하던 탓에 미체결 매도 ON/ORLY/MU 가 추적에서 사라져 방치됨)
+        KR: 기존 동작 유지 (접수 = 반영). KR 은 아직 reconcile 경로가 없음.
+        """
         try:
             from live_trading.tracker_live import LivePosition, load_live_positions, save_live_positions
             positions = load_live_positions(strategy)
+            now_iso = pd.Timestamp.now().isoformat()
+            pending = self.market == "us"
             if side == "BUY":
                 from datetime import date as _date
                 positions[symbol] = LivePosition(
@@ -218,12 +238,22 @@ class OrderManager:
                     entry_date=signal_date,
                     fill_date=_date.today().isoformat(),
                     signal_price=price,
-                    fill_price=price,
+                    fill_price=price,   # US 는 reconcile 시 실체결가로 교체
                     qty=qty,
                     order_no=order_no,
+                    status="pending_buy" if pending else "open",
+                    submitted_at=now_iso,
                 )
             elif side == "SELL" and symbol in positions:
-                del positions[symbol]
+                if pending:
+                    pos = positions[symbol]
+                    pos.status        = "pending_sell"
+                    pos.submitted_at  = now_iso
+                    pos.sell_order_no = order_no
+                    pos.sell_price    = price
+                    pos.sell_attempts += 1
+                else:
+                    del positions[symbol]
             save_live_positions(strategy, positions)
         except Exception as e:
             log.warning(f"[orders] positions_live 갱신 실패 ({strategy}/{symbol}): {e}")
@@ -293,9 +323,7 @@ class OrderManager:
             if df is None or today not in df.index:
                 continue
             cur = float(df.at[today, "close"])
-            price = round(cur * 0.995, 2)
-            # 보유 수량은 positions 파일에서 읽어야 하지만 1주 기본값으로 처리
-            # Phase C(포지션 동기화) 구현 후 실제 수량으로 교체
+            price = round(cur * _sell_factor("clenow", sym), 2)
             qty = _get_live_qty("clenow", sym)
             if qty <= 0:
                 log.warning(f"[clenow] {sym} SELL: 보유수량 0 — 스킵 (positions_live 미동기화)")
@@ -349,7 +377,7 @@ class OrderManager:
             if df is None or today not in df.index:
                 continue
             cur = float(df.at[today, "close"])
-            price = round(cur * 0.995, 2)
+            price = round(cur * _sell_factor("weinstein", sym), 2)
             qty = _get_live_qty("weinstein", sym)
             if qty <= 0:
                 log.warning(f"[weinstein] {sym} SELL: 보유수량 0 — 스킵")
@@ -476,6 +504,60 @@ class OrderManager:
                 time.sleep(0.5)
         return results
 
+    # ── KW Super Value: 분기 리밸런싱 탈락분 매도 ─────────────────────────
+    def place_kw_sv_exits(
+        self,
+        keep_symbols: list,
+        signal_date: str,
+        dry_run: bool = False,
+    ) -> tuple[list, list]:
+        """positions_live_kw_super_value.json 보유 중 keep_symbols 에 없는 종목 전부 매도.
+
+        분기 리밸런싱 탈락분 매도가 수동 전용이었던 것(기존 _build_core_message
+        경고 문구)을 KR 도 US(clenow/weinstein)와 동일한 _send() 경로로 자동화.
+        거래정지 종목은 현재가 조회가 실패하므로 자동으로 스킵되고 skipped 에 기록됨
+        (예: 008500 — 정지 해제 전까지는 어떤 방법으로도 매도 불가).
+
+        반환: (results: list[OrderResult], skipped: list[dict])
+        """
+        from live_trading.tracker_live import load_live_positions
+        try:
+            held = load_live_positions("kw_super_value")
+        except Exception as e:
+            log.warning(f"[kw_sv] positions_live 로드 실패: {e} — 매도 스킵")
+            return [], []
+
+        keep = set(keep_symbols)
+        drop_symbols = [s for s in held if s not in keep]
+        if not drop_symbols:
+            log.info("[kw_sv] 매도 대상 없음 (전종목 유지)")
+            return [], []
+
+        results = []
+        skipped = []
+        for sym in drop_symbols:
+            qty = _get_live_qty("kw_super_value", sym)
+            if qty <= 0:
+                continue
+            try:
+                price_info = self.kis.get_price(sym)
+            except Exception as e:
+                log.warning(f"[kw_sv] {sym} 현재가 조회 실패 — 매도 스킵 (거래정지 추정): {e}")
+                skipped.append({"symbol": sym, "qty": qty, "reason": str(e)})
+                continue
+            cur = float(price_info.get("last", 0) or 0)
+            if cur <= 0:
+                log.warning(f"[kw_sv] {sym} 현재가 0 — 매도 스킵 (거래정지 추정)")
+                skipped.append({"symbol": sym, "qty": qty, "reason": "현재가 0"})
+                continue
+            price = self._adjust_limit_price(cur * 0.995, "SELL")
+            r = self._send("kw_super_value", sym, signal_date, "SELL", qty, price, dry_run)
+            results.append(r)
+            if not dry_run:
+                time.sleep(0.5)
+
+        return results, skipped
+
 
 # ── 보유수량 조회 헬퍼 (Phase C 전 임시) ─────────────────────────────────
 def _get_live_qty(strategy: str, symbol: str) -> int:
@@ -489,6 +571,21 @@ def _get_live_qty(strategy: str, symbol: str) -> int:
     data = json.loads(path.read_text(encoding="utf-8"))
     pos = data.get(symbol, {})
     return int(pos.get("qty", 0))
+
+
+# 첫 매도는 종가 -0.5% LIMIT. 이미 한 번 미체결된 종목은 -3% 로 낮춰 체결을 우선한다.
+# 매도 LIMIT 은 "이 가격 이상이면 판다"라 시장가가 더 높으면 시장가에 체결되므로,
+# 낮춘다고 그만큼 손해 보는 게 아니라 갭하락 시에도 빠져나올 확률만 올라간다.
+SELL_FACTOR_FIRST = 0.995
+SELL_FACTOR_RETRY = 0.97
+
+
+def _sell_factor(strategy: str, symbol: str) -> float:
+    path = LIVE_DIR / f"positions_live_{strategy}.json"
+    if not path.exists():
+        return SELL_FACTOR_FIRST
+    pos = json.loads(path.read_text(encoding="utf-8")).get(symbol, {})
+    return SELL_FACTOR_RETRY if int(pos.get("sell_attempts", 0)) > 0 else SELL_FACTOR_FIRST
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────

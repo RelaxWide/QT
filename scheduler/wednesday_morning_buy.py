@@ -66,11 +66,14 @@ def main(dry_run: bool = False, no_wait: bool = False):
     cfg_live = yaml.safe_load(Path("config_live.yaml").read_text(encoding="utf-8"))
 
     # 리스크 가드 재확인
-    guard = RiskGuard.from_config()
+    guard = RiskGuard.from_config(market="us")
     ok, reason = guard.check()
     if not ok:
         log.warning(f"[wed_buy] 신규 주문 차단: {reason} - pending 삭제, 종료")
         WED_BUY_PENDING.unlink()
+        _notify(f"🛑 <b>US 신규 매수 중단</b>\n{reason}\n"
+                f"매수 후보 {sum(len(v.get('symbols', [])) for v in payload.values())}종목 건너뜀 "
+                f"(보유 종목 청산은 계속 진행)", cfg_live)
         return
 
     # ET 11:00 까지 대기

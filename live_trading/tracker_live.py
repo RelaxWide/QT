@@ -22,6 +22,13 @@ class LivePosition:
     fill_price:  float   # 실제 체결가
     qty:         int
     order_no:    str
+    # 주문 접수 ≠ 체결 (US). 접수 시점엔 pending_*, 다음 daily_close 의
+    # account.reconcile_fills() 가 KIS 실잔고로 확정한다. 기존 파일은 기본값 "open".
+    status:        str   = "open"   # pending_buy | open | pending_sell
+    submitted_at:  str   = ""       # 마지막 주문 접수 시각 (ISO)
+    sell_order_no: str   = ""
+    sell_price:    float = 0.0      # 매도 LIMIT 가
+    sell_attempts: int   = 0        # 미체결 재주문 횟수 판단용
 
 
 def _pos_file(strategy: str) -> Path:
