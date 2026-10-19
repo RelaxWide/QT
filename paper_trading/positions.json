@@ -128,55 +128,37 @@
   "AAPL": {
     "symbol": "AAPL",
     "entry_date": "2026-09-21T00:00:00",
-    "entry_price": NaN,
+    "entry_price": 335.6152787780761,
     "stop_initial": 309.8999938964844,
     "stop_current": 309.8999938964844,
     "targets": [
-      NaN
+      412.76113342285134
     ],
     "partial_weights": [
       0.5
     ],
     "targets_hit": 0,
-    "shares_total": NaN,
-    "shares_remaining": NaN,
+    "shares_total": 27.22116450287098,
+    "shares_remaining": 27.22116450287098,
     "realized_pnl": 0.0,
     "split_adjusted_through": "2026-10-16"
   },
   "TMO": {
     "symbol": "TMO",
     "entry_date": "2026-09-25T00:00:00",
-    "entry_price": NaN,
+    "entry_price": 678.2075593261718,
     "stop_initial": 594.3644351329852,
     "stop_current": 594.3644351329852,
     "targets": [
-      NaN
+      929.7369319057315
     ],
     "partial_weights": [
       0.5
     ],
     "targets_hit": 0,
-    "shares_total": NaN,
-    "shares_remaining": NaN,
+    "shares_total": 8.3489255289092,
+    "shares_remaining": 8.3489255289092,
     "realized_pnl": 0.0,
     "split_adjusted_through": "2026-10-16"
-  },
-  "BDX": {
-    "symbol": "BDX",
-    "entry_date": "2026-10-16T00:00:00",
-    "entry_price": 194.61441816711422,
-    "stop_initial": 175.7100067138672,
-    "stop_current": 175.7100067138672,
-    "targets": [
-      251.32765252685533
-    ],
-    "partial_weights": [
-      0.5
-    ],
-    "targets_hit": 0,
-    "shares_total": 37.02839423121884,
-    "shares_remaining": 37.02839423121884,
-    "realized_pnl": 0.0,
-    "split_adjusted_through": ""
   }
 }
