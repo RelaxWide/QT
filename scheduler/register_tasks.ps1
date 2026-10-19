@@ -42,7 +42,8 @@ function Register-QTTask {
     } catch {
         Write-Host "[FAIL] $name : $($_.Exception.Message)" -ForegroundColor Red
         if ($_.Exception.HResult -eq -2147024891) {   # 0x80070005 액세스 거부
-            Write-Host "       관리자 권한으로 만든 작업 — 관리자 PowerShell 에서 Unregister-ScheduledTask $name -Confirm:`$false 후 재실행" -ForegroundColor Yellow
+            # 관리자 권한으로 만든 작업 → 관리자 PowerShell 에서 삭제 후 재실행
+            Write-Host "       Created by admin. In admin PowerShell: Unregister-ScheduledTask $name -Confirm:`$false ; then rerun this script" -ForegroundColor Yellow
         }
     }
 }
