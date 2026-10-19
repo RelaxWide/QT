@@ -1,7 +1,8 @@
 # 채택 전략 플레이북
 
-> 최종 업데이트: 2026-05-19 (18년 백테스트 + Sensitivity 10×10 + DART 검증 완료 — KW SV 단일 채택 확정)
-> 지원 시장: **US (S&P 500)** ✅ 실전 운영 / **KR** ✅ KW Super Value 단일 채택 (18년 CAGR 28~31% 검증)
+> 최종 업데이트: 2026-10-19 (KR KW SV 실계좌 중단·전량 매도, US 체결확인·리스크 가드 재작성)
+> 지원 시장: **US (S&P 500)** ✅ 실전 운영 (Clenow + Weinstein) / **KR** ⏸️ 실계좌 중단 — 전략 전면 재설계 예정
+> 현재 운영 상황 요약은 [`docs/STATUS.md`](STATUS.md) 참고
 
 ---
 
@@ -25,7 +26,7 @@
 | 전략 | 시장 | 유형 | 기간 | CAGR | MDD | Sharpe | 알파 | 상태 |
 |---|---|---|---|---|---|---|---|---|
 | **Clenow Momentum** | US | 주봉 모멘텀 | 2015~ | 17.64% / **12.17%** | -19.6% | 1.13 / 0.89 | +3.40%p / ≈0%p | ✅ **실계좌 운영** (SPY+MDD개선 역할) |
-| **KW Super Value** ⭐ | KR | 분기 가치 | **2008~** | **28.32% / 30.79%** | -48.2% | **1.23 / 1.30** | +20.13%p / **+27%p** | ✅ **KR 메인 엔진 확정** (18년 검증 통과) |
+| ~~KW Super Value~~ | KR | 분기 가치 | 2008~ | 28.32% / 30.79% | -48.2% | 1.23 / 1.30 | +20.13%p / +27%p | ⏸️ **실계좌 중단** (2026-10-19, 전량 매도 — REJECTED 7-F) |
 | ~~KW Super Quality~~ | ~~KR~~ | — | — | — | — | — | — | ❌ **폐기 확정** (2026-05-19, SV 와 중복 + DART 강화 효과 없음) |
 | **Weinstein Stage 2** | US | 주봉 추세 | 2015~ | 8.0% / 5.87% | -14.0% | 0.88 / 0.74 | — | ✅ **실계좌 운영** (US 합성 분산 보조) |
 | ~~Clenow Momentum~~ | ~~KR~~ | — | — | — | — | — | — | ❌ **폐기 확정** (2026-05-18, REJECTED 이동) |
@@ -301,7 +302,7 @@ Clenow 비중(%)을 0~100%로 5%씩 변화시킨 Sharpe 스윕 분석.
 | **A: KIS 클라이언트** | 인증·시세·주문 API 래퍼, OAuth 토큰 캐시 | ✅ 완료 |
 | **B: 신호→주문 변환** | 페이퍼 신호 → KIS 주문 (LIMIT ±0.5%) | ✅ 완료 |
 | **C: 포지션 동기화** | KIS 잔고 ↔ 로컬 positions 일치 | ✅ 완료 |
-| **D: 리스크 가드** | Kill switch, 손실 한도, 연속손절, 토큰 발급 가드 | ✅ 완료 |
+| **D: 리스크 가드** | Kill switch, 실계좌 NAV 낙폭·당일 손실 한도, 토큰 발급 가드 | ✅ 완료 (2026-10-19 재작성, 6.4) |
 | **E: 스케줄러** | Windows Task Scheduler 5개 작업 무인 운영 | ✅ 완료 |
 | **F: 스모크 테스트** | GHA 수동 트리거 → prod 실계좌 1종목 체결 검증 | ✅ 완료 (2026-05-15, APA $37.48 체결) |
 | **G: 실계좌 본운영** | Windows 스케줄러 + auto_allocate, $10k prod | ✅ 운영 시작 (2026-05-18 월 ~) |
@@ -321,7 +322,7 @@ Clenow 비중(%)을 0~100%로 5%씩 변화시킨 Sharpe 스윕 분석.
 |---|---|---|
 | 22:29 평일 | `scheduler/morning_entry.py` | Phase 4 pending → MOO 주문 |
 | 23:00~04:00 매시 | `scheduler/exit_check.py` | 손절·트레일 체크 |
-| 06:00 평일 | `scheduler/daily_close.py` | Clenow/Weinstein 매도 즉시 / KR 수요일 매수 후보 pending 저장 / Phase 4 pending |
+| 06:00 평일 | `scheduler/daily_close.py` | ① 실계좌 NAV 기록 ② 리스크 가드 판정 ③ 전날 주문 체결 확정(reconcile) ④ Clenow/Weinstein 매도 + 미체결 매도 재주문 ⑤ 수요일 매수 후보 pending 저장 / Phase 4 pending |
 | **목 00:00** | `scheduler/wednesday_morning_buy.py` | **Wed 11 AM ET 매수 실행** (스크립트가 ET 11:00 까지 대기) |
 | 07:00 평일 | `scheduler/summary.py` | 텔레그램 일일 리포트 |
 
@@ -334,15 +335,32 @@ Clenow 비중(%)을 0~100%로 5%씩 변화시킨 Sharpe 스윕 분석.
 
 등록: `.\scheduler\register_tasks.ps1`
 
-### 6.4 리스크 가드 (live_trading/risk_guard.py)
+KR 작업 스케줄러(`QT_KR_*` 4개)는 2026-10-19부터 **Disabled**. 재개: `Get-ScheduledTask -TaskName 'QT_KR_*' | Enable-ScheduledTask`
+
+**주문 체결 확정 (2026-10-19~, US 전용)**: 주문 접수 ≠ 체결. 매수는 `pending_buy`, 매도는 `pending_sell` 상태로
+`positions_live_*.json`에 남고, 다음 daily_close 의 `account.reconcile_fills()`가 KIS 실잔고로 확정한다.
+- 체결 여부 = KIS 잔고 / 체결가 = 체결내역 API(`inquire-ccnl`), 실패 시 평균단가·LIMIT가로 폴백하고 텔레그램에 "체결가 추정" 표시
+- 미체결 매도는 신호 재발생과 무관하게 재주문 (첫 주문 종가 -0.5%, 재시도 -3% LIMIT)
+- 매도 체결 시 `trades_live_{strategy}.csv`에 손익 기록 (이전엔 아무도 쓰지 않았음)
+- 접수 4시간 미만 주문은 판정 보류 (수동 재실행 시 중복 매도 방지), 잔고 조회 실패 시 포지션 미변경
+- KR 경로는 아직 "접수 = 반영" — 새 KR 전략 전에 동일 구조 도입 필요
+
+### 6.4 리스크 가드 (live_trading/risk_guard.py, 2026-10-19 재작성)
 
 | 조건 | 동작 |
 |---|---|
 | `live_trading/KILL_SWITCH` 파일 존재 | 모든 신규 주문 즉시 차단 |
-| 당일 -1.5% | 신규 진입 차단 |
-| 누적 낙폭 -10% | 전면 정지 + 텔레그램 경고 |
-| 5연속 손실 | 다음 신호 1주일 보류 |
+| 실계좌 NAV 누적 낙폭 ≤ **-20%** | 신규 매수 중단 + 텔레그램 🛑 (청산은 계속). -15%부터 ⚠️ 표시 |
+| 실계좌 NAV 당일 ≤ -1.5% (평가손익 포함) | 당일 신규 진입 차단 |
+| NAV 파일 손상 / 마지막 기록 5일 초과 | **신규 매수 차단 (fail-closed)** |
 | 단일 주문 > 자본 50% | 주문 거부 |
+
+- NAV: daily_close 가 매일 KIS 잔고(예수금+평가액)를 `live_trading/nav_live_{us,kr}.csv`에 기록. 시장별 분리.
+- 입출금은 `unit_nav`(시간가중)로 제외 — **입출금 시 반드시** `python -m live_trading.risk_guard --cashflow 금액 --market us` (입금 +, 출금 −). 안 하면 출금이 손실로 계산됨.
+- 상태 확인: `python -m live_trading.risk_guard --status`
+- -20% 근거: 백테스트 최악 MDD(Clenow -19.6%, Weinstein -14%)를 넘으면 "정상 범위 하락"이 아니라 고장 의심.
+- **연속 손실 규칙 삭제**: 승률 31% 추세추종에서 5연속 손실 확률 ≈16%로 흔하고, 연속 손절 뒤의 큰 추세가 수익원이라 그때 진입을 막으면 전략이 깨짐.
+- 이전 버전 결함(참고): 페이퍼 NAV 사용(로컬 사본은 7/7 정체), KR 이 US NAV·USD 로 판정, 계산 실패 시 "낙폭 0%" 통과, 청산 거래 기록이 없어 연속손실·당일손실 규칙이 사실상 미작동.
 
 Kill Switch: `type nul > live_trading/KILL_SWITCH` / 재개: `del live_trading/KILL_SWITCH`
 
@@ -447,7 +465,7 @@ python run_weinstein.py   # Weinstein 백테스트
 python run_phase4_v2.py   # Phase 4-v2 (Anticipatory Cloud) 백테스트
 ```
 
-**주의**: Claude Code 터미널에서 Python 실행 불가 (Windows Anaconda DLL 문제). Anaconda Prompt 사용.
+**Python 실행**: PowerShell 에서 `& "C:\Users\Quiruri\Anaconda3\envs\qt\python.exe" ...`. Claude Code 의 `!` 명령(bash)에서는 `/c/Users/Quiruri/Anaconda3/envs/qt/python.exe` (백슬래시가 사라짐).
 
 ### 7.3 KIS 라이브 운영 명령
 
@@ -468,6 +486,17 @@ python -m live_trading.kis_client --test-auth
 python -m live_trading.kis_client --test-price AAPL
 python -m live_trading.orders --clenow --dry-run
 python -m live_trading.account --report    # 슬리피지 누적 리포트
+python -m live_trading.account --sync      # KIS 잔고 ↔ positions_live 대조
+
+# 체결가를 KIS 평균단가로 교정 (기본 미리보기, --apply 로 저장)
+python -m live_trading.account --backfill-fill-prices [--apply]
+
+# 리스크 가드 상태 / 입출금 기록
+python -m live_trading.risk_guard --status
+python -m live_trading.risk_guard --cashflow 1000 --market us
+
+# KR 보유분 시장가 정리 (미체결 지정가는 시장가로 정정, 기본 미리보기)
+python scripts/kr_sell_market.py [--execute]
 ```
 
 ### 7.4 실행 파이프라인 (run_daily.py 6단계)
@@ -519,12 +548,14 @@ position_size  = risk_per_trade / (entry_price − stop_price)
 
 ### 서킷 브레이커
 
-| 트리거 | 액션 |
-|---|---|
-| 일 손실 > 자본 1.5% | 당일 신규 진입 중지 |
-| 주 손실 > 자본 3% | 주말에 로직 리뷰 |
-| 월 낙폭 > 5% | 포지션 크기 50% 축소 |
-| 누적 낙폭 > 10% | 전면 중단, 백테스트 재검증 |
+실제 구현은 6.4 참고 (실계좌 NAV 기준).
+
+| 트리거 | 액션 | 구현 |
+|---|---|---|
+| 일 손실 > 자본 1.5% | 당일 신규 진입 중지 | ✅ |
+| 주 손실 > 자본 3% | 주말에 로직 리뷰 | ❌ 수동 |
+| 월 낙폭 > 5% | 포지션 크기 50% 축소 | ❌ 미구현 |
+| 누적 낙폭 > **20%** (2026-10-19, 기존 10%) | 신규 매수 중단 + 텔레그램, 백테스트 재검증 | ✅ |
 
 ### 시장 체제 필터
 
@@ -568,6 +599,11 @@ position_size  = risk_per_trade / (entry_price − stop_price)
 ---
 
 ## 10. KR 시장 트랙
+
+> ⏸️ **2026-10-19 KR 실계좌 운영 중단.** KW SV 전량 매도(계좌 보유 0), `config_live.yaml`
+> `kr.capital.kw_super_value_pct: 0`·`kw_super_value_krw: 0`, `QT_KR_*` 스케줄 Disabled.
+> 사유와 실적은 `REJECTED_STRATEGIES.md` 7-F. 아래는 기록용 — 새 KR 전략은 US 구조
+> (분산 + 종목별 추세이탈 청산, 손익비형) + KR 박스권·소형주 꼬리위험 필터로 재설계 예정.
 
 ### 10.1 결정사항
 
