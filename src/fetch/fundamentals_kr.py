@@ -14,13 +14,34 @@ KRX 인증 필요: 환경변수 KRX_ID, KRX_PW 설정 후 사용 가능.
 """
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
 
+log = logging.getLogger(__name__)
+
 CACHE_FUND = Path("data/raw/kr/fundamentals")
 CACHE_MCAP = Path("data/raw/kr/marketcap")
+
+
+def krx_login_status() -> str:
+    """현재 PyKRX KRX 로그인 세션 상태 (진단용).
+
+    반환: "ok" | "no_credentials" | "login_failed" | "unknown"
+    """
+    try:
+        from pykrx.website.comm.auth import get_auth_session
+        sess = get_auth_session()
+        if sess is None:
+            import os
+            if os.getenv("KRX_ID") and os.getenv("KRX_PW"):
+                return "login_failed"
+            return "no_credentials"
+        return "ok" if sess.is_valid() else "login_failed"
+    except Exception:
+        return "unknown"
 
 
 def _ymd(date) -> str:
@@ -63,7 +84,9 @@ def fetch_pykrx_fundamentals(date) -> pd.DataFrame:
         df.index.name = "ticker"
         df.to_parquet(cache_path)
         return df
-    except Exception:
+    except Exception as e:
+        log.warning(f"[fundamentals_kr] PyKRX fundamental fetch 실패 ({_ymd(date)}): "
+                    f"{type(e).__name__}: {e} | KRX 로그인 상태: {krx_login_status()}")
         return pd.DataFrame()
 
 
@@ -95,7 +118,9 @@ def fetch_market_cap_kr(date) -> pd.DataFrame:
         df.index.name = "ticker"
         df.to_parquet(cache_path)
         return df
-    except Exception:
+    except Exception as e:
+        log.warning(f"[fundamentals_kr] PyKRX market cap fetch 실패 ({_ymd(date)}): "
+                    f"{type(e).__name__}: {e} | KRX 로그인 상태: {krx_login_status()}")
         return pd.DataFrame()
 
 
@@ -148,6 +173,56 @@ def build_fundamentals_panel(
             rows.append(row)
         df = pd.DataFrame(rows).set_index("date")
         panel[ticker] = df
+    return panel
+
+
+# ── KIS 기반 panel 빌드 (pykrx/KRX 로그인 완전 우회) ─────────────────────
+def build_fundamentals_panel_kis(
+    date,
+    tickers: Iterable[str],
+    cli=None,
+    sleep_sec: float = 0.08,
+) -> dict[str, pd.DataFrame]:
+    """KIS `inquire-price` 종목별 조회로 PER/PBR/EPS/BPS/시가총액 panel 빌드.
+
+    pykrx 는 KRX 로그인(비밀번호 평문 전송)이 구조적으로 막혀 있어 쓸 수 없다
+    (fundamentals_kr.krx_login_status 참고). KIS 는 이미 인증된 세션이고
+    종목 단위 조회라 전종목 상위 N개만 보여주는 KRX 순위 API의 상한(30건)
+    제약도 없다. 분기 1회만 호출하므로 종목당 한 번씩 순차 호출해도 충분.
+
+    반환: build_fundamentals_panel 과 동일한 형태 — {ticker: DataFrame(date × [...])}
+    (단일 날짜만 들어있음 — 실시간 조회라 과거 시점 재현은 불가능, 라이브 전용)
+    """
+    import time
+    from tqdm import tqdm
+
+    if cli is None:
+        from live_trading.kis_client import KISClient
+        cli = KISClient.from_config(allow_prod=True, market="kr")
+
+    date = pd.Timestamp(date)
+    tickers = list(tickers)
+    panel: dict[str, pd.DataFrame] = {}
+    n_failed = 0
+    for ticker in tqdm(tickers, desc="KIS fundamentals fetch"):
+        try:
+            d = cli.get_fundamentals_kr(ticker)
+        except Exception as e:
+            log.warning(f"[fundamentals_kr] KIS {ticker} 조회 예외: {e}")
+            d = {}
+        if not d or d.get("mcap", 0) <= 0:
+            n_failed += 1
+            time.sleep(sleep_sec)
+            continue
+        panel[ticker] = pd.DataFrame([{
+            "date": date, "per": d["per"], "pbr": d["pbr"], "eps": d["eps"],
+            "bps": d["bps"], "close": d["close"], "mcap": d["mcap"],
+            "shares": d["shares"],
+        }]).set_index("date")
+        time.sleep(sleep_sec)
+
+    log.info(f"[fundamentals_kr] KIS panel 빌드 완료 — {len(panel)}/{len(tickers)}종목 "
+              f"성공 ({n_failed}건 실패/거래정지 추정)")
     return panel
 
 

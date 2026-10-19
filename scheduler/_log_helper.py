@@ -22,6 +22,17 @@ def setup_file_logger(task_name: str, log_dir: str = "logs") -> Path:
     p.mkdir(exist_ok=True)
     log_path = p / f"{task_name}_{datetime.now():%Y%m%d_%H%M%S}.log"
 
+    # Windows 콘솔 기본 인코딩(cp949)은 이모지 등 일부 유니코드를 인코딩 못 해
+    # print() 가 UnicodeEncodeError 로 죽는다 (예: pykrx 가 KRX 로그인 실패 시
+    # 출력하는 "⚠️" — 2026-08 KW SV 리밸런싱 무응답 사고의 원인). Tee 로 감싸기
+    # 전에 원본 스트림을 UTF-8 로 강제해 어떤 하위 라이브러리의 print() 도
+    # 프로세스를 죽이지 못하게 한다.
+    for _stream_name in ("stdout", "stderr"):
+        try:
+            getattr(sys, _stream_name).reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
     # 파일 핸들러
     fh = logging.FileHandler(log_path, encoding="utf-8")
     fh.setLevel(logging.DEBUG)
