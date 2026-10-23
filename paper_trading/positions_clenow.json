@@ -5,7 +5,7 @@
     "entry_price": 284.3699951171875,
     "shares": 17.582727031167703,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "MPC": {
     "symbol": "MPC",
@@ -13,7 +13,7 @@
     "entry_price": 360.75,
     "shares": 13.86001386001386,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "IQV": {
     "symbol": "IQV",
@@ -21,7 +21,7 @@
     "entry_price": 249.27999877929688,
     "shares": 20.057766465358544,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "VLO": {
     "symbol": "VLO",
@@ -29,7 +29,7 @@
     "entry_price": 346.260009765625,
     "shares": 14.440015765564088,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "ZBRA": {
     "symbol": "ZBRA",
@@ -37,7 +37,7 @@
     "entry_price": 359.8399963378906,
     "shares": 13.895064614509911,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "VEEV": {
     "symbol": "VEEV",
@@ -45,7 +45,7 @@
     "entry_price": 244.91000366210938,
     "shares": 20.415662591301338,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "WDAY": {
     "symbol": "WDAY",
@@ -53,7 +53,7 @@
     "entry_price": 200.8699951171875,
     "shares": 24.891721618666846,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "PSX": {
     "symbol": "PSX",
@@ -61,7 +61,7 @@
     "entry_price": 260.7799987792969,
     "shares": 19.173249572071654,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "TMO": {
     "symbol": "TMO",
@@ -69,7 +69,7 @@
     "entry_price": 605.6900024414062,
     "shares": 8.255047928554333,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "HPQ": {
     "symbol": "HPQ",
@@ -77,7 +77,7 @@
     "entry_price": 32.70000076293945,
     "shares": 152.90519520925363,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "MRNA": {
     "symbol": "MRNA",
@@ -85,7 +85,7 @@
     "entry_price": 182.11000061035156,
     "shares": 27.45593313515034,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "ILMN": {
     "symbol": "ILMN",
@@ -93,7 +93,7 @@
     "entry_price": 255.3800048828125,
     "shares": 19.57866671000486,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "RVTY": {
     "symbol": "RVTY",
@@ -101,7 +101,7 @@
     "entry_price": 142.11000061035156,
     "shares": 35.18401223365972,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "P": {
     "symbol": "P",
@@ -109,7 +109,7 @@
     "entry_price": 130.77999877929688,
     "shares": 38.23214594487001,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "CRWD": {
     "symbol": "CRWD",
@@ -117,7 +117,7 @@
     "entry_price": 264.75,
     "shares": 18.885741265344663,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "CRM": {
     "symbol": "CRM",
@@ -125,7 +125,7 @@
     "entry_price": 229.57000732421875,
     "shares": 21.77984858857701,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "PLTR": {
     "symbol": "PLTR",
@@ -133,7 +133,7 @@
     "entry_price": 194.1199951171875,
     "shares": 25.757264196207974,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "MSFT": {
     "symbol": "MSFT",
@@ -141,7 +141,7 @@
     "entry_price": 529.760009765625,
     "shares": 9.438236008437267,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "NOW": {
     "symbol": "NOW",
@@ -149,7 +149,7 @@
     "entry_price": 139.97999572753906,
     "shares": 35.71938957429416,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   },
   "HPE": {
     "symbol": "HPE",
@@ -157,6 +157,6 @@
     "entry_price": 63.11000061035156,
     "shares": 79.22674618354986,
     "strategy": "clenow",
-    "split_adjusted_through": "2026-10-16"
+    "split_adjusted_through": "2026-10-23"
   }
 }
