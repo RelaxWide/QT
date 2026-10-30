@@ -1,10 +1,10 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-10-29
+날짜: 2026-10-30
 
 ## 전략별 현황
 
 ### Phase 4 (추세추종)
-보유 9종목: AAPL, APH, AVB, CFG, CPAY, DAL, EBAY, TMO, TRGP
+보유 10종목: AAPL, APH, AVB, CFG, CPAY, CVX, DAL, EBAY, TMO, TRGP
 
 누적: 27건 | WR 18.5% | PF 0.49 | PnL $-6,575
 낙폭: 현재 -6.6% | 최대 -6.6%
@@ -16,15 +16,15 @@
 ⚠️ 8연속 손절 중
 
 ### Clenow (모멘텀)
-보유 20종목: CRL, CRM, CRWD, HPE, HPQ, ILMN, IQV, MPC, MRNA, MSFT, NOW, P, PLTR, PSX, RVTY, TMO, VEEV, VLO, WDAY, ZBRA
+보유 20종목: ACN, APA, CRL, CRM, CTSH, ILMN, IT, MPC, MRNA, MSFT, NOW, P, PLTR, PSX, PTC, RVTY, VEEV, VLO, WDAY, ZBRA
 
-누적: 73건 | WR 39.7% | PF 1.19 | PnL $+4,490
-낙폭: 현재 +0.0% | 최대 -10.0%
-스트릭: W 2연속
-최근 10건: L W L W L W L L W W
+누적: 78건 | WR 41.0% | PF 1.24 | PnL $+5,651
+낙폭: 현재 -0.2% | 최대 -10.0%
+스트릭: W 1연속
+최근 10건: W L L W W W W L L W
 
-⚠️ WR 39.7% < 게이트 55%
-⚠️ PF 1.19 < 게이트 1.5
+⚠️ WR 41.0% < 게이트 55%
+⚠️ PF 1.24 < 게이트 1.5
 
 ### Weinstein (Stage 2)
 보유 1종목: CNC
@@ -46,20 +46,11 @@
 | CPAY | 2026-08-03T00:00:00 | $385.04 | $349.51 | 0 |
 | AAPL | 2026-09-21T00:00:00 | $335.62 | $309.90 | 0 |
 | TMO | 2026-09-25T00:00:00 | $678.21 | $594.36 | 0 |
-
-## 내일 진입 예정 (Phase 4)
-| 종목 | 예상가 | stop | R |
-|------|--------|------|---|
-| CVX | $230.96 | $213.75 | $17.21 |
+| CVX | 2026-10-28T00:00:00 | $229.11 | $213.75 | 0 |
 
 ## 최근 거래 내역 (최근 20건)
 | 날짜 | 전략 | 종목 | PnL | R | 사유 |
 |------|------|------|-----|---|------|
-| 2026-09-16T00:00:00 | Clenow | NTAP | ✅ $+783 | - | rank_exit |
-| 2026-09-16T00:00:00 | Clenow | PAYX | ❌ $-156 | - | rank_exit |
-| 2026-09-16T00:00:00 | Clenow | HPE | ✅ $+2,611 | - | rank_exit |
-| 2026-09-18T00:00:00 | Phase4 | JBHT | ❌ $-704 | -1.0053 | stop |
-| 2026-09-23T00:00:00 | Clenow | EXPE | ❌ $-800 | - | ma100_exit |
 | 2026-09-23T00:00:00 | Clenow | WTW | ❌ $-255 | - | rank_exit |
 | 2026-09-23T00:00:00 | Clenow | DASH | ❌ $-195 | - | rank_exit |
 | 2026-09-23T00:00:00 | Clenow | BAX | ❌ $-707 | - | rank_exit |
@@ -75,3 +66,8 @@
 | 2026-10-14T00:00:00 | Clenow | BDX | ✅ $+169 | - | rank_exit |
 | 2026-10-14T00:00:00 | Clenow | DELL | ✅ $+7,336 | - | rank_exit |
 | 2026-10-16T00:00:00 | Phase4 | PANW | ❌ $-705 | -1.0074 | stop |
+| 2026-10-28T00:00:00 | Clenow | TMO | ✅ $+807 | - | rank_exit |
+| 2026-10-28T00:00:00 | Clenow | IQV | ✅ $+591 | - | rank_exit |
+| 2026-10-28T00:00:00 | Clenow | HPE | ❌ $-225 | - | rank_exit |
+| 2026-10-28T00:00:00 | Clenow | HPQ | ❌ $-43 | - | rank_exit |
+| 2026-10-28T00:00:00 | Clenow | CRWD | ✅ $+31 | - | rank_exit |
