@@ -42,7 +42,10 @@ def reconcile_fills(kis: KISClient, strategies=STRATEGIES) -> dict:
                     남아 있으면 open 으로 되돌려 재매도 대상(unfilled_sells)으로 반환
     잔고 조회 실패 시 예외를 그대로 올린다 — 빈 잔고를 "전량 체결" 로 오판하면 안 됨.
 
-    반환: {buys_filled, buys_expired, sells_filled, sells_unfilled, skipped, price_fallback}
+    반환: {buys_filled, buys_expired, sells_filled, sells_unfilled, skipped, price_fallback,
+           sell_fills}
+    sell_fills = [(symbol, 매도대금, submitted_at)] — 부분체결 포함. 결제(T+1) 전 대금은
+                 주문가능금액에 안 잡히므로 NAV 기록 시 더해야 한다 (risk_guard.add_unsettled)
     """
     balance = kis.get_balance()
     if balance.get("_failed"):
@@ -53,7 +56,7 @@ def reconcile_fills(kis: KISClient, strategies=STRATEGIES) -> dict:
     pendings = [(s, p) for s, ps in all_pos.items() for p in ps.values()
                 if p.status in ("pending_buy", "pending_sell")]
     result = {"buys_filled": [], "buys_expired": [], "sells_filled": [],
-              "sells_unfilled": [], "skipped": [], "price_fallback": []}
+              "sells_unfilled": [], "skipped": [], "price_fallback": [], "sell_fills": []}
     if not pendings:
         return result
 
@@ -128,6 +131,7 @@ def reconcile_fills(kis: KISClient, strategies=STRATEGIES) -> dict:
                 "pnl_pct": round((exit_price / pos.fill_price - 1) * 100, 2) if pos.fill_price else 0,
                 "order_no": pos.sell_order_no,
             })
+            result["sell_fills"].append((sym, exit_price * sold, pos.submitted_at))
         if held <= 0:
             del positions[sym]
             result["sells_filled"].append(tag)

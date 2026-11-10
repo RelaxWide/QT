@@ -7,9 +7,26 @@ Task Scheduler 가 stdout 캡처 안 하므로 자동 실행 결과 추적용.
 from __future__ import annotations
 
 import logging
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
+
+# 텔레그램 봇 토큰 (예외 메시지·URL 에 섞여 들어와도 파일에는 남기지 않는다)
+_TOKEN_RE = re.compile(r"bot\d{6,}:[A-Za-z0-9_-]{20,}")
+
+
+def redact(text: str) -> str:
+    return _TOKEN_RE.sub("bot<REDACTED>", text)
+
+
+class _RedactFilter(logging.Filter):
+    def filter(self, record):
+        msg = record.getMessage()
+        clean = redact(msg)
+        if clean != msg:
+            record.msg, record.args = clean, None
+        return True
 
 
 def setup_file_logger(task_name: str, log_dir: str = "logs") -> Path:
@@ -37,6 +54,7 @@ def setup_file_logger(task_name: str, log_dir: str = "logs") -> Path:
     fh = logging.FileHandler(log_path, encoding="utf-8")
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+    fh.addFilter(_RedactFilter())
 
     # 루트 로거에 추가 (기존 basicConfig 핸들러는 유지 — tee)
     logging.getLogger().addHandler(fh)
@@ -44,7 +62,8 @@ def setup_file_logger(task_name: str, log_dir: str = "logs") -> Path:
 
     # 시끄러운 서드파티 DEBUG 억제 (yfinance 가 KR 로그를 ~519KB 로 비대화시킴)
     # yfinance/peewee 는 매 fetch 마다 Entering/Exiting/cookie/crumb 수천 줄 출력
-    for noisy in ("yfinance", "peewee"):
+    # urllib3 DEBUG 는 요청 URL 전체를 남겨 텔레그램 봇 토큰·계좌번호가 평문 기록됐다 (2026-11 발견)
+    for noisy in ("yfinance", "peewee", "urllib3"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
     # stdout/stderr 도 파일에 tee
@@ -54,7 +73,7 @@ def setup_file_logger(task_name: str, log_dir: str = "logs") -> Path:
             self.file = file
         def write(self, msg):
             self.stream.write(msg)
-            self.file.write(msg)
+            self.file.write(redact(msg))
             self.file.flush()
         def flush(self):
             self.stream.flush()

@@ -29,8 +29,8 @@ setup_file_logger("daily_close")
 from live_trading.kis_client import KISClient
 from live_trading.orders import OrderManager, PHASE4_LIVE_PENDING, phase4_live_enabled
 from live_trading.account import sync_all, reconcile_fills
-from live_trading.risk_guard import RiskGuard, record_nav
-from live_trading.freshness import expected_us_session, is_stale
+from live_trading.risk_guard import RiskGuard, record_nav, add_unsettled
+from live_trading.freshness import expected_us_session, is_stale, session_after
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 log = logging.getLogger("kis")
@@ -42,11 +42,33 @@ def main(dry_run: bool = False, refresh: bool = False):
     cfg_live = yaml.safe_load(Path("config_live.yaml").read_text(encoding="utf-8"))
     cfg      = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
 
-    # 실계좌 NAV 를 먼저 기록해야 가드가 오늘 기준으로 판단한다
-    nav_error = ""
+    # ── 0. 어제 낸 주문 체결 확정 (신호 생성 전에 보유 상태를 실잔고에 맞춘다) ──
+    # NAV 기록보다 먼저 한다: 체결된 매도 대금을 미결제로 등록해야 매도 다음 날 가짜 낙폭이 안 생긴다.
+    # 미체결 매도는 신호 재발생 여부와 무관하게 아래에서 재매도한다 (전략이 이미 청산 결정함).
+    session = _current_session()
+    recon, recon_error = None, ""
+    retry_sells: dict[str, list[str]] = {"clenow": [], "weinstein": []}
     if not dry_run:
         try:
-            if record_nav("us", KISClient.from_config(allow_prod=True).get_balance()) is None:
+            recon = reconcile_fills(KISClient.from_config(allow_prod=True))
+            for strat, sym in recon["sells_unfilled"]:
+                if strat in retry_sells:
+                    retry_sells[strat].append(sym)
+            log.info(f"[daily_close] reconcile: {recon}")
+            for sym, amount, submitted_at in recon["sell_fills"]:
+                s = session_after(submitted_at) if submitted_at else None
+                add_unsettled("us", str(s.date()) if s is not None else session, amount, sym)
+        except Exception as e:
+            recon_error = str(e)
+            log.error(f"[daily_close] 체결 확정 실패: {e}")
+
+    # 실계좌 NAV 를 먼저 기록해야 가드가 오늘 기준으로 판단한다
+    nav_error, nav_row = "", None
+    if not dry_run:
+        try:
+            nav_row = record_nav("us", KISClient.from_config(allow_prod=True).get_balance(),
+                                 session=session)
+            if nav_row is None:
                 nav_error = "KIS 잔고 조회 실패"
         except Exception as e:
             nav_error = str(e)
@@ -105,21 +127,6 @@ def main(dry_run: bool = False, refresh: bool = False):
                   f"— 신호 판정 중단, 미체결 재매도만 KIS 종가로")
 
     om = OrderManager.from_config(allow_prod=True)
-
-    # ── 1-b. 어제 낸 주문 체결 확정 (신호 생성 전에 보유 상태를 실잔고에 맞춘다) ──
-    # 미체결 매도는 신호 재발생 여부와 무관하게 아래에서 재매도한다 (전략이 이미 청산 결정함).
-    recon, recon_error = None, ""
-    retry_sells: dict[str, list[str]] = {"clenow": [], "weinstein": []}
-    if not dry_run:
-        try:
-            recon = reconcile_fills(KISClient.from_config(allow_prod=True))
-            for strat, sym in recon["sells_unfilled"]:
-                if strat in retry_sells:
-                    retry_sells[strat].append(sym)
-            log.info(f"[daily_close] reconcile: {recon}")
-        except Exception as e:
-            recon_error = str(e)
-            log.error(f"[daily_close] 체결 확정 실패: {e}")
 
     # ── 2. Clenow 신호 ────────────────────────────────────────────────────
     # 보유 기준은 실계좌 포지션 (positions_live_*.json).
@@ -205,7 +212,8 @@ def main(dry_run: bool = False, refresh: bool = False):
         kis = KISClient.from_config(allow_prod=True)
         report = sync_all(kis)
         msg = _build_core_message(report, today, cl_sell_orders, w_sell_orders,
-                                  pending_payload, data_stale, now_kst)
+                                  _pending_view(pending_payload, om), data_stale, now_kst,
+                                  unsettled=(nav_row or {}).get("unsettled", 0))
         msg += _build_recon_message(recon, recon_error)
         msg += "\n" + guard.summary_line()
         if nav_error:
@@ -223,8 +231,36 @@ def main(dry_run: bool = False, refresh: bool = False):
     log.info("[daily_close] 완료")
 
 
+def _current_session() -> str:
+    """방금 마감한 NYSE 세션 날짜. 달력 실패 시 뉴욕 날짜를 평일로 되돌린 근사."""
+    s = expected_us_session()
+    if s is None:
+        s = pd.Timestamp.now(tz="America/New_York").tz_localize(None).normalize()
+        while s.weekday() >= 5:
+            s -= pd.Timedelta(days=1)
+    return str(s.date())
+
+
+def _pending_view(pending: dict, om) -> dict:
+    """매수 후보 → 실제로 주문될 종목. wednesday_morning_buy 와 같은 규칙
+    (기보유 제외, 빈자리 = 한도 − 보유(매도 대기 포함), 순위순으로 빈자리만큼)."""
+    from live_trading.tracker_live import load_live_positions
+    view = {}
+    for k, v in pending.items():
+        syms = v.get("symbols", [])
+        held = set(load_live_positions(k).keys())
+        cands = [s for s in syms if s not in held]
+        slots = max(0, om._strategy_max_positions(k) - len(held))
+        view[k] = {"n_cand": len(syms), "slots": slots, "buy": cands[:slots]}
+    return view
+
+
+def _syms(orders) -> str:
+    return ", ".join(r.symbol + ("" if r.ok else "(실패)") for r in orders) or "-"
+
+
 def _build_core_message(report, today, cl_sells, w_sells, pending,
-                        data_stale=False, now_kst=None) -> str:
+                        data_stale=False, now_kst=None, unsettled=0.0) -> str:
     """daily_close 핵심정보 텔레그램. 종목별 스팸 대신 요약 1건."""
     # 헤더 날짜는 데이터 기준일. 실행일과 다를 수 있어(주말·휴장·정체) 둘 다 표기
     run = f" · 실행 {now_kst:%m/%d %H:%M} KST" if now_kst is not None else ""
@@ -234,21 +270,27 @@ def _build_core_message(report, today, cl_sells, w_sells, pending,
     cash = bal.get("cash_usd", 0.0)
     sum_eval = sum(p.get("eval_amt", 0) for p in bal.get("positions", []))
     pnl = bal.get("total_pnl_usd", 0.0)
-    # cash_usd 는 KIS 주문가능금액(inquire-psamount) — 예수금·미정산 구분값이 아니다
-    L.append(f"잔고: 주문가능 ${cash:,.2f} | 평가 ${sum_eval:,.2f} | 평가손익 ${pnl:+,.2f}")
+    # cash_usd 는 KIS 주문가능금액(inquire-psamount) — 결제 전 매도 대금은 빠져 있다
+    line = f"잔고: 주문가능 ${cash:,.2f} | 평가 ${sum_eval:,.2f} | 평가손익 ${pnl:+,.2f}"
+    if unsettled:
+        line += f" | 결제대기 매도대금 ${unsettled:,.2f}"
+    L.append(line)
 
     n_sells = len(cl_sells) + len(w_sells)
     if data_stale:
-        L.append(f"💸 미체결 재매도 {n_sells}건 (신호 판정 중단)" if n_sells
-                 else "매도: 판정 안 함 (데이터 정체)")
+        L.append(f"💸 미체결 재매도 {n_sells}건 (신호 판정 중단): {_syms(cl_sells + w_sells)}"
+                 if n_sells else "매도: 판정 안 함 (데이터 정체)")
     elif n_sells:
-        L.append(f"💸 매도 {n_sells}건 (Clenow {len(cl_sells)} / Weinstein {len(w_sells)})")
+        L.append(f"💸 매도 주문 {n_sells}건 — Clenow: {_syms(cl_sells)} / Weinstein: {_syms(w_sells)}")
     else:
         L.append("매도: 신호 없음")
 
     if pending:
-        parts = [f"{k} {len(v.get('symbols', []))}종목" for k, v in pending.items()]
-        L.append("🔔 매수대기 (목 00:00 KST 실행): " + ", ".join(parts))
+        parts = []
+        for k, v in pending.items():
+            buy = ", ".join(v["buy"]) if v["buy"] else "매수 없음"
+            parts.append(f"{k.capitalize()} {buy} (후보 {v['n_cand']} 중 빈자리 {v['slots']})")
+        L.append("🔔 매수 예정 (목 00:00 KST): " + " / ".join(parts))
 
     # 전략별 추적 수 — 예전 "KIS N종목 추적" 은 미할당 보유까지 세서 추적 중인 것처럼 보였다
     by = report.get("by_strategy", {})
@@ -296,7 +338,8 @@ def _build_recon_message(recon, error: str) -> str:
         return ""
     L = []
     if recon["buys_filled"] or recon["sells_filled"]:
-        L.append(f"✅ 체결 확정: 매수 {len(recon['buys_filled'])} / 매도 {len(recon['sells_filled'])}")
+        sym = lambda tags: ", ".join(t.split("/", 1)[-1] for t in tags) or "-"
+        L.append(f"✅ 체결 확정: 매수 {sym(recon['buys_filled'])} / 매도 {sym(recon['sells_filled'])}")
     if recon["sells_unfilled"]:
         items = ", ".join(f"{s}({st})" for st, s in recon["sells_unfilled"])
         L.append(f"⚠️ 매도 미체결 → 재매도(-3% LIMIT): {items}")

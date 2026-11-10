@@ -40,7 +40,7 @@ WARN_RATIO = 0.75
 
 log = logging.getLogger("kis")
 
-NAV_FIELDS = ["date", "total", "cash", "flow", "unit_nav"]
+NAV_FIELDS = ["date", "total", "cash", "flow", "unit_nav", "unsettled"]
 
 
 def nav_path(market: str) -> Path:
@@ -49,6 +49,39 @@ def nav_path(market: str) -> Path:
 
 def _flow_path(market: str) -> Path:
     return LIVE_DIR / f"cashflow_pending_{market}.json"
+
+
+def _unsettled_path(market: str) -> Path:
+    return LIVE_DIR / f"unsettled_sells_{market}.json"
+
+
+def add_unsettled(market: str, session: str, amount: float, symbol: str = "") -> None:
+    """
+    체결됐지만 결제 전인 매도 대금 등록 (session = 체결된 NYSE 세션 날짜).
+    cash 는 KIS 주문가능금액이라 결제(T+1) 전 매도 대금이 빠져 있다. 평가액은 매도 즉시
+    빠지므로 이걸 더하지 않으면 매도 다음 날 가짜 낙폭이 생긴다
+    (2026-10-21 DELL $3,199 → 낙폭 -20.01% 오판으로 주간 매수 통째로 건너뜀, 10-26 AMZN -7.87%).
+    """
+    p = _unsettled_path(market)
+    items = json.loads(p.read_text(encoding="utf-8")) if p.exists() else []
+    if any(x["session"] == session and x["symbol"] == symbol for x in items):
+        return   # 같은 날 재실행
+    items.append({"session": session, "symbol": symbol, "amount": round(amount, 2)})
+    LIVE_DIR.mkdir(exist_ok=True)
+    p.write_text(json.dumps(items, indent=2), encoding="utf-8")
+
+
+def _take_unsettled(market: str, session: str | None) -> float:
+    """현재 세션(session)에 체결된 대금만 미결제로 본다. 다음 세션이 지나면 결제됐으니 정리."""
+    p = _unsettled_path(market)
+    if session is None or not p.exists():
+        return 0.0
+    items = [x for x in json.loads(p.read_text(encoding="utf-8")) if x["session"] >= session]
+    if items:
+        p.write_text(json.dumps(items, indent=2), encoding="utf-8")
+    else:
+        p.unlink()
+    return sum(x["amount"] for x in items)
 
 
 def load_nav(market: str) -> list[dict]:
@@ -74,9 +107,11 @@ def add_cashflow(market: str, amount: float) -> float:
     return sum(x["amount"] for x in pending)
 
 
-def record_nav(market: str, balance: dict, today: str | None = None) -> dict | None:
+def record_nav(market: str, balance: dict, today: str | None = None,
+               session: str | None = None) -> dict | None:
     """
     KIS 잔고로 오늘 NAV 기록 (같은 날짜 재실행 시 덮어씀).
+    total = 주문가능금액 + 평가액 + 미결제 매도대금 (session 을 주면 add_unsettled 장부에서)
     unit_nav_t = unit_nav_{t-1} × (total_t − flow_t) / total_{t-1}
     잔고 조회 실패(_failed)면 기록하지 않고 None — 오염된 0 을 남기지 않는다.
     """
@@ -85,7 +120,8 @@ def record_nav(market: str, balance: dict, today: str | None = None) -> dict | N
         return None
     cash_key = "cash_krw" if market == "kr" else "cash_usd"
     cash  = float(balance.get(cash_key, 0) or 0)
-    total = cash + sum(float(p.get("eval_amt", 0) or 0) for p in balance.get("positions", []))
+    unsettled = _take_unsettled(market, session)
+    total = cash + unsettled + sum(float(p.get("eval_amt", 0) or 0) for p in balance.get("positions", []))
     today = today or date.today().isoformat()
 
     rows = [r for r in load_nav(market) if r["date"] != today]
@@ -97,7 +133,7 @@ def record_nav(market: str, balance: dict, today: str | None = None) -> dict | N
     else:
         unit = 1.0
     row = {"date": today, "total": round(total, 2), "cash": round(cash, 2),
-           "flow": round(flow, 2), "unit_nav": round(unit, 6)}
+           "flow": round(flow, 2), "unit_nav": round(unit, 6), "unsettled": round(unsettled, 2)}
     rows.append(row)
 
     LIVE_DIR.mkdir(exist_ok=True)

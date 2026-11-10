@@ -282,8 +282,10 @@ def main(print_only: bool = False):
         chat_id  = cfg_live.get("notify", {}).get("telegram_chat_id", "")
         if token and chat_id:
             from src.notify import telegram
-            telegram.send(msg, token=token, chat_id=chat_id)
-            log.info("[summary] 텔레그램 전송 완료")
+            if telegram.send(msg, token=token, chat_id=chat_id):
+                log.info("[summary] 텔레그램 전송 완료")
+            else:
+                log.error("[summary] 텔레그램 전송 실패 (응답 오류)")
         else:
             log.warning("[summary] telegram_token/chat_id 미설정 - 전송 스킵")
     except Exception as e:

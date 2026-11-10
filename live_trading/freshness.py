@@ -33,6 +33,24 @@ def expected_us_session(now: pd.Timestamp | None = None) -> pd.Timestamp | None:
     return None
 
 
+def session_after(ts) -> pd.Timestamp | None:
+    """ts(naive 면 KST) 이후 처음 마감하는 NYSE 세션 — 그 시각에 낸 주문이 체결되는 세션."""
+    try:
+        import exchange_calendars as xcals
+        cal = xcals.get_calendar("XNYS")
+        ts = pd.Timestamp(ts)
+        if ts.tzinfo is None:
+            ts = ts.tz_localize("Asia/Seoul")
+        ts = ts.tz_convert("UTC")
+        d = pd.Timestamp(ts.tz_convert("America/New_York").date())
+        for s in cal.sessions_in_range(d, d + pd.Timedelta(days=15)):
+            if cal.session_close(s) > ts:
+                return pd.Timestamp(s.date())
+    except Exception as e:
+        log.warning(f"[freshness] 체결 세션 계산 실패 ({ts!r}): {e}")
+    return None
+
+
 def is_stale(data_today: pd.Timestamp, expected: pd.Timestamp | None) -> bool:
     """기대 세션보다 하루라도 뒤면 정체. 달력이 없으면 3영업일 허용 (예전 기준)."""
     if expected is None:
