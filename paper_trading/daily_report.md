@@ -1,30 +1,30 @@
 # QT Paper Trading 일일 리포트
-날짜: 2026-11-07
+날짜: 2026-11-10
 
 ## 전략별 현황
 
 ### Phase 4 (추세추종)
-보유 10종목: AAPL, APH, AVB, CFG, CPAY, CVX, DAL, EBAY, TMO, TRGP
+보유 9종목: AAPL, APH, AVB, CFG, CPAY, DAL, EBAY, TMO, TRGP
 
-누적: 27건 | WR 18.5% | PF 0.49 | PnL $-6,575
-낙폭: 현재 -6.6% | 최대 -6.6%
-스트릭: L 8연속
-최근 10건: W W L L L L L L L L
+누적: 28건 | WR 17.9% | PF 0.46 | PnL $-7,417
+낙폭: 현재 -7.5% | 최대 -7.5%
+스트릭: L 9연속
+최근 10건: W L L L L L L L L L
 
-⚠️ WR 18.5% < 게이트 33%
-⚠️ PF 0.49 < 게이트 1.5
-⚠️ 8연속 손절 중
+⚠️ WR 17.9% < 게이트 33%
+⚠️ PF 0.46 < 게이트 1.5
+⚠️ 9연속 손절 중
 
 ### Clenow (모멘텀)
-보유 20종목: A, ACN, APA, CRL, CRM, CTSH, ILMN, IT, MPC, MRNA, OKTA, P, PLTR, PSX, PTC, RVTY, SWKS, TMO, VEEV, VLO
+보유 18종목: A, ACN, APA, CRL, CRM, CTSH, IT, MPC, MRNA, OKTA, PLTR, PSX, PTC, RVTY, SWKS, TMO, VEEV, VLO
 
-누적: 82건 | WR 41.5% | PF 1.18 | PnL $+4,398
-낙폭: 현재 -1.4% | 최대 -10.0%
-스트릭: W 2연속
-최근 10건: W W W L L W L L W W
+누적: 84건 | WR 40.5% | PF 1.1 | PnL $+2,644
+낙폭: 현재 -3.1% | 최대 -10.0%
+스트릭: L 2연속
+최근 10건: W L L W L L W W L L
 
-⚠️ WR 41.5% < 게이트 55%
-⚠️ PF 1.18 < 게이트 1.5
+⚠️ WR 40.5% < 게이트 55%
+⚠️ PF 1.1 < 게이트 1.5
 
 ### Weinstein (Stage 2)
 보유 1종목: CNC
@@ -46,14 +46,10 @@
 | CPAY | 2026-08-03T00:00:00 | $385.04 | $349.51 | 0 |
 | AAPL | 2026-09-21T00:00:00 | $335.62 | $309.90 | 0 |
 | TMO | 2026-09-25T00:00:00 | $678.21 | $594.36 | 0 |
-| CVX | 2026-10-28T00:00:00 | $229.11 | $213.75 | 0 |
 
 ## 최근 거래 내역 (최근 20건)
 | 날짜 | 전략 | 종목 | PnL | R | 사유 |
 |------|------|------|-----|---|------|
-| 2026-09-23T00:00:00 | Clenow | GPN | ❌ $-149 | - | rank_exit |
-| 2026-09-24T00:00:00 | Phase4 | GEN | ❌ $-705 | -1.0077 | stop |
-| 2026-09-30T00:00:00 | Clenow | TECH | ✅ $+1 | - | rank_exit |
 | 2026-09-30T00:00:00 | Clenow | GPC | ❌ $-421 | - | rank_exit |
 | 2026-09-30T00:00:00 | Clenow | PANW | ✅ $+2,540 | - | rank_exit |
 | 2026-10-01T00:00:00 | Phase4 | BNY | ❌ $-705 | -1.0074 | stop |
@@ -71,3 +67,6 @@
 | 2026-11-03T00:00:00 | Clenow | ZBRA | ❌ $-426 | - | ma100_exit |
 | 2026-11-04T00:00:00 | Clenow | MSFT | ✅ $+241 | - | rank_exit |
 | 2026-11-04T00:00:00 | Clenow | WDAY | ✅ $+19 | - | rank_exit |
+| 2026-11-09T00:00:00 | Phase4 | CVX | ❌ $-842 | -1.2025 | stop_gap |
+| 2026-11-09T00:00:00 | Clenow | P | ❌ $-1,072 | - | ma100_exit |
+| 2026-11-09T00:00:00 | Clenow | ILMN | ❌ $-682 | - | ma100_exit |
