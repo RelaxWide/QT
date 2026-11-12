@@ -332,6 +332,7 @@ Clenow 비중(%)을 0~100%로 5%씩 변화시킨 Sharpe 스윕 분석.
 | 06:30 평일 | `scheduler/daily_close.py` | ① 실계좌 NAV 기록 ② 리스크 가드 판정 ③ 전날 주문 체결 확정(reconcile) ④ Clenow/Weinstein 매도 + 미체결 매도 재주문 ⑤ 수요일 매수 후보 pending 저장 / Phase 4 실계좌 pending (배분 > 0 일 때만) |
 | **목 00:00** | `scheduler/wednesday_morning_buy.py` | **Wed 11 AM ET 매수 실행** (스크립트가 ET 11:00 까지 대기) |
 | 07:00 평일 | `scheduler/summary.py` | 텔레그램 일일 리포트 |
+| 08:30·12:30·18:30·21:00 평일 | `scheduler/catchup.py` | 오늘 장마감 처리가 빠졌으면 git 동기화 → daily_close → summary 따라잡기 (이미 돌았으면 no-op) |
 
 **Clenow / Weinstein 매수 시점 (Wed 11 AM ET 매수 정책)**:
 - KR 수요일 06:30: 화요일 종가 데이터로 매수 후보 계산 → `live_trading/wed_buy_pending.json` 저장

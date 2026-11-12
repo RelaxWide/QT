@@ -88,6 +88,17 @@ Register-QTTask "QT_Summary" "scheduler\summary.py" $t5
 $t6  = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "05:40"
 Register-QTTask "QT_GitSync" "scheduler\git_sync.py" $t6
 
+# 7. 08:30 / 12:30 / 18:30 / 21:00 — 놓친 장마감 처리 따라잡기
+#    오늘 daily_close 기록(NAV)이 없을 때만 git_sync → daily_close → summary 를 돌린다. 이미 돌았으면 바로 종료.
+#    (2026-11-12 새벽 Windows 업데이트 재부팅으로 05:40~07:00 작업이 전부 빠진 뒤 추가)
+$catchTriggers = @(
+    (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "08:30"),
+    (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "12:30"),
+    (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "18:30"),
+    (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "21:00")
+)
+Register-QTTask "QT_CatchUp" "scheduler\catchup.py" $catchTriggers
+
 Write-Host ""
 Write-Host "Registered tasks:"
 Get-ScheduledTask | Where-Object { $_.TaskName -like "QT_*" } |
