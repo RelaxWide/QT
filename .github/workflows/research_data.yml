@@ -1,0 +1,26 @@
+name: Research Data Fetch
+
+# 수동 실행 전용 — 리서치용 장기 가격 데이터를 받아 artifact 로 올린다 (저장소에는 커밋하지 않음)
+on:
+  workflow_dispatch:
+    inputs:
+      tickers:
+        description: "공백으로 구분한 티커"
+        default: "^GSPC ^IRX SPY SSO UPRO"
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -r requirements.txt
+      - run: python scripts/fetch_research_data.py ${{ inputs.tickers }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-data
+          path: research_data/
+          retention-days: 7
