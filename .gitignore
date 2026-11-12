@@ -32,3 +32,4 @@ live_trading/cashflow_pending_*.json
 paper_trading/kw_sv_overdue_alert.json
 logs/
 docs_cache/
+live_trading/daily_close_done.json

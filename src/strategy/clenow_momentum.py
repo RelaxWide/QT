@@ -66,9 +66,16 @@ def size_multiplier(atr_pct: float, params: dict | None = None) -> float:
 
 
 def spy_regime_ok(spy_close: pd.Series, date: pd.Timestamp, ma_period: int = 200) -> bool | None:
-    """SPY 종가 > MA(ma_period) 인가. 데이터가 모자라면 None (호출측이 판단)."""
+    """
+    SPY 종가 > MA(ma_period) 인가. 판정할 수 없으면 None (호출측은 매수를 보류한다):
+      - 데이터가 ma_period 개 미만
+      - **date 세션의 SPY 봉이 없음** — 며칠 전 봉으로 오늘 레짐을 판정하지 않는다
+        (11/9 까지의 데이터로 11/11 을 판정하면 그 사이 급락을 못 본다)
+    """
     s = spy_close.loc[:date].dropna()
     if len(s) < ma_period:
+        return None
+    if pd.Timestamp(s.index[-1]).normalize() != pd.Timestamp(date).normalize():
         return None
     return bool(s.iloc[-1] > s.rolling(ma_period).mean().iloc[-1])
 

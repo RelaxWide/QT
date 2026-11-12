@@ -39,6 +39,9 @@ logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 log = logging.getLogger("kis")
 
 WED_BUY_PENDING = Path("live_trading/wed_buy_pending.json")
+# 끝까지 정상 처리된 실행만 남기는 완료 기록 — catchup.py 가 "오늘 처리됐는가" 를 이걸로 판단한다.
+# NAV 는 실행 초반에 기록되므로 완료 여부의 근거가 못 된다 (이후 단계에서 죽어도 NAV 는 남는다).
+DONE_MARKER = Path("live_trading/daily_close_done.json")
 
 
 def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
@@ -204,6 +207,10 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
             "signal_date": str(today.date()),
             "symbols":     cl_sigs["buy"],
             "size_mult":   cl_sigs.get("size_mult", {}),    # 변동성 역가중 배율
+            # 매수 시점에 업종 한도를 다시 확인하기 위한 정보 (후보 + 현재 보유).
+            # 신호 단계는 "매도가 체결된다" 고 가정하고 업종을 세므로, 미체결이면 한도를 넘길 수 있다.
+            "sectors":        {s: sectors[s] for s in list(cl_sigs["buy"]) + list(cl_pos.keys()) if s in sectors},
+            "max_per_sector": int(om.cap.get("clenow_max_per_sector", 2)),
         }
         log.info(f"[daily_close] Clenow 매수 후보 {len(cl_sigs['buy'])}건 → pending 저장")
 
@@ -289,6 +296,20 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
                    f"캐시/네트워크 점검 필요\n") + msg
         log.info("[daily_close] " + msg.replace("\n", " | "))
         _notify(msg, cfg_live)
+
+    # 완료 기록: 실제 실행(dry-run 아님)이 끝까지 왔고 데이터가 정체되지 않았을 때만.
+    # 데이터 정체로 신호 판정을 건너뛴 실행은 미완료로 남겨 catchup 이 나중에 다시 시도하게 한다.
+    if not dry_run and not data_stale:
+        try:
+            DONE_MARKER.parent.mkdir(exist_ok=True)
+            DONE_MARKER.write_text(json.dumps({
+                "date": now_kst.strftime("%Y-%m-%d"), "data_today": str(today.date()),
+                "finished_at": pd.Timestamp.now(tz="Asia/Seoul").isoformat(),
+            }, indent=2), encoding="utf-8")
+        except Exception as e:
+            log.error(f"[daily_close] 완료 기록 실패: {e}")
+    elif data_stale:
+        log.warning("[daily_close] 데이터 정체 — 완료 기록을 남기지 않음 (catchup 재시도 대상)")
 
     log.info("[daily_close] 완료")
 

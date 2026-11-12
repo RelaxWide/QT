@@ -428,6 +428,8 @@ class OrderManager:
         dry_run: bool = False,
         allow_overflow: bool = True,
         size_mult: dict | None = None,
+        sectors: dict | None = None,
+        max_per_sector: int | None = None,
     ) -> list:
         """
         KIS 현재가를 직접 조회해 LIMIT 매수 주문.
@@ -438,6 +440,10 @@ class OrderManager:
         size_mult: {종목: 슬롯 금액 배율} — 변동성 역가중 (Clenow). 주면 overflow 는 끈다
                   (비싼 종목 1주가 슬롯을 몇 배 넘겨 들어오면 가중이 무의미해진다).
         Clenow 는 전략 예산 대비 남은 여유(예산 − 현재 보유 평가액 − 이번에 낸 주문)도 넘지 않는다.
+        sectors / max_per_sector: 주면 **매수 시점의 실제 보유**로 업종 한도를 다시 확인한다.
+                  신호 단계는 매도 예정 종목을 뺀 채로 업종을 세는데, 그 매도가 미체결이면 실제 보유는
+                  그대로라 한도를 넘는다. 여기서는 KIS 잔고에 남아 있는 종목(매도 접수 중 포함)과
+                  매수 체결 대기분을 전부 세고, 이번에 낸 주문도 더해 가며 확인한다.
         """
         if strategy not in ("clenow", "weinstein", "kw_super_value"):
             raise ValueError(f"strategy must be clenow|weinstein|kw_super_value, got {strategy}")
@@ -497,11 +503,31 @@ class OrderManager:
             log.info(f"[{strategy}] 보유 평가 {self._fmt_price(invested)} / 예산 {self._fmt_price(budget)} "
                      f"→ 여유 {self._fmt_price(room)}")
 
+        # 업종별 현재 보유 수 — 추적 중인 포지션 가운데 KIS 잔고에 실제로 남아 있거나 매수 체결 대기 중인 것
+        sector_count: dict = {}
+        if sectors and max_per_sector:
+            try:
+                tracked = load_live_positions(strategy)
+            except Exception:
+                tracked = {}
+            in_kis = None if bal.get("_failed") else {p["symbol"] for p in bal.get("positions", [])
+                                                      if int(p.get("qty", 0) or 0) > 0}
+            for s, p in tracked.items():
+                still_held = in_kis is None or s in in_kis or p.status == "pending_buy"
+                sec = sectors.get(s)
+                if still_held and sec:
+                    sector_count[sec] = sector_count.get(sec, 0) + 1
+            log.info(f"[{strategy}] 업종별 보유(매수 시점): {sector_count} / 한도 {max_per_sector}")
+
         results = []
         filled = 0
         for sym in candidates:
             if filled >= slots:
                 break
+            sec = (sectors or {}).get(sym)
+            if sec and max_per_sector and sector_count.get(sec, 0) >= max_per_sector:
+                log.info(f"[{strategy}] {sym} 건너뜀 — {sec} 업종 보유 {sector_count[sec]} / 한도 {max_per_sector}")
+                continue
             if room <= 0:
                 log.info(f"[{strategy}] 전략 예산 여유 없음 — 남은 후보 생략")
                 break
@@ -545,6 +571,8 @@ class OrderManager:
             if r.ok:
                 filled += 1
                 room -= price * qty
+                if sec:
+                    sector_count[sec] = sector_count.get(sec, 0) + 1
             if r.ok and not r.dry_run:
                 remaining_cash -= price * qty
             if not dry_run:

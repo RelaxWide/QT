@@ -232,10 +232,16 @@ def main():
     # 그대로 돌리면 순위·청산이 일부 종목만으로 계산된다.
     last_nav = _last_nav_date()
     pending  = _pending_days(price_data, last_nav)
-    days     = [d for d, cov in pending if cov >= MIN_TODAY_COVERAGE]
+    # 날짜순으로 처리하다가 **첫 미충족 날짜에서 멈춘다.** 건너뛰고 뒷날을 처리하면 NAV 마지막 날짜가
+    # 넘어가 버려 그날은 다시는 처리 대상이 되지 않는다 (11/10 80%·11/11 100% 로 재현).
+    # 미충족 상태가 오래가면 아래 STALE_ALERT_BDAYS 경고로 드러난다.
+    days = []
     for d, cov in pending:
         if cov < MIN_TODAY_COVERAGE:
-            print(f"  {d.date()} 봉이 {cov:.0%} 종목에만 있음 (기준 {MIN_TODAY_COVERAGE:.0%}) — 다음 실행으로 미룸")
+            print(f"  {d.date()} 봉이 {cov:.0%} 종목에만 있음 (기준 {MIN_TODAY_COVERAGE:.0%}) — "
+                  f"여기서 멈춤 (이후 날짜도 다음 실행으로 미룸)")
+            break
+        days.append(d)
     if not days:
         print(f"  처리할 새 봉 없음 (NAV 마지막 {last_nav.date() if last_nav is not None else '-'}) — 종료")
         if last_nav is not None:
@@ -248,7 +254,8 @@ def main():
 
     # 레짐(SPY > MA200)·업종 정보 — 못 받으면 매수는 보류/업종 제한 없이 진행
     try:
-        spy_close = fetch_prices("SPY", "2015-01-01", None, refresh=args.refresh)["close"]
+        # 항상 새로 받는다 — 캐시(30영업일 유효)의 낡은 SPY 로 레짐을 판정하지 않도록
+        spy_close = fetch_prices("SPY", "2015-01-01", None, refresh=True)["close"]
     except Exception as e:
         print(f"  SPY 가격 조회 실패 — 이번 실행은 신규 매수 보류: {e}")
         spy_close = pd.Series(dtype=float)

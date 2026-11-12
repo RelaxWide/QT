@@ -89,7 +89,9 @@ def main(dry_run: bool = False, no_wait: bool = False):
         symbols     = section["symbols"]
         log.info(f"[wed_buy] {strategy} 매수 시작 - {len(symbols)} 종목 (signal_date={signal_date})")
         orders = om.place_buys_at_kis_price(strategy, symbols, signal_date, dry_run=dry_run,
-                                            size_mult=section.get("size_mult") or None)
+                                            size_mult=section.get("size_mult") or None,
+                                            sectors=section.get("sectors") or None,
+                                            max_per_sector=section.get("max_per_sector"))
         total_orders.extend(orders)
         log.info(f"[wed_buy] {strategy} 매수 주문 {len(orders)}건")
 
