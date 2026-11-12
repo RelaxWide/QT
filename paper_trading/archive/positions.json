@@ -1,0 +1,164 @@
+{
+  "EBAY": {
+    "symbol": "EBAY",
+    "entry_date": "2026-05-18T00:00:00",
+    "entry_price": 115.72561061096191,
+    "stop_initial": 96.27999877929688,
+    "stop_current": 96.27999877929688,
+    "targets": [
+      174.062446105957
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 35.99783879569822,
+    "shares_remaining": 35.99783879569822,
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-11-10"
+  },
+  "TRGP": {
+    "symbol": "TRGP",
+    "entry_date": "2026-05-20T00:00:00",
+    "entry_price": 275.5352697753906,
+    "stop_initial": 241.86000061035156,
+    "stop_current": 241.86000061035156,
+    "targets": [
+      376.56107727050767
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 20.78676777813926,
+    "shares_remaining": 20.78676777813926,
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-11-10"
+  },
+  "DAL": {
+    "symbol": "DAL",
+    "entry_date": "2026-05-27T00:00:00",
+    "entry_price": 80.83075,
+    "stop_initial": 67.76000213623047,
+    "stop_current": 67.76000213623047,
+    "targets": [
+      120.04299359130857
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 53.554701482714094,
+    "shares_remaining": 53.554701482714094,
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-11-10"
+  },
+  "APH": {
+    "symbol": "APH",
+    "entry_date": "2026-06-16T00:00:00",
+    "entry_price": 79.37429316711425,
+    "stop_initial": 69.0999984741211,
+    "stop_current": 69.0999984741211,
+    "targets": [
+      110.1971772460937
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 68.13119741225496,
+    "shares_remaining": 68.13119741225496,
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-11-10"
+  },
+  "CFG": {
+    "symbol": "CFG",
+    "entry_date": "2026-06-18T00:00:00",
+    "entry_price": 67.21715152740478,
+    "stop_initial": 60.560001373291016,
+    "stop_current": 60.560001373291016,
+    "targets": [
+      87.18860198974608
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 105.15009933604053,
+    "shares_remaining": 105.15009933604053,
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-11-10"
+  },
+  "AVB": {
+    "symbol": "AVB",
+    "entry_date": "2026-07-08T00:00:00",
+    "entry_price": 194.58438938903805,
+    "stop_initial": 174.50256160647254,
+    "stop_current": 174.50256160647254,
+    "targets": [
+      254.82987273673461
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 34.85738487448441,
+    "shares_remaining": 34.85738487448441,
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-11-10"
+  },
+  "CPAY": {
+    "symbol": "CPAY",
+    "entry_date": "2026-08-03T00:00:00",
+    "entry_price": 385.04466366577145,
+    "stop_initial": 349.510009765625,
+    "stop_current": 349.510009765625,
+    "targets": [
+      491.6486253662108
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 19.699080282786007,
+    "shares_remaining": 19.699080282786007,
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-11-10"
+  },
+  "AAPL": {
+    "symbol": "AAPL",
+    "entry_date": "2026-09-21T00:00:00",
+    "entry_price": 335.6152787780761,
+    "stop_initial": 309.8999938964844,
+    "stop_current": 309.8999938964844,
+    "targets": [
+      412.76113342285134
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 27.22116450287098,
+    "shares_remaining": 27.22116450287098,
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-11-10"
+  },
+  "TMO": {
+    "symbol": "TMO",
+    "entry_date": "2026-09-25T00:00:00",
+    "entry_price": 678.2075593261718,
+    "stop_initial": 594.3644351329852,
+    "stop_current": 594.3644351329852,
+    "targets": [
+      929.7369319057315
+    ],
+    "partial_weights": [
+      0.5
+    ],
+    "targets_hit": 0,
+    "shares_total": 8.3489255289092,
+    "shares_remaining": 8.3489255289092,
+    "realized_pnl": 0.0,
+    "split_adjusted_through": "2026-11-10"
+  }
+}

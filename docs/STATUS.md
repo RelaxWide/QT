@@ -17,7 +17,7 @@
 - US 보유 8종목: Clenow CRL·VEEV·MRNA·MPC / Weinstein ALLE·DHR·HCA·EFX (**청산 대상** — 다음 daily_close 가 전량 매도 주문)
 - 체결 대기: Clenow **ACN 7주 @252.55** (11/12 01:00 KST 접수 → 11/13 06:30 daily_close 에서 확정)
 - 10/19 이후 실현 3건: DELL +87.3% (+$1,491) / AMZN -6.8% (-$92) / P -33.2% (-$601, 11/6 급락 후 MA100 이탈 청산)
-- 페이퍼 Clenow(11/9): $106,191 (84건, 승률 40.5%, PF 1.10). 종료 전략 최종값: Weinstein $101,345 / Phase 4 $95,397
+- 페이퍼 Clenow(11/10): $105,443. 종료 전략 최종값: Weinstein $101,552 / Phase 4 $95,534
 - 텔레그램: 봇 `@rw_qt_bot`. 토큰·chat_id 는 로컬 `config_live.yaml` + GitHub Secrets.
   **봇을 다시 만들거나 Revoke 하지 말 것** — 토큰이 바뀌면 두 곳 모두 다시 바꿔야 함.
 
