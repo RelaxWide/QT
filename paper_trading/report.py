@@ -102,77 +102,32 @@ def strategy_block(name: str, m: dict, cur_dd: float, max_dd: float,
 
 
 def generate_report() -> str:
+    """Clenow 단일 (2026-11-12 Phase 4 · Weinstein 페이퍼 종료 — 기록은 paper_trading/archive/)."""
     base = Path("paper_trading")
 
-    p4_trades = load_trades(base / "trades.csv")
     cl_trades = load_trades(base / "trades_clenow.csv")
-    w_trades  = load_trades(base / "trades_weinstein.csv")
-    p4_pos    = load_json(base / "positions.json", {})
     cl_pos    = load_json(base / "positions_clenow.json", {})
-    w_pos     = load_json(base / "positions_weinstein.json", {})
-    pending   = load_json(base / "pending.json", [])
-
-    p4_m = compute_metrics(p4_trades)
-    cl_m = compute_metrics(cl_trades)
-    w_m  = compute_metrics(w_trades)
-
-    p4_cur_dd, p4_max_dd = compute_drawdown(p4_trades)
+    cl_m      = compute_metrics(cl_trades)
     cl_cur_dd, cl_max_dd = compute_drawdown(cl_trades)
-    w_cur_dd,  w_max_dd  = compute_drawdown(w_trades)
 
     L = []
-
-    L.append(f"# QT Paper Trading 일일 리포트")
+    L.append("# QT Paper Trading 일일 리포트")
     L.append(f"날짜: {date.today().isoformat()}")
     L.append("")
-
-    # ── 전략별 현황 ──────────────────────────────────────────────────
-    L.append("## 전략별 현황")
-    L.append("")
-    L.extend(strategy_block("Phase 4 (추세추종)", p4_m, p4_cur_dd, p4_max_dd, p4_pos, 0.33, 1.5))
+    L.append("## 전략 현황")
     L.append("")
     L.extend(strategy_block("Clenow (모멘텀)", cl_m, cl_cur_dd, cl_max_dd, cl_pos, 0.55, 1.5))
     L.append("")
-    L.extend(strategy_block("Weinstein (Stage 2)", w_m, w_cur_dd, w_max_dd, w_pos, 0.31, 1.5))
-    L.append("")
 
-    # ── Phase 4 보유 포지션 상세 ──────────────────────────────────────
-    if p4_pos:
-        L.append("## Phase 4 보유 포지션 상세")
-        L.append("| 종목 | 진입일 | 진입가 | stop | targets_hit |")
-        L.append("|------|--------|--------|------|-------------|")
-        for sym, pos in p4_pos.items():
-            L.append(f"| {sym} | {pos['entry_date']} | ${pos['entry_price']:.2f} | ${pos['stop_current']:.2f} | {pos['targets_hit']} |")
-        L.append("")
-
-    # ── 내일 진입 예정 ────────────────────────────────────────────────
-    if pending:
-        L.append("## 내일 진입 예정 (Phase 4)")
-        L.append("| 종목 | 예상가 | stop | R |")
-        L.append("|------|--------|------|---|")
-        for p in pending:
-            L.append(f"| {p['symbol']} | ${p['entry_price_est']:.2f} | ${p['stop']:.2f} | ${p['r']:.2f} |")
-        L.append("")
-
-    # ── 최근 거래 내역 (전 전략 합산, 최근 20건) ─────────────────────
     L.append("## 최근 거래 내역 (최근 20건)")
-    all_recent = (
-        [("Phase4", t) for t in p4_trades] +
-        [("Clenow", t) for t in cl_trades] +
-        [("Weinstein", t) for t in w_trades]
-    )
-    all_recent.sort(key=lambda x: x[1].get("date", ""))
-    all_recent = all_recent[-20:]
-
-    if all_recent:
-        L.append("| 날짜 | 전략 | 종목 | PnL | R | 사유 |")
-        L.append("|------|------|------|-----|---|------|")
-        for strategy, t in all_recent:
-            pnl    = float(t["pnl"])
-            icon   = "✅" if pnl > 0 else "❌"
-            r_str  = t.get("r_multiple", "-")
-            reason = t.get("exit_reason") or t.get("reason", "")
-            L.append(f"| {t['date']} | {strategy} | {t['symbol']} | {icon} ${pnl:+,.0f} | {r_str} | {reason} |")
+    recent = cl_trades[-20:]
+    if recent:
+        L.append("| 날짜 | 종목 | PnL | 사유 |")
+        L.append("|------|------|-----|------|")
+        for t in recent:
+            pnl  = float(t["pnl"])
+            icon = "✅" if pnl > 0 else "❌"
+            L.append(f"| {t['date']} | {t['symbol']} | {icon} ${pnl:+,.0f} | {t.get('reason', '')} |")
     else:
         L.append("거래 없음")
 

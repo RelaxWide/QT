@@ -319,10 +319,8 @@ class OrderManager:
         results = []
         max_pos   = self._strategy_max_positions("clenow")
         total_usd = self._strategy_budget("clenow")
-        if total_usd <= 0:
-            log.info(f"[clenow] 예산 ${total_usd:.2f} - 실거래 자본 배분 없음")
-            return []
-        budget_per_pos = total_usd / max_pos
+        # 예산 0 이어도 매도는 처리한다 (전략 종료 청산 — 예전엔 여기서 return 해 보유분이 방치됐다)
+        budget_per_pos = total_usd / max_pos if total_usd > 0 else 0.0
         log.info(f"[clenow] 예산 ${total_usd:.2f} / {max_pos}종목 = ${budget_per_pos:.2f}/종목")
 
         today_str = str(today.date())
@@ -344,6 +342,9 @@ class OrderManager:
                 time.sleep(0.5)
 
         # 매수
+        if total_usd <= 0:
+            log.info("[clenow] 실거래 자본 배분 없음 — 매수 생략")
+            return results
         buy_candidates = signals.get("buy", [])
         for sym in buy_candidates[:max_pos]:
             df = price_data.get(sym)
@@ -373,10 +374,8 @@ class OrderManager:
         results = []
         max_pos   = self._strategy_max_positions("weinstein")
         total_usd = self._strategy_budget("weinstein")
-        if total_usd <= 0:
-            log.info(f"[weinstein] 예산 ${total_usd:.2f} - 실거래 자본 배분 없음")
-            return []
-        budget_per_pos = total_usd / max_pos
+        # 예산 0 이어도 매도는 처리한다 (전략 종료 청산 — 예전엔 여기서 return 해 보유분이 방치됐다)
+        budget_per_pos = total_usd / max_pos if total_usd > 0 else 0.0
         log.info(f"[weinstein] 예산 ${total_usd:.2f} / {max_pos}종목 = ${budget_per_pos:.2f}/종목")
 
         today_str = str(today.date())
@@ -398,6 +397,9 @@ class OrderManager:
                 time.sleep(0.5)
 
         # 매수
+        if total_usd <= 0:
+            log.info("[weinstein] 실거래 자본 배분 없음 — 매수 생략")
+            return results
         for sym in signals.get("buy", [])[:max_pos]:
             df = price_data.get(sym)
             if df is None or today not in df.index:

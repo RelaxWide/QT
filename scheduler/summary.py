@@ -206,6 +206,8 @@ def build_summary() -> str:
         if cap_usd > 0:
             mode_tag = " (auto)" if auto else ""
             line(f"배분{mode_tag}: ${cap_usd:.2f} / {max_pos}종목 = ${cap_usd/max(max_pos,1):.2f}/종목")
+        elif strat in (cap.get("liquidate_strategies") or []):
+            line("배분 없음 — 전략 종료, 보유분 청산 중")
         else:
             line("배분: 페이퍼 전용 (실전 자본 0)")
 

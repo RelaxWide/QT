@@ -33,6 +33,7 @@ from live_trading.account import sync_all, reconcile_fills
 from live_trading.risk_guard import (RiskGuard, record_nav, add_unsettled,
                                      load_spy_closes, update_benchmark, benchmark_line)
 from live_trading.freshness import expected_us_session, is_stale, session_after
+from live_trading.tracker_live import load_live_positions
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 log = logging.getLogger("kis")
@@ -139,16 +140,27 @@ def main(dry_run: bool = False, refresh: bool = False):
 
     om = OrderManager.from_config(allow_prod=True)
 
+    # 종료된 전략 (config_live capital.liquidate_strategies) — 신호와 무관하게 보유분 전량 매도, 매수 없음.
+    # 명시적 목록으로만 판단한다 (배분 0 을 기준으로 하면 잔고 조회 실패가 전량 청산으로 이어질 수 있다)
+    liquidate = set(om.cap.get("liquidate_strategies") or [])
+    liq_syms: dict[str, list[str]] = {}
+    for strat in liquidate:
+        liq_syms[strat] = [s for s, p in load_live_positions(strat).items() if p.status == "open"]
+    if liquidate:
+        log.info(f"[daily_close] 전략 종료 청산 대상: {liq_syms}")
+
     # ── 2. Clenow 신호 ────────────────────────────────────────────────────
     # 보유 기준은 실계좌 포지션 (positions_live_*.json).
     # 페이퍼 positions_clenow.json 은 GHA(run_daily.py)가 관리하는 가상 포트폴리오라
     # 실계좌와 다르다 — 이걸 쓰면 미보유 종목 매도/보유 종목 방치가 발생 (2026-07-02 사고).
     from paper_trading.live_signals import get_clenow_signals
-    from live_trading.tracker_live import load_live_positions
     # 데이터 정체면 낡은 종가로 신호도 매도 지정가도 만들지 않는다.
     # 이미 청산이 결정된 미체결 재매도만 KIS 시세(장 마감 후 = 종가)로 낸다.
     if data_stale:
-        sell_px = _kis_close_frames(om.kis, retry_sells["clenow"] + retry_sells["weinstein"], today)
+        sell_px = _kis_close_frames(
+            om.kis,
+            retry_sells["clenow"] + retry_sells["weinstein"] + [s for v in liq_syms.values() for s in v],
+            today)
         cl_sigs = {"sell_ma100": [], "sell_ranked": [], "buy": []}
     else:
         sell_px = price_data
@@ -159,7 +171,7 @@ def main(dry_run: bool = False, refresh: bool = False):
     cl_ma100  = cl_sigs.get("sell_ma100", [])
     cl_ranked = cl_sigs.get("sell_ranked", [])
     cl_sell_only = {
-        "sell_ma100":  cl_ma100 + [s for s in retry_sells["clenow"]
+        "sell_ma100":  cl_ma100 + [s for s in retry_sells["clenow"] + liq_syms.get("clenow", [])
                                    if s not in cl_ma100 and s not in cl_ranked],
         "sell_ranked": cl_ranked,
         "buy":         [],
@@ -169,7 +181,7 @@ def main(dry_run: bool = False, refresh: bool = False):
 
     # 매수 후보는 pending 저장 (수요일 + allow_new 인 경우만)
     pending_payload = {}
-    if is_wed and allow_new and cl_sigs.get("buy"):
+    if is_wed and allow_new and cl_sigs.get("buy") and "clenow" not in liquidate:
         pending_payload["clenow"] = {
             "signal_date": str(today.date()),
             "symbols":     cl_sigs["buy"],
@@ -178,7 +190,7 @@ def main(dry_run: bool = False, refresh: bool = False):
 
     # ── 3. Weinstein 신호 ────────────────────────────────────────────────
     from paper_trading.live_signals import get_weinstein_signals
-    if data_stale:
+    if data_stale or "weinstein" in liquidate:
         w_sigs = {"sell_ma30": [], "buy": []}
     else:
         w_pos  = load_live_positions("weinstein")
@@ -186,7 +198,7 @@ def main(dry_run: bool = False, refresh: bool = False):
 
     w_ma30 = w_sigs.get("sell_ma30", [])
     w_sell_only = {
-        "sell_ma30": w_ma30 + [s for s in retry_sells["weinstein"] if s not in w_ma30],
+        "sell_ma30": list(dict.fromkeys(w_ma30 + retry_sells["weinstein"] + liq_syms.get("weinstein", []))),
         "buy":       [],
     }
     w_sell_orders = om.place_weinstein_orders(w_sell_only, sell_px, today, dry_run)
@@ -226,6 +238,10 @@ def main(dry_run: bool = False, refresh: bool = False):
                                   _pending_view(pending_payload, om), data_stale, now_kst,
                                   unsettled=(nav_row or {}).get("unsettled", 0))
         msg += _build_recon_message(recon, recon_error)
+        for strat in sorted(liquidate):
+            left = sorted(load_live_positions(strat).keys())
+            msg += (f"\n🧹 <b>{strat.capitalize()} 전략 종료 청산</b>: "
+                    + (f"잔여 {', '.join(left)} (매도 주문 중)" if left else "완료 — 보유 없음"))
         msg += "\n" + guard.summary_line()
         bench = benchmark_line("us")
         if bench:

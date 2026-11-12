@@ -47,7 +47,8 @@ us:
     auto_allocate: true
     buffer_pct:      1.0
     clenow_pct:     60
-    weinstein_pct:  40
+    weinstein_pct:   0           # 2026-11-12 Weinstein 실계좌 종료 (40% 는 새 배분 결정 전까지 현금)
+    # liquidate_strategies: [weinstein]   # 종료 전략 보유분 전량 매도 (daily_close). 청산 끝나면 삭제
     phase4_pct:      0
     clenow_max_positions:    5
     weinstein_max_positions: 4
@@ -80,7 +81,8 @@ capital:
   auto_allocate: true
   buffer_pct:      1.0
   clenow_pct:     60
-  weinstein_pct:  40
+  weinstein_pct:   0           # 2026-11-12 Weinstein 실계좌 종료 (40% 는 새 배분 결정 전까지 현금)
+  # liquidate_strategies: [weinstein]   # 종료 전략 보유분 전량 매도 (daily_close). 청산 끝나면 삭제
   phase4_pct:      0
   clenow_max_positions:    5
   weinstein_max_positions: 4

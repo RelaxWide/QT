@@ -10,8 +10,9 @@
 
 | 트랙 | 전략 | 상태 |
 |---|---|---|
-| US 실계좌 (한국투자증권 API) | Clenow 모멘텀 60% (최대 5종목) + Weinstein Stage 2 40% (최대 4종목) | ✅ 운영 중 |
-| US 페이퍼 (GitHub Actions) | 위 두 전략 + Phase 4 (Donchian + 일목 + SPY RS) | 운영 중, Phase 4 는 게이트 미달로 페이퍼 전용 |
+| US 실계좌 (한국투자증권 API) | Clenow 모멘텀 60% (최대 5종목) + 현금 40% (SPY:Clenow 비율 결정 대기) | ✅ 운영 중 |
+| US 페이퍼 (GitHub Actions) | Clenow | 운영 중 |
+| Weinstein Stage 2 · Phase 4 | — | ❌ 2026-11-12 종료 |
 | KR 실계좌 | — | ⏸️ 2026-10-19 중단 (KW Super Value 전량 청산) |
 
 - 판정 기준: 2026-10-19 이후 6개월 또는 50거래 시점에 **SPY 보유 대비 위험조정 수익**.
