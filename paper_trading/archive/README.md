@@ -9,4 +9,4 @@ Phase 4 와 Weinstein 페이퍼 트레이딩을 2026-11-12 에 종료했다. 종
 | `daily_nav_3strategy.csv` | 3전략 NAV 전체 이력 (2026-05-01 ~ 2026-11-10). 마지막 값: Phase 4 $95,534 / Weinstein $101,552 / Clenow $105,443 |
 
 폐기 사유는 `docs/REJECTED_STRATEGIES.md` 7-H, 7-I. Clenow 페이퍼는 `paper_trading/daily_nav.csv` 에서 계속된다.
-`paper_trading/` 의 `positions.json` · `pending.json` · `positions_weinstein.json` 은 비워 둔 채 남아 있다 (워크플로가 경로를 참조).
+원래 경로(`paper_trading/positions.json` 등)의 파일은 삭제했다.

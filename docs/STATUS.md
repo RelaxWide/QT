@@ -54,8 +54,20 @@
 - **청산이 끝나면** `config_live.yaml` 의 `liquidate_strategies` 줄 삭제.
 - **페이퍼**: `run_daily.py` · `report.py` 를 Clenow 단일로 축소. `daily_nav.csv` 는 Clenow 열만 남김.
   종료 시점의 Phase 4 · Weinstein 상태·거래·NAV 이력은 `paper_trading/archive/` 에 보존.
-  `positions.json` · `pending.json` · `positions_weinstein.json` 은 비운 채로 남겨 둠 (`daily.yml` 이 아직 경로를 참조).
-- Phase 4 실계좌용 스케줄(`morning_entry` 22:29, `exit_check` 23~04시)은 배분 0 이라 원래 no-op. 지워도 됨.
+  원래 경로의 Phase 4 · Weinstein 상태·거래 파일은 삭제했다.
+- Phase 4 실계좌 경로 삭제: `scheduler/morning_entry.py` · `exit_check.py` · `windows_tasks.xml`, daily_close 의 Phase 4 pending 생성.
+  **`.\scheduler\register_tasks.ps1` 를 한 번 다시 실행**하면 남아 있는 `QT_MorningEntry` · `QT_ExitCheck` 작업이 지워진다.
+
+### 페이퍼 날짜 누락 수정
+- `run_daily.py` 가 최신 봉 하나가 아니라 **마지막 NAV 이후 밀린 거래일을 날짜순으로 전부** 처리한다.
+  봉이 90% 미만 종목에만 온 날은 건드리지 않고 다음 실행으로 미룬다 (텔레그램 경고는 NAV 가 3영업일 이상 밀렸을 때만).
+- `daily.yml` 에 재실행 일정(03:30 UTC)과 동시 실행 방지를 추가. 하루 두 번 돌아도 같은 날을 두 번 처리하지 않는다.
+- 이미 빠진 11/5 · 11/6 은 소급하지 않았다 (NAV 가 11/10 까지 기록돼 있어 그 이후만 따라잡는다).
+
+### 텔레그램에서 뺀 것
+- 07:00 요약: 전략별 "배분 $… / N종목" 줄, 슬리피지 누적 줄, 낙폭 줄(06:30 메시지와 중복), Phase 4 섹션. Weinstein 섹션은 청산이 끝나면 자동으로 사라진다.
+- 06:30 장마감: 청산 완료 후의 "완료 — 보유 없음" 줄 (잔여가 있을 때만 표시).
+- 페이퍼: Phase 4 · Weinstein 섹션, 합성 60:40, 레짐 줄. 날짜가 덜 온 날의 "실행 건너뜀" 경고.
 
 ### SPY 벤치마크 (`live_trading/risk_guard.py`, `scheduler/daily_close.py`, `scheduler/summary.py`)
 - `nav_live_us.csv` 에 `spy` 열 추가. 각 행에 "그 기록이 반영한 세션"의 SPY 수정종가(배당 포함)를 붙인다.
@@ -71,7 +83,7 @@
 - 10/21 (DELL 매도대금 $3,199.00 결제 전) · 10/26 (AMZN $1,254.45) 두 행이 미결제 대금 누락으로 낮게 기록돼 있었다.
   코드는 11/10 에 고쳤지만 과거 행은 남아 있어 MDD 가 -20% 로 계산될 상태였음.
 - 두 행의 total 에 매도대금을 더하고 unit_nav 재계산: 10/21 0.7999 → **1.0061**, 10/26 0.9286 → **1.0095**.
-  다른 행은 체인이 그대로 맞는 것을 확인 (오차 < 0.00002). 원본은 `nav_live_us_bak_20261112.csv`.
+  다른 행은 체인이 그대로 맞는 것을 확인 (오차 < 0.00002).
 
 ### 텔레그램 메시지
 | 메시지 | 수정 |
@@ -117,11 +129,10 @@
 | 2 | **SPY:Clenow 비율 스윕 + Clenow 종목 수(5·8·10·20) 백테스트** | 다음 | 결과로 실계좌 비율·종목 수 결정. 그때까지 40% 는 현금. SPY 편입 방식(직접 보유 주문 경로)도 이때 구현 |
 | 3 | 새 전략 통과 기준 문서화 | 2번 뒤 | SPY+Clenow 조합에 넣었을 때 Sharpe/MDD 개선, Clenow 와 낮은 상관, 비용·세금 차감 후, 컷오프·워크포워드·생존편향 |
 | 4 | 후보 탐색 (분기당 2개까지) | 3번 뒤 | 팩터 포트폴리오(가치·퀄리티·저변동), 실적 발표 후 드리프트, Clenow 중소형주 적용 등. 백테스트 게이트 → 페이퍼 → 5% 파일럿 → 편입 |
-| 5 | **페이퍼가 날짜를 건너뛰는 문제** | 중간 | GHA 실행 시각에 yfinance 당일 봉이 아직 없으면 그날은 건너뛰고 다시 처리하지 않는다 (11/5·6·10·11 누락, 11/7 로그 "11/06 봉이 1% 종목에만"). 몇 시간 뒤 한 번 더 도는 cron 추가가 간단한 해법 (`daily.yml` 수정 필요) |
-| 5-1 | PC 절전으로 스케줄 누락 | 중간 | 11/12 처럼 06:30 실행이 빠지면 매도가 하루 밀린다. 작업 스케줄러 "예약 시간을 놓친 경우 가능한 빨리 실행" 또는 절전 해제 설정 검토 |
+| 5 | **11/12 스케줄 누락 원인 확인** | 중간 | 작업에는 이미 "놓치면 가능한 빨리 실행"·"절전 해제" 가 설정돼 있는데도 05:40·06:30 실행 기록이 없다 (03:00 까지는 정상). PowerShell `Get-ScheduledTask QT_* \| Get-ScheduledTaskInfo` 로 LastRunTime·LastTaskResult 확인 |
 | 5-2 | 판정 시점까지 규칙대로 운영 | 계속 | 입출금 시 반드시 `python -m live_trading.risk_guard --cashflow 금액 --market us` |
 | 6 | 최소 회귀 테스트 | 중간 | `tests/` 가 비어 있음. NAV·미결제·벤치마크·reconcile 처럼 돈이 걸린 계산부터 |
-| 7 | 저장소 정리 | 낮음 | `.codex-review/`·`output/` (QT 와 무관한 슬라이드 작업물, 미추적), 방치된 `fix/full-system-hardening` 워크트리, `nav_live_us_bak_20261112.csv` (확인 후 삭제) |
+| 7 | 저장소 정리 | 낮음 | `.codex-review/`·`output/` (NVMe-MI 세미나 자료 — QT 와 무관, 미추적. 영구 삭제라 손대지 않음), `fix/full-system-hardening` 워크트리(`..\QT-hardening`, master 에 전부 병합됨 → `git worktree remove ..\QT-hardening` 후 `git branch -d`) |
 | 8 | `kw_sv_morning_sell.py` dry-run 도 텔레그램 발송 | KR 재개 시 | KR 중단 중이라 보류 |
 | 9 | KR 매도 "접수=삭제" 버그 | KR 재개 시 필수 | `orders._update_live_positions` KR 분기. US reconcile 구조 이식 |
 

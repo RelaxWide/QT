@@ -322,8 +322,6 @@ Clenow 비중(%)을 0~100%로 5%씩 변화시킨 Sharpe 스윕 분석.
 
 | 시각 | 스크립트 | 역할 |
 |---|---|---|
-| 22:29 평일 | `scheduler/morning_entry.py` | Phase 4 실계좌 pending → MOO 주문 (배분 0 이면 no-op) |
-| 23:00~04:00 매시 | `scheduler/exit_check.py` | 손절·트레일 체크 (배분 0 이면 no-op) |
 | 05:40 평일 | `scheduler/git_sync.py` | GHA 페이퍼 커밋 `pull --ff-only`, **실패 시 텔레그램** |
 | 06:30 평일 | `scheduler/daily_close.py` | ① 실계좌 NAV 기록 ② 리스크 가드 판정 ③ 전날 주문 체결 확정(reconcile) ④ Clenow/Weinstein 매도 + 미체결 매도 재주문 ⑤ 수요일 매수 후보 pending 저장 / Phase 4 실계좌 pending (배분 > 0 일 때만) |
 | **목 00:00** | `scheduler/wednesday_morning_buy.py` | **Wed 11 AM ET 매수 실행** (스크립트가 ET 11:00 까지 대기) |
@@ -1163,8 +1161,6 @@ KR 트랙은 미국과 시간 충돌 없음 — 단일 PC 에서 두 시장 모�
 | 09:00 수 | wednesday_morning_buy_kr (KR 매수 실행) | KR |
 | 16:00 평일 | daily_close_kr (KR 매도 + pending) | KR |
 | 16:30 평일 | summary_kr (KR 텔레그램 요약) | KR |
-| 22:29 평일 | morning_entry (US Phase 4 진입) | US |
-| 23:00~04:00 평일 매시 | exit_check (US 손절) | US |
 | 00:00 목 | wednesday_morning_buy (US Wed 11 AM ET 매수) | US |
 | 06:30 평일 | daily_close (US 매도 + pending) | US |
 | 07:00 평일 | summary (US 텔레그램 요약) | US |

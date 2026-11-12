@@ -4,6 +4,10 @@ Paper Trading 일일 실행 스크립트 (Clenow 단일)
 
   [Clenow] 매일: MA100 이탈 청산 / 수요일: 스코어 리밸런싱
 
+마지막 NAV 이후 아직 처리 안 한 거래일을 날짜순으로 전부 처리한다 (하루 여러 번 실행해도 안전).
+예전엔 최신 봉 하나만 처리해서, 실행 시점에 yfinance 당일 봉이 없으면 그날이 영영 빠졌다
+(2026-11 첫 주 8세션 중 4일 누락 — 수요일 리밸런싱도 함께 빠짐).
+
 2026-11-12: Phase 4 · Weinstein 페이퍼 종료. 그때까지의 상태·거래·NAV 는 paper_trading/archive/ 에 보존.
 새 후보 전략을 페이퍼에 올릴 때는 이 파일에 섹션을 추가한다.
 """
@@ -35,7 +39,19 @@ from paper_trading.splits import adjust_simple_positions
 
 NAV_FILE           = Path("paper_trading/daily_nav.csv")
 NAV_FIELDS         = ["date", "cl_total", "cl_cash", "cl_invested"]
-MIN_TODAY_COVERAGE = 0.90   # 당일 봉이 있어야 하는 종목 비율 (미만이면 데이터 장애로 보고 건너뜀)
+MIN_TODAY_COVERAGE = 0.90   # 당일 봉이 있어야 하는 종목 비율 (미만이면 아직 데이터가 덜 온 날로 보고 미룸)
+STALE_ALERT_BDAYS  = 3      # NAV 가 이만큼 영업일 밀리면 텔레그램 경고 (그 전엔 다음 실행이 따라잡는다)
+
+
+def _pending_days(price_data: dict, last_nav) -> list[tuple[pd.Timestamp, float]]:
+    """마지막 NAV 이후의 거래일과 그날 봉이 있는 종목 비율. 첫 실행(NAV 없음)이면 최신 봉 하루만."""
+    counts: dict = {}
+    for df in price_data.values():
+        idx = df.index[df.index > last_nav] if last_nav is not None else df.index[-1:]
+        for d in idx:
+            counts[d] = counts.get(d, 0) + 1
+    n = max(len(price_data), 1)
+    return sorted((d, c / n) for d, c in counts.items())
 
 
 def _last_nav_date() -> pd.Timestamp | None:
@@ -208,28 +224,47 @@ def main():
     price_data = fetch_all(tickers, "2015-01-01", None, min_bars=300, refresh=args.refresh)
     print(f"  {len(price_data)} 종목 로드")
 
-    last_dates = pd.Series([df.index[-1] for df in price_data.values()])
-    end_date   = last_dates.max()
-    today      = end_date
-
-    # 당일 봉 커버리지 — 불량 봉(NaN) 제거 후 당일 데이터가 있는 종목이 적으면 데이터 장애.
-    # 그대로 돌리면 순위·청산이 일부 종목만으로 계산된다 → 상태를 건드리지 않고 종료
-    coverage = float((last_dates == end_date).mean())
-    if coverage < MIN_TODAY_COVERAGE:
-        msg = (f"⚠️ <b>페이퍼 실행 건너뜀</b> — {today.date()} 봉이 {coverage:.0%} 종목에만 있음 "
-               f"(기준 {MIN_TODAY_COVERAGE:.0%}). yfinance 데이터 장애 추정, 상태 파일 미변경")
-        print(msg)
-        telegram.send(msg, token=tg.get("bot_token", ""), chat_id=tg.get("chat_id", ""))
-        return
-
-    # 같은 봉을 두 번 처리하지 않는다 (수동 재실행·휴장일 — 5/22, 9/04 NAV 중복 기록 이력)
+    # 처리할 날 = 마지막 NAV 이후 거래일 중 봉이 충분히 온 날 (같은 봉을 두 번 처리하지 않는다).
+    # 봉이 덜 온 날(불량 봉 NaN 제거 후 커버리지 미달)은 건드리지 않고 다음 실행으로 미룬다 —
+    # 그대로 돌리면 순위·청산이 일부 종목만으로 계산된다.
     last_nav = _last_nav_date()
-    if last_nav is not None and today <= last_nav:
-        print(f"  {today.date()} 봉은 이미 처리됨 (NAV 마지막 {last_nav.date()}) — 종료")
+    pending  = _pending_days(price_data, last_nav)
+    days     = [d for d, cov in pending if cov >= MIN_TODAY_COVERAGE]
+    for d, cov in pending:
+        if cov < MIN_TODAY_COVERAGE:
+            print(f"  {d.date()} 봉이 {cov:.0%} 종목에만 있음 (기준 {MIN_TODAY_COVERAGE:.0%}) — 다음 실행으로 미룸")
+    if not days:
+        print(f"  처리할 새 봉 없음 (NAV 마지막 {last_nav.date() if last_nav is not None else '-'}) — 종료")
+        if last_nav is not None:
+            behind = len(pd.bdate_range(last_nav, pd.Timestamp.today().normalize())) - 1
+            if behind >= STALE_ALERT_BDAYS:
+                msg = (f"⚠️ <b>페이퍼 NAV 정체</b> — 마지막 {last_nav.date()} ({behind}영업일 전). "
+                       f"yfinance 데이터 장애 추정, 상태 파일 미변경")
+                telegram.send(msg, token=tg.get("bot_token", ""), chat_id=tg.get("chat_id", ""))
         return
 
-    # ── 2. Clenow 신호 ────────────────────────────────────────────────────
-    is_wednesday = today.weekday() == 2 or args.force_wednesday
+    cl_exits_all, cl_buys_all = [], []
+    tag = len(days) > 1
+    for today in days:
+        is_wed = today.weekday() == 2 or (args.force_wednesday and today == days[-1])
+        exits, buys, cl_pos = _process_day(today, is_wed, price_data, cfg, initial_capital, slippage)
+        d = f" {today:%m/%d}"
+        cl_exits_all += [(s, pnl, reason + d) if tag else (s, pnl, reason) for s, pnl, reason in exits]
+        cl_buys_all  += buys
+        print(f"  {today.date()} 처리: 청산 {len(exits)} / 매수 {len(buys)}")
+
+    # ── 3. 텔레그램 발송 ──────────────────────────────────────────────────
+    today = days[-1]
+    is_wednesday = any(d.weekday() == 2 for d in days) or args.force_wednesday
+    msg = build_telegram_message(today, cl_pos, cl_exits_all, cl_buys_all, is_wednesday, price_data, cfg)
+    if tag:
+        msg += "\n\n⏪ 밀린 날 함께 처리: " + ", ".join(f"{d:%m/%d}" for d in days)
+    telegram.send(msg, token=tg.get("bot_token", ""), chat_id=tg.get("chat_id", ""))
+    print(msg.replace("<b>", "").replace("</b>", ""))
+
+
+def _process_day(today, is_wednesday, price_data, cfg, initial_capital, slippage):
+    """하루치 Clenow 처리: 청산 → (수요일) 매수 → 포지션 저장 → NAV 한 줄. (exits, buys, positions) 반환."""
     cap          = initial_capital
     cl_cfg       = cfg.get("clenow_strategy", {})
     cl_pos       = load_simple_positions("clenow")
@@ -282,7 +317,7 @@ def main():
 
     save_simple_positions("clenow", cl_pos)
 
-    # ── 3. 일별 NAV 기록 ─────────────────────────────────────────────────
+    # 일별 NAV 기록
     cl_t, cl_c, cl_i, _ = _nav(cl_pos, price_data, today, initial_capital)
     NAV_FILE.parent.mkdir(exist_ok=True)
     write_header = not NAV_FILE.exists() or NAV_FILE.stat().st_size == 0
@@ -292,11 +327,7 @@ def main():
             writer.writeheader()
         writer.writerow({"date": today.isoformat(), "cl_total": round(cl_t, 2),
                          "cl_cash": round(cl_c, 2), "cl_invested": round(cl_i, 2)})
-
-    # ── 4. 텔레그램 발송 ──────────────────────────────────────────────────
-    msg = build_telegram_message(today, cl_pos, cl_exits, cl_buys, is_wednesday, price_data, cfg)
-    telegram.send(msg, token=tg.get("bot_token", ""), chat_id=tg.get("chat_id", ""))
-    print(msg.replace("<b>", "").replace("</b>", ""))
+    return cl_exits, cl_buys, cl_pos
 
 
 if __name__ == "__main__":

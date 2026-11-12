@@ -3,6 +3,7 @@ name: Daily Paper Trading
 on:
   schedule:
     - cron: "30 21 * * 1-5"   # 평일 21:30 UTC = 미국 동부 17:30 (장 마감 1.5시간 후)
+    - cron: "30 3 * * 2-6"    # 재실행 — 첫 실행 때 yfinance 당일 봉이 아직 없던 날을 따라잡는다 (run_daily 는 멱등)
   workflow_dispatch:            # 수동 실행 버튼
 
 env:
@@ -10,6 +11,10 @@ env:
 
 permissions:
   contents: write               # git push 권한
+
+concurrency:
+  group: paper-trading          # 두 실행이 겹쳐 같은 상태 파일을 동시에 쓰지 않게
+  cancel-in-progress: false
 
 jobs:
   run-daily:
@@ -44,10 +49,8 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          touch paper_trading/trades.csv paper_trading/trades_clenow.csv paper_trading/trades_weinstein.csv paper_trading/daily_nav.csv
-          git add paper_trading/positions.json paper_trading/pending.json paper_trading/trades.csv \
-                  paper_trading/positions_clenow.json paper_trading/trades_clenow.csv \
-                  paper_trading/positions_weinstein.json paper_trading/trades_weinstein.csv \
+          touch paper_trading/trades_clenow.csv paper_trading/daily_nav.csv
+          git add paper_trading/positions_clenow.json paper_trading/trades_clenow.csv \
                   paper_trading/daily_nav.csv paper_trading/daily_report.md
           git diff --staged --quiet || git commit -m "chore: daily state update $(date -u +%Y-%m-%d)"
           git pull --rebase origin master

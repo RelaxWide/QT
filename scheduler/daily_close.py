@@ -6,9 +6,8 @@ scheduler/daily_close.py
   1. Clenow / Weinstein 매도 신호 (MA 이탈, rank_exit) → 즉시 주문
   2. KR 수요일: 매수 후보를 live_trading/wed_buy_pending.json 으로 저장
      (wednesday_morning_buy.py 가 Wed 11 AM ET 에 KIS 주문 전송)
-  3. Phase 4 신규 신호 생성 → live_trading/pending_phase4_live.json 저장
-     (다음날 morning_entry가 주문). Phase 4 실거래 배분 0 이면 생략 — 페이퍼는 GHA 담당
-  4. KIS 잔고 동기화
+  3. 종료 전략(config_live capital.liquidate_strategies) 보유분 전량 매도
+  4. KIS 잔고 동기화 + 텔레그램 1건
 
 수동 실행:
     python scheduler/daily_close.py [--dry-run]
@@ -28,7 +27,7 @@ from scheduler._log_helper import setup_file_logger
 setup_file_logger("daily_close")
 
 from live_trading.kis_client import KISClient
-from live_trading.orders import OrderManager, PHASE4_LIVE_PENDING, phase4_live_enabled
+from live_trading.orders import OrderManager
 from live_trading.account import sync_all, reconcile_fills
 from live_trading.risk_guard import (RiskGuard, record_nav, add_unsettled,
                                      load_spy_closes, update_benchmark, benchmark_line)
@@ -224,13 +223,7 @@ def main(dry_run: bool = False, refresh: bool = False):
         WED_BUY_PENDING.unlink()
         log.info(f"[daily_close] 매수 후보 없음 - 이전 pending 삭제")
 
-    # ── 4. Phase 4 신규 신호 → 실계좌 pending 저장 (익일 MOO) ────────────
-    # 배분 0 이면 생략. 예전엔 GHA 소유 paper_trading/pending.json 을 덮어써서
-    # 로컬 git 동기화가 조용히 멈췄다 (2026-10, 73커밋 정체).
-    if allow_new and not data_stale and phase4_live_enabled(cfg_live):
-        _update_phase4_pending(cfg, cfg_live, price_data, today)
-
-    # ── 5. KIS 잔고 동기화 + 핵심정보 텔레그램 1건 ───────────────────────
+    # ── 4. KIS 잔고 동기화 + 핵심정보 텔레그램 1건 ───────────────────────
     if not dry_run:
         kis = KISClient.from_config(allow_prod=True)
         report = sync_all(kis)
@@ -240,8 +233,8 @@ def main(dry_run: bool = False, refresh: bool = False):
         msg += _build_recon_message(recon, recon_error)
         for strat in sorted(liquidate):
             left = sorted(load_live_positions(strat).keys())
-            msg += (f"\n🧹 <b>{strat.capitalize()} 전략 종료 청산</b>: "
-                    + (f"잔여 {', '.join(left)} (매도 주문 중)" if left else "완료 — 보유 없음"))
+            if left:
+                msg += f"\n🧹 <b>{strat.capitalize()} 종료 청산</b>: 잔여 {', '.join(left)} (매도 주문 중)"
         msg += "\n" + guard.summary_line()
         bench = benchmark_line("us")
         if bench:
@@ -396,58 +389,6 @@ def _build_recon_message(recon, error: str) -> str:
     if recon["price_fallback"]:
         L.append("ℹ️ 체결가 추정: " + ", ".join(recon["price_fallback"]))
     return ("\n" + "\n".join(L)) if L else ""
-
-
-def _update_phase4_pending(cfg, cfg_live, price_data, today):
-    """Phase 4 신호 재생성 → live_trading/pending_phase4_live.json 업데이트."""
-    from src.indicators.regime import compute_regime
-    from src.indicators.factors import build_factor_matrices
-    from src.strategy.factor_stack import generate_factor_signals
-    from paper_trading.tracker import load_positions, save_pending, PendingEntry
-
-    p1 = cfg["phase1_breakout_pullback"]
-    p2 = cfg["phase2_cloud_support"]
-    p3 = cfg["phase3_hybrid"]
-    p4 = cfg["phase4_factor_stack"]
-    p2_filter = dict(p2)
-    p2_filter["cloud_filter_thickness_min_pct"] = p3["cloud_filter_thickness_min_pct"]
-    p2_filter["cloud_filter_use_chikou"]        = p3["cloud_filter_use_chikou"]
-    p4["momentum_period"] = p4.get("momentum_period", 63)
-
-    regime_on = compute_regime(
-        cfg["data"]["start_date"],
-        cfg["data"]["end_date"],
-        ma_short=cfg["regime_filter"]["spy_ma_short"],
-        ma_long=cfg["regime_filter"]["spy_ma_long"],
-        vix_threshold=cfg["regime_filter"]["vix_threshold"],
-    )
-    if today in regime_on.index and not bool(regime_on.at[today, "trade_ok"]):
-        log.info("[phase4] 레짐 OFF - pending 업데이트 스킵")
-        return
-
-    mom_period = p4.get("momentum_period", 63)
-    mom_rank, bbw_rank, spy_mom = build_factor_matrices(price_data, mom_period=mom_period)
-    current_positions = load_positions()
-    new_pending = []
-
-    for sym, df in price_data.items():
-        if sym in current_positions:
-            continue
-        sigs = generate_factor_signals(sym, df, p1, p2_filter, p4, mom_rank, bbw_rank, spy_mom)
-        for s in sigs:
-            if s.entry_date == today + pd.Timedelta(days=1):
-                new_pending.append(PendingEntry(
-                    symbol=sym,
-                    signal_date=str(today.date()),
-                    entry_price_est=float(df.at[today, "close"]) if today in df.index else s.entry_price,
-                    stop=s.stop,
-                    r=s.r,
-                    targets=s.targets,
-                    partial_weights=s.partial_weights,
-                ))
-
-    save_pending(new_pending, PHASE4_LIVE_PENDING)
-    log.info(f"[phase4] pending {len(new_pending)}건 저장")
 
 
 def _notify(msg: str, cfg_live: dict):

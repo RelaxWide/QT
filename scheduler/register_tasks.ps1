@@ -50,21 +50,17 @@ function Register-QTTask {
 
 $weekdays = @("Monday","Tuesday","Wednesday","Thursday","Friday")
 
-# 1. 22:29 — Phase 4 MOO 진입
-$t1 = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "22:29"
-Register-QTTask "QT_MorningEntry" "scheduler\morning_entry.py" $t1
-
-# 2. 23:00~04:00 매시 — 손절·트레일 체크 (6개 트리거)
-$exitTriggers = @(
-    (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "23:00"),
-    (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "00:00"),
-    (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "01:00"),
-    (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "02:00"),
-    (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "03:00"),
-    (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "04:00")
-)
-# 함수 인자로는 배열이 그대로 전달된다. (,) 로 감싸면 배열 안의 배열이 돼 등록 실패
-Register-QTTask "QT_ExitCheck" "scheduler\exit_check.py" $exitTriggers
+# 1~2. Phase 4 용 작업(QT_MorningEntry 22:29, QT_ExitCheck 23~04시)은 2026-11-12 폐기 — 남아 있으면 삭제
+foreach ($old in @("QT_MorningEntry", "QT_ExitCheck")) {
+    if (Get-ScheduledTask -TaskName $old -ErrorAction SilentlyContinue) {
+        try {
+            Unregister-ScheduledTask -TaskName $old -Confirm:$false -ErrorAction Stop
+            Write-Host "[OK] $old removed"
+        } catch {
+            Write-Host "[FAIL] remove $old : $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
+}
 
 # 3. 06:30 — 종가 신호:
 #     매도(MA 이탈, rank_exit) 즉시 주문 / KR 수요일엔 매수 후보 pending 저장

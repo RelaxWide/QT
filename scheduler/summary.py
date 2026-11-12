@@ -21,16 +21,14 @@ from scheduler._log_helper import setup_file_logger
 setup_file_logger("summary")
 
 from live_trading.kis_client import KISClient
-from live_trading.account import slippage_report
-from live_trading.risk_guard import RiskGuard, benchmark_line
+from live_trading.risk_guard import benchmark_line
 from live_trading.tracker_live import load_live_positions, _trades_file
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 log = logging.getLogger("kis")
 
-STRATEGIES = ("phase4", "clenow", "weinstein")
+STRATEGIES = ("clenow", "weinstein")   # weinstein 은 청산이 끝나면 섹션이 자동으로 사라진다
 STRATEGY_LABELS = {
-    "phase4":    "📈 Phase 4 (추세추종)",
     "clenow":    "📊 Clenow (모멘텀)",
     "weinstein": "🏭 Weinstein (Stage 2)",
 }
@@ -143,9 +141,8 @@ def build_summary() -> str:
         # cash_usd 는 KIS 주문가능금액 — 결제 전 매도 대금은 빠져 있다 (daily_close 와 같은 라벨)
         line(f"잔고: 주문가능 ${cash:,.2f} | 평가 ${sum_eval:,.2f} | 평가손익 ${pnl_amt:+,.2f}")
 
-    # 낙폭·SPY 대비 (daily_close 가 기록한 실계좌 NAV 기준)
+    # SPY 대비 (daily_close 가 기록한 실계좌 NAV 기준). 낙폭·당일 손익은 06:30 장마감 메시지에 있다
     try:
-        line(RiskGuard.from_config(market="us").summary_line())
         bench = benchmark_line("us")
         if bench:
             line(bench)
@@ -203,13 +200,8 @@ def build_summary() -> str:
         label = STRATEGY_LABELS[strat]
         line()
         line(bold(f"━━━ {label} ━━━"))
-        if cap_usd > 0:
-            mode_tag = " (auto)" if auto else ""
-            line(f"배분{mode_tag}: ${cap_usd:.2f} / {max_pos}종목 = ${cap_usd/max(max_pos,1):.2f}/종목")
-        elif strat in (cap.get("liquidate_strategies") or []):
-            line("배분 없음 — 전략 종료, 보유분 청산 중")
-        else:
-            line("배분: 페이퍼 전용 (실전 자본 0)")
+        if strat in (cap.get("liquidate_strategies") or []):
+            line("전략 종료 — 보유분 청산 중")
 
         # 매수 접수만 된 종목(pending_buy)은 아직 보유가 아니다 — 체결 확정은 다음 daily_close
         n_wait = sum(1 for p in positions.values() if p.status == "pending_buy")
@@ -281,12 +273,6 @@ def build_summary() -> str:
             sign = "+" if cur >= avg else ""
             line(f"  {sym}: {qty}주 ${avg:.2f}→${cur:.2f} ({sign}{pct:.1f}%) | 평가 ${ev:,.2f}")
         line("→ positions_live_*.json 에 수동 등록 필요 (전략 자동 청산 대상에서 누락 중)")
-
-    # 슬리피지
-    line()
-    sr = slippage_report()
-    if sr.get("records", 0) > 0:
-        line(f"슬리피지 누적 {sr['records']}건: 평균 {sr['mean_pct']:+.3f}% (σ {sr['std_pct']:.3f}%)")
 
     # 합계
     line()
