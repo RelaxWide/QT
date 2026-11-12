@@ -1,6 +1,6 @@
 """
 scheduler/wednesday_morning_buy.py
-실행 시각: 매주 목 00:00 KR (= Wed 11 AM ET 서머타임 / Wed 10 AM ET 표준시)
+실행 시각: 매주 목 00:00 KR (= Wed 11 AM ET 서머타임 / Wed 10 AM ET 표준시 → 01:00 KR 에 주문)
 역할:
   Wed 06:30 KR 에 daily_close 가 저장한 매수 후보를 11 AM ET 정각에 KIS LIMIT 주문 전송.
   표준시(11월 초~3월)에는 시작 시 ET 10:00 → 1시간 슬립 후 11:00 ET 에 실행.
@@ -101,10 +101,16 @@ def main(dry_run: bool = False, no_wait: bool = False):
 
     # 텔레그램 알림
     if total_orders:
-        lines = [f"🌅 Wed 11 AM ET 매수 실행 ({len(total_orders)}건)"]
+        n_fail = sum(1 for r in total_orders if not r.ok)
+        head = f"🌅 <b>US 매수 주문 접수</b> (수 11:00 ET) {len(total_orders) - n_fail}건"
+        if n_fail:
+            head += f" · 🚨 실패 {n_fail}건"
+        lines = [head]
         for r in total_orders:
-            status = "OK" if r.ok else "FAIL"
-            lines.append(f"  [{status}] {r.symbol} x{r.qty} @${r.price:.2f}")
+            status = "접수" if r.ok else "실패"
+            lines.append(f"  [{status}] {r.symbol} x{r.qty} @${r.price:.2f} (${r.qty * r.price:,.0f})")
+        if n_fail < len(total_orders):
+            lines.append("체결 여부는 다음 장마감 처리(06:30 KST)에서 확정")
         _notify("\n".join(lines), cfg_live)
 
     log.info("[wed_buy] 완료")

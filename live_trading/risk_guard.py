@@ -24,6 +24,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
+from bisect import bisect_left
 from datetime import date
 from pathlib import Path
 
@@ -40,7 +41,10 @@ WARN_RATIO = 0.75
 
 log = logging.getLogger("kis")
 
-NAV_FIELDS = ["date", "total", "cash", "flow", "unit_nav", "unsettled"]
+NAV_FIELDS = ["date", "total", "cash", "flow", "unit_nav", "unsettled", "spy"]
+
+# SPY 종가를 붙일 때 기록일(KST)과 직전 세션 사이 허용 간격 (금→월 3일, 연휴 낀 주말 4일)
+BENCH_MAX_GAP_DAYS = 5
 
 
 def nav_path(market: str) -> Path:
@@ -94,7 +98,16 @@ def load_nav(market: str) -> list[dict]:
     for r in rows:
         r["total"]    = float(r["total"])
         r["unit_nav"] = float(r["unit_nav"])
+        r["spy"]      = float(r["spy"]) if r.get("spy") not in (None, "") else None
     return rows
+
+
+def _write_nav(market: str, rows: list[dict]) -> None:
+    LIVE_DIR.mkdir(exist_ok=True)
+    with nav_path(market).open("w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=NAV_FIELDS, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(rows)
 
 
 def add_cashflow(market: str, amount: float) -> float:
@@ -136,14 +149,95 @@ def record_nav(market: str, balance: dict, today: str | None = None,
            "flow": round(flow, 2), "unit_nav": round(unit, 6), "unsettled": round(unsettled, 2)}
     rows.append(row)
 
-    LIVE_DIR.mkdir(exist_ok=True)
-    with nav_path(market).open("w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=NAV_FIELDS)
-        w.writeheader()
-        w.writerows(rows)
+    _write_nav(market, rows)
     if fp.exists():
         fp.unlink()
     return row
+
+
+# ── SPY 벤치마크 ─────────────────────────────────────────────────────────
+# US 판정 기준이 "SPY 보유 대비" 인데 NAV 파일에 비교 대상이 없었다 (2026-11 추가).
+# 각 NAV 행에 "그 기록이 반영한 세션" 의 SPY 수정종가를 붙이고, 같은 구간 수익률·MDD 를 비교한다.
+
+def load_spy_closes(cfg: dict | None = None):
+    """SPY 수정종가 Series (배당 포함 총수익 기준). 실패하면 예외."""
+    from src.fetch.prices import fetch_prices
+    if cfg is None:
+        cfg = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
+    data = cfg.get("data", {})
+    df = fetch_prices("SPY", data.get("start_date", "2015-01-01"), data.get("end_date"), refresh=True)
+    if df is None or df.empty:
+        raise RuntimeError("SPY 가격 조회 실패 (빈 응답)")
+    return df["close"]
+
+
+def update_benchmark(market: str, closes, session: str | None = None) -> int:
+    """
+    NAV 각 행의 spy 열을 채운다 (매번 전 행 재계산 — 배당 수정으로 과거 종가가 바뀌어도 일관).
+    행 날짜는 daily_close 실행일(KST)이라 그 직전 NYSE 세션 종가를 쓴다.
+    session = 방금 마감한 세션(YYYY-MM-DD). 주면 그 이후 봉(장중 미확정)은 무시하고,
+    오늘 행은 SPY 데이터가 그 세션까지 와 있을 때만 채운다 (밀린 종가를 오늘 값으로 쓰지 않음).
+    반환: 값이 채워진 행 수.
+    """
+    rows = load_nav(market)
+    if not rows or closes is None or len(closes) == 0:
+        return 0
+    bars = sorted((str(d)[:10], float(v)) for d, v in closes.items() if v == v)
+    if session:
+        bars = [b for b in bars if b[0] <= session]
+    days = [b[0] for b in bars]
+    today = date.today().isoformat()
+    filled = 0
+    for r in rows:
+        d = r["date"][:10]
+        k = bisect_left(days, d) - 1
+        if k < 0:
+            continue
+        if (date.fromisoformat(d) - date.fromisoformat(days[k])).days > BENCH_MAX_GAP_DAYS:
+            continue
+        if session and d == today and days[k] != session:
+            r["spy"] = None
+            continue
+        r["spy"] = round(bars[k][1], 4)
+        filled += 1
+    _write_nav(market, rows)
+    return filled
+
+
+def _mdd_pct(xs: list[float]) -> float:
+    peak, worst = xs[0], 0.0
+    for x in xs:
+        peak = max(peak, x)
+        worst = min(worst, x / peak - 1)
+    return worst * 100
+
+
+def benchmark_stats(market: str = "us") -> dict | None:
+    """SPY 값이 있는 첫 행을 기준일로 계좌(unit_nav) vs SPY. 비교할 행이 2개 미만이면 None."""
+    rows = [r for r in load_nav(market) if r.get("spy")]
+    if len(rows) < 2:
+        return None
+    acct = [r["unit_nav"] for r in rows]
+    spy  = [r["spy"] for r in rows]
+    a = (acct[-1] / acct[0] - 1) * 100
+    s = (spy[-1] / spy[0] - 1) * 100
+    return {"since": rows[0]["date"][:10], "last": rows[-1]["date"][:10], "n": len(rows),
+            "acct_pct": a, "spy_pct": s, "excess_pp": a - s,
+            "acct_mdd": _mdd_pct(acct), "spy_mdd": _mdd_pct(spy)}
+
+
+def benchmark_line(market: str = "us") -> str:
+    """일일 텔레그램용 한 줄. 비교 불가면 빈 문자열 (메시지를 깨지 않는다)."""
+    try:
+        s = benchmark_stats(market)
+    except Exception as e:
+        return f"📊 SPY 비교 계산 실패: {e}"
+    if not s:
+        return ""
+    icon = "🟢" if s["excess_pp"] >= 0 else "🔴"
+    return (f"📊 SPY 대비 ({s['since'][5:].replace('-', '/')}~, {s['n']}일): "
+            f"계좌 {s['acct_pct']:+.2f}% vs SPY {s['spy_pct']:+.2f}% → {icon} {s['excess_pp']:+.2f}%p"
+            f" | MDD {s['acct_mdd']:.1f}% vs {s['spy_mdd']:.1f}%")
 
 
 class RiskGuard:
@@ -234,7 +328,14 @@ def _cli():
     p.add_argument("--market", default="us", choices=["us", "kr"])
     p.add_argument("--cashflow", type=float, help="입금(+)/출금(-) 금액 — 다음 NAV 기록에 반영")
     p.add_argument("--status", action="store_true")
+    p.add_argument("--benchmark", action="store_true",
+                   help="SPY 종가를 NAV 이력에 채우고 SPY 대비 성과 출력 (US)")
     args = p.parse_args()
+    if args.benchmark:
+        n = update_benchmark("us", load_spy_closes())
+        print(f"SPY 종가 {n}행 반영")
+        print(benchmark_line("us") or "비교할 NAV 이력이 부족함")
+        return
     if args.cashflow is not None:
         total = add_cashflow(args.market, args.cashflow)
         print(f"{args.market} 입출금 예약: {args.cashflow:+,.2f} (미반영 합계 {total:+,.2f})")

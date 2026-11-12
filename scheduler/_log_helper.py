@@ -78,6 +78,12 @@ def setup_file_logger(task_name: str, log_dir: str = "logs") -> Path:
         def flush(self):
             self.stream.flush()
             self.file.flush()
+        def isatty(self):
+            # tqdm(disable=None) 등이 터미널 여부를 물어본다 — 원본 스트림 기준
+            try:
+                return self.stream.isatty()
+            except Exception:
+                return False
 
     tee_file = open(log_path.with_suffix(".stdout.log"), "a", encoding="utf-8")
     sys.stdout = _Tee(sys.stdout, tee_file)

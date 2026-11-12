@@ -87,7 +87,8 @@ def fetch_all(
         return fetch_all_kr(tickers, start, end, min_bars=min_bars, refresh=refresh)
 
     result: dict[str, pd.DataFrame] = {}
-    for t in tqdm(tickers, desc="Downloading"):
+    # disable=None: 터미널이 아니면(스케줄러·GHA) 진행바 끔 — 로그가 수백 KB 로 불어나던 원인
+    for t in tqdm(tickers, desc="Downloading", disable=None):
         try:
             df = fetch_prices(t, start, end, refresh, cache_dir=cache_dir, market="us")
             if not df.empty and len(df) >= min_bars:

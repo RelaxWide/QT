@@ -96,6 +96,23 @@ def reset_paper_trading() -> None:
     print("✅ Paper trading 초기화 완료.")
 
 
+# 슬롯 금액의 이 비율도 못 채우는 현금이면 그 슬롯은 비워 둔다 (자투리 매수 방지)
+MIN_SLOT_FILL = 0.5
+
+
+def _paper_cash(initial: float, positions: dict, strategy: str) -> float:
+    """Clenow/Weinstein 페이퍼 가용 현금 = 초기자본 − 보유 원가 + 확정손익 (NAV 계산과 같은 식)."""
+    cost     = sum(p.entry_price * p.shares for p in positions.values())
+    realized = float(get_simple_trade_summary(strategy).get("total_pnl") or 0)
+    return initial - cost + realized
+
+
+def _buy_amount(alloc: float, cash: float) -> float:
+    """슬롯 매수 금액 — 현금 한도 내. 슬롯의 MIN_SLOT_FILL 미만이면 0 (매수 안 함)."""
+    amt = min(alloc, cash)
+    return amt if amt >= alloc * MIN_SLOT_FILL else 0.0
+
+
 def _get_cur(sym, today, price_data, fallback):
     df = price_data.get(sym)
     if df is not None:
@@ -295,8 +312,7 @@ def build_telegram_message(
 
     def fmt_strat(name, total, cash, invested, init):
         pct = (total / init - 1) * 100
-        s   = "+" if pct >= 0 else ""
-        return f"  {name:<10} ${total:>9,.0f} ({s}{pct:+.2f}%) | 예수금 ${cash:>8,.0f} | 투자중 ${invested:>8,.0f}"
+        return f"  {name:<10} ${total:>9,.0f} ({pct:+.2f}%) | 예수금 ${cash:>8,.0f} | 투자중 ${invested:>8,.0f}"
 
     line(fmt_strat("Phase 4",   p4_total, p4_cash, p4_invested, initial))
     line(fmt_strat("Clenow",    cl_total, cl_cash, cl_invested, initial))
@@ -585,16 +601,25 @@ def main():
 
     n_slots = cl_cfg.get("max_positions", 20)
     alloc   = cap / n_slots
+    # 가용 현금 = 초기자본 − 보유 원가 + 확정손익 (오늘 청산분 포함). 예전엔 현금 확인 없이
+    # 슬롯당 고정액을 사서 누적 손실 구간에 현금이 음수가 됐다 (레버리지 = 수익률 과대).
+    cl_cash = _paper_cash(cap, cl_pos, "clenow")
     for sym in cl_sigs["buy"][:n_slots - len(cl_pos)]:
         if sym not in price_data or today not in price_data[sym].index:
             continue
+        buy_amt = _buy_amount(alloc, cl_cash)
+        if buy_amt <= 0:
+            print(f"  [Clenow] 현금 부족 (${cl_cash:,.0f} < 슬롯 ${alloc:,.0f} 의 "
+                  f"{MIN_SLOT_FILL:.0%}) — {sym} 이후 매수 생략")
+            break
         entry_px = price_data[sym].loc[today, "close"]
-        shares   = alloc / entry_px
+        shares   = buy_amt / entry_px
         cl_pos[sym] = SimplePosition(
             symbol=sym, entry_date=today.isoformat(),
             entry_price=entry_px, shares=shares, strategy="clenow",
         )
-        cl_buys.append((sym, entry_px, shares, alloc))
+        cl_cash -= buy_amt
+        cl_buys.append((sym, entry_px, shares, buy_amt))
 
     save_simple_positions("clenow", cl_pos)
 
@@ -626,16 +651,22 @@ def main():
 
     max_w   = w_cfg.get("max_positions", 15)
     alloc_w = cap / max_w
+    w_cash  = _paper_cash(cap, w_pos, "weinstein")
     for sym in w_sigs["buy"][:max_w - len(w_pos)]:
         if sym not in price_data or today not in price_data[sym].index:
             continue
+        buy_amt = _buy_amount(alloc_w, w_cash)
+        if buy_amt <= 0:
+            print(f"  [Weinstein] 현금 부족 (${w_cash:,.0f}) — {sym} 이후 매수 생략")
+            break
         entry_px = price_data[sym].loc[today, "close"]
-        shares   = alloc_w / entry_px
+        shares   = buy_amt / entry_px
         w_pos[sym] = SimplePosition(
             symbol=sym, entry_date=today.isoformat(),
             entry_price=entry_px, shares=shares, strategy="weinstein",
         )
-        w_buys.append((sym, entry_px, shares, alloc_w))
+        w_cash -= buy_amt
+        w_buys.append((sym, entry_px, shares, buy_amt))
 
     save_simple_positions("weinstein", w_pos)
 

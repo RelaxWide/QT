@@ -1,6 +1,7 @@
 """
 scheduler/daily_close.py
 실행 시각: 평일 06:30 KR (미국장 마감 후 — 서머타임 1.5h / 표준시 0.5h)
+          월요일 실행분이 금요일 세션을 처리한다 (토요일엔 실행 안 함)
 역할:
   1. Clenow / Weinstein 매도 신호 (MA 이탈, rank_exit) → 즉시 주문
   2. KR 수요일: 매수 후보를 live_trading/wed_buy_pending.json 으로 저장
@@ -29,7 +30,8 @@ setup_file_logger("daily_close")
 from live_trading.kis_client import KISClient
 from live_trading.orders import OrderManager, PHASE4_LIVE_PENDING, phase4_live_enabled
 from live_trading.account import sync_all, reconcile_fills
-from live_trading.risk_guard import RiskGuard, record_nav, add_unsettled
+from live_trading.risk_guard import (RiskGuard, record_nav, add_unsettled,
+                                     load_spy_closes, update_benchmark, benchmark_line)
 from live_trading.freshness import expected_us_session, is_stale, session_after
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
@@ -126,6 +128,15 @@ def main(dry_run: bool = False, refresh: bool = False):
                   f"expected={expected.date() if expected is not None else '?'}) "
                   f"— 신호 판정 중단, 미체결 재매도만 KIS 종가로")
 
+    # SPY 벤치마크 — NAV 이력에 같은 세션의 SPY 종가를 붙인다 (판정 기준: SPY 보유 대비).
+    # 실패해도 매매에는 영향 없음. SPY 가 밀려 있으면 오늘 행은 비워 두고 다음 실행에서 채운다.
+    if not dry_run:
+        try:
+            n = update_benchmark("us", load_spy_closes(cfg), session)
+            log.info(f"[daily_close] SPY 벤치마크 {n}행 반영")
+        except Exception as e:
+            log.warning(f"[daily_close] SPY 벤치마크 갱신 실패: {e}")
+
     om = OrderManager.from_config(allow_prod=True)
 
     # ── 2. Clenow 신호 ────────────────────────────────────────────────────
@@ -216,6 +227,9 @@ def main(dry_run: bool = False, refresh: bool = False):
                                   unsettled=(nav_row or {}).get("unsettled", 0))
         msg += _build_recon_message(recon, recon_error)
         msg += "\n" + guard.summary_line()
+        bench = benchmark_line("us")
+        if bench:
+            msg += "\n" + bench
         if nav_error:
             msg += f"\n🚨 NAV 기록 실패: {nav_error}"
         if not allow_new:
@@ -255,6 +269,22 @@ def _pending_view(pending: dict, om) -> dict:
     return view
 
 
+_KR_DOW = "월화수목금토일"
+
+
+def _buy_time_label(now_kst=None) -> str:
+    """다음 수요일 11:00 ET 를 KST 로 (서머타임 목 00:00 / 표준시 목 01:00)."""
+    try:
+        now = pd.Timestamp.now(tz="Asia/Seoul") if now_kst is None else now_kst
+        d = pd.Timestamp(now.tz_convert("America/New_York").date())
+        while d.weekday() != 2:
+            d += pd.Timedelta(days=1)
+        t = (d + pd.Timedelta(hours=11)).tz_localize("America/New_York").tz_convert("Asia/Seoul")
+        return f"수 11:00 ET = {_KR_DOW[t.weekday()]} {t:%H:%M} KST"
+    except Exception:
+        return "수 11:00 ET"
+
+
 def _syms(orders) -> str:
     return ", ".join(r.symbol + ("" if r.ok else "(실패)") for r in orders) or "-"
 
@@ -290,7 +320,7 @@ def _build_core_message(report, today, cl_sells, w_sells, pending,
         for k, v in pending.items():
             buy = ", ".join(v["buy"]) if v["buy"] else "매수 없음"
             parts.append(f"{k.capitalize()} {buy} (후보 {v['n_cand']} 중 빈자리 {v['slots']})")
-        L.append("🔔 매수 예정 (목 00:00 KST): " + " / ".join(parts))
+        L.append(f"🔔 매수 예정 ({_buy_time_label(now_kst)}): " + " / ".join(parts))
 
     # 전략별 추적 수 — 예전 "KIS N종목 추적" 은 미할당 보유까지 세서 추적 중인 것처럼 보였다
     by = report.get("by_strategy", {})

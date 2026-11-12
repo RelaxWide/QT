@@ -17,8 +17,12 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from scheduler._log_helper import setup_file_logger
+setup_file_logger("summary")
+
 from live_trading.kis_client import KISClient
 from live_trading.account import slippage_report
+from live_trading.risk_guard import RiskGuard, benchmark_line
 from live_trading.tracker_live import load_live_positions, _trades_file
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
@@ -64,9 +68,10 @@ def _today_trades(strategy: str, today_str: str):
         df = pd.read_csv(f)
     except Exception:
         return []
-    if "date" not in df.columns:
+    col = "exit_date" if "exit_date" in df.columns else "date"
+    if col not in df.columns:
         return []
-    df = df[df["date"].astype(str).str.startswith(today_str)]
+    df = df[df[col].astype(str).str.startswith(today_str)]
     return df.to_dict("records")
 
 
@@ -135,7 +140,17 @@ def build_summary() -> str:
         cash     = bal.get("cash_usd", 0.0)
         sum_eval = sum(p["eval_amt"] for p in bal.get("positions", []))
         pnl_amt  = bal.get("total_pnl_usd", 0.0)
-        line(f"잔고: 예수금 ${cash:,.2f} | 평가 ${sum_eval:,.2f} | 손익 ${pnl_amt:+,.2f}")
+        # cash_usd 는 KIS 주문가능금액 — 결제 전 매도 대금은 빠져 있다 (daily_close 와 같은 라벨)
+        line(f"잔고: 주문가능 ${cash:,.2f} | 평가 ${sum_eval:,.2f} | 평가손익 ${pnl_amt:+,.2f}")
+
+    # 낙폭·SPY 대비 (daily_close 가 기록한 실계좌 NAV 기준)
+    try:
+        line(RiskGuard.from_config(market="us").summary_line())
+        bench = benchmark_line("us")
+        if bench:
+            line(bench)
+    except Exception as e:
+        line(f"⚠️ 리스크/벤치마크 요약 실패: {e}")
 
     # 보유 종목만 가격 데이터 로드 (stop 계산용)
     held_syms = set()
@@ -194,10 +209,18 @@ def build_summary() -> str:
         else:
             line("배분: 페이퍼 전용 (실전 자본 0)")
 
-        line(bold(f"보유 {len(positions)}종목"))
+        # 매수 접수만 된 종목(pending_buy)은 아직 보유가 아니다 — 체결 확정은 다음 daily_close
+        n_wait = sum(1 for p in positions.values() if p.status == "pending_buy")
+        head = f"보유 {len(positions) - n_wait}종목"
+        if n_wait:
+            head += f" + 체결 대기 {n_wait}"
+        line(bold(head))
         s_unreal = 0.0
         for sym in sorted(positions.keys()):
             pos      = positions[sym]
+            if pos.status == "pending_buy":
+                line(f"  {sym}: ⏳ 매수 접수 {pos.qty}주 @${pos.fill_price:.2f} (체결 대기)")
+                continue
             cur_info = cur_map.get(sym, {})
             cur      = float(cur_info.get("cur_price", pos.fill_price))
             qty      = int(cur_info.get("qty", pos.qty))
@@ -213,6 +236,8 @@ def build_summary() -> str:
             else:
                 stop = None
             stop_s = f" | stop ${stop:.2f}" if stop is not None else ""
+            if pos.status == "pending_sell":
+                stop_s += " | ⏳ 매도 접수"
             line(f"  {sym}: {qty}주 ${pos.fill_price:.2f}→${cur:.2f} ({sign}{pct:.1f}%) | 평가 ${cur*qty:,.2f}{stop_s}")
 
         # 오늘 주문 (order_map.json 기준)
@@ -230,8 +255,8 @@ def build_summary() -> str:
             for t in trades_today:
                 pnl    = float(t.get("pnl", 0) or 0)
                 icon   = "✅" if pnl >= 0 else "❌"
-                reason = t.get("reason", "")
-                line(f"  {icon} {t.get('symbol', '')} [{reason}] ${pnl:+,.2f}")
+                pct    = float(t.get("pnl_pct", 0) or 0)
+                line(f"  {icon} {t.get('symbol', '')} ${pnl:+,.2f} ({pct:+.1f}%)")
 
         # 누적 손익
         s_realized = _realized_pnl(strat)
