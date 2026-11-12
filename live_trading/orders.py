@@ -573,9 +573,17 @@ class OrderManager:
         buffer = float(self.cap.get("buffer_pct", 1.0)) / 100.0
         target = total * (1.0 - buffer) * pct / 100.0
         held = evals.get(sym, 0.0)
+        # 분할 매수: 한 번(주 1회)에 총자산의 core_max_buy_pct 까지만 산다. 0/미설정이면 한도 없음.
+        max_pct = float(self.cap.get("core_max_buy_pct", 0) or 0)
+        tranche = total * max_pct / 100.0 if max_pct > 0 else float("inf")
         return {"symbol": sym, "target_pct": pct, "target": target, "held": held, "qty": qtys.get(sym, 0),
                 "held_pct": held / total * 100 if total > 0 else 0.0, "gap": target - held,
-                "total": total, "cash": cash, "reserve": total * buffer}
+                "total": total, "cash": cash, "reserve": total * buffer, "tranche": tranche}
+
+    @staticmethod
+    def core_spend(st: dict, cash_committed: float = 0.0) -> float:
+        """이번에 코어 매수에 쓸 금액 = min(목표까지 남은 금액, 쓸 수 있는 현금, 1회 한도)."""
+        return max(0.0, min(st["gap"], st["cash"] - cash_committed - st["reserve"], st["tranche"]))
 
     def place_core_topup(self, signal_date: str, dry_run: bool = False,
                          cash_committed: float = 0.0) -> list:
@@ -589,10 +597,11 @@ class OrderManager:
             return []
         sym = st["symbol"]
         spendable = st["cash"] - cash_committed - st["reserve"]
-        spend = min(st["gap"], spendable)
+        spend = self.core_spend(st, cash_committed)
+        cap_s = "없음" if st["tranche"] == float("inf") else self._fmt_price(st["tranche"])
         log.info(f"[core] {sym} 목표 {self._fmt_price(st['target'])} ({st['target_pct']:.0f}%) / "
                  f"보유 {self._fmt_price(st['held'])} ({st['held_pct']:.1f}%) / 쓸 수 있는 현금 "
-                 f"{self._fmt_price(spendable)}")
+                 f"{self._fmt_price(spendable)} / 1회 한도 {cap_s}")
         if st["gap"] < st["total"] * self.CORE_MIN_GAP_PCT / 100:
             log.info(f"[core] 목표와의 차이 {self._fmt_price(st['gap'])} — 기준 미만, 매수 없음")
             return []
@@ -606,6 +615,8 @@ class OrderManager:
             return []
         price = self._adjust_limit_price(cur * 1.005, "BUY")
         qty = int(spend // price)
+        if qty < 1 and st["gap"] >= price and spendable >= price:
+            qty = 1      # 1회 한도가 1주 값보다 작은 계좌 — 한도 때문에 영영 못 사는 것을 막는다
         if qty < 1:
             log.info(f"[core] 쓸 수 있는 금액 {self._fmt_price(spend)} < 1주 {self._fmt_price(price)} — 매수 없음")
             return []

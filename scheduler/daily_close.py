@@ -266,7 +266,7 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
         if core:
             line = (f"\n🧱 코어 {core['symbol']}: ${core['held']:,.0f} "
                     f"({core['held_pct']:.0f}% / 목표 {core['target_pct']:.0f}%)")
-            buyable = min(core["gap"], core["cash"] - core["reserve"])
+            buyable = om.core_spend(core)      # 목표까지 남은 금액·현금·1회 한도 중 작은 값
             if is_wed and allow_new and core["gap"] >= core["total"] * om.CORE_MIN_GAP_PCT / 100 and buyable > 0:
                 line += f" → 매수 예정 약 ${buyable:,.0f}"
             msg += line

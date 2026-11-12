@@ -48,6 +48,7 @@ us:
     buffer_pct:      1.0
     core_symbol: SPY             # 코어 보유 — 목표 비중까지 채워 두는 지수 (자동 매도 없음)
     core_pct:       60           # 2026-11-12 SPY 60 : Clenow 40
+    core_max_buy_pct: 15         # 분할 매수 — 주 1회 총자산의 15% 까지. 1주 단위라 지금 규모에선 주 2주씩 5~6주. 0 이면 한 번에
     clenow_pct:     40
     weinstein_pct:   0           # 2026-11-12 Weinstein 실계좌 종료 (40% 는 새 배분 결정 전까지 현금)
     # liquidate_strategies: [weinstein]   # 종료 전략 보유분 전량 매도 (daily_close). 청산 끝나면 삭제
@@ -85,6 +86,7 @@ capital:
   buffer_pct:      1.0
   core_symbol: SPY             # 코어 보유 — 목표 비중까지 채워 두는 지수 (자동 매도 없음)
   core_pct:       60           # 2026-11-12 SPY 60 : Clenow 40
+  core_max_buy_pct: 15         # 분할 매수 — 주 1회 총자산의 15% 까지. 1주 단위라 지금 규모에선 주 2주씩 5~6주. 0 이면 한 번에
   clenow_pct:     40
   weinstein_pct:   0           # 2026-11-12 Weinstein 실계좌 종료 (40% 는 새 배분 결정 전까지 현금)
   # liquidate_strategies: [weinstein]   # 종료 전략 보유분 전량 매도 (daily_close). 청산 끝나면 삭제
