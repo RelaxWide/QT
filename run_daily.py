@@ -224,6 +224,11 @@ def main():
     # ── 1. 데이터 로드 ─────────────────────────────────────────────────────
     print(f"[{today_str}] 데이터 다운로드...")
     tickers    = get_sp500_tickers()
+    # 지수에서 빠진 보유 종목도 가격을 받아야 청산·평가가 된다
+    held_extra = [s for s in load_simple_positions("clenow") if s not in set(tickers)]
+    if held_extra:
+        print(f"  유니버스 밖 보유 종목 가격 추가 수집: {held_extra}")
+        tickers = tickers + held_extra
     price_data = fetch_all(tickers, "2015-01-01", None, min_bars=300, refresh=args.refresh)
     print(f"  {len(price_data)} 종목 로드")
 
@@ -261,12 +266,14 @@ def main():
         spy_close = pd.Series(dtype=float)
     sectors = get_sp500_sectors()
 
+    data_end = str(max(df.index[-1] for df in price_data.values()).date())   # 수정주가 기준일
+
     cl_exits_all, cl_buys_all = [], []
     tag = len(days) > 1
     for today in days:
         is_wed = today.weekday() == 2 or (args.force_wednesday and today == days[-1])
         exits, buys, cl_pos = _process_day(today, is_wed, price_data, cfg, initial_capital, slippage,
-                                           spy_close, sectors)
+                                           spy_close, sectors, data_end)
         d = f" {today:%m/%d}"
         cl_exits_all += [(s, pnl, reason + d) if tag else (s, pnl, reason) for s, pnl, reason in exits]
         cl_buys_all  += buys
@@ -284,12 +291,14 @@ def main():
     print(msg.replace("<b>", "").replace("</b>", ""))
 
 
-def _process_day(today, is_wednesday, price_data, cfg, initial_capital, slippage, spy_close, sectors):
-    """하루치 Clenow 처리: 청산 → (수요일) 매수 → 포지션 저장 → NAV 한 줄. (exits, buys, positions) 반환."""
+def _process_day(today, is_wednesday, price_data, cfg, initial_capital, slippage, spy_close, sectors,
+                 data_end: str):
+    """하루치 Clenow 처리: 청산 → (수요일) 매수 → 포지션 저장 → NAV 한 줄. (exits, buys, positions) 반환.
+    data_end: 가격 데이터의 마지막 봉 날짜 — 수정주가의 기준일 (분할 보정 마커에 쓴다)."""
     cap          = initial_capital
     cl_cfg       = cfg.get("clenow_strategy", {})
     cl_pos       = load_simple_positions("clenow")
-    cl_split_msgs = adjust_simple_positions(cl_pos, str(today.date()))
+    cl_split_msgs = adjust_simple_positions(cl_pos, str(today.date()), as_of=data_end)
     if cl_split_msgs:
         save_simple_positions("clenow", cl_pos)
         print(f"  [분할 보정] Clenow: {', '.join(cl_split_msgs)}")
@@ -336,6 +345,9 @@ def _process_day(today, is_wednesday, price_data, cfg, initial_capital, slippage
         cl_pos[sym] = SimplePosition(
             symbol=sym, entry_date=today.isoformat(),
             entry_price=entry_px, shares=shares, strategy="clenow",
+            # 진입가는 이미 "데이터 마지막 날까지의 분할이 반영된" 수정주가다 → 과거 날짜를 따라잡으며
+            # 산 포지션에 그 뒤 날짜의 분할을 다시 적용하지 않도록 마커를 데이터 기준일로 둔다
+            split_adjusted_through=data_end,
         )
         cl_cash -= buy_amt
         cl_buys.append((sym, entry_px, shares, buy_amt))

@@ -38,6 +38,7 @@ def _exp_reg_score(prices: pd.Series, lookback: int) -> float:
     return float(annualized * r2)
 
 
+MAX_BAR_AGE_DAYS = 5         # 신호 날짜 기준 마지막 봉이 이보다 오래되면 점수 계산에서 제외
 REF_ATR_PCT = 0.025          # 이 변동성의 종목이 슬롯 하나를 꽉 채운다
 SIZE_MULT_RANGE = (0.4, 1.5)  # 슬롯 금액 대비 매수 배율 범위
 
@@ -104,8 +105,13 @@ def compute_scores(
     for sym, df in price_data.items():
         if sym == index_ticker or sym in ("SPY", "^KS11", "^KS200", "^VIX", "^VKOSPI"):
             continue
-        idx = df.index.searchsorted(date)
-        if idx < ma100_p + lookback:
+        # date 이하의 마지막 봉까지만 쓴다. 예전 searchsorted(date) 는 그 날짜 봉이 없으면 **다음 봉**
+        # 위치를 돌려줘서, 과거 날짜를 처리할 때(페이퍼 따라잡기·백테스트) 미래 가격이 점수에 들어갔다.
+        idx = df.index.searchsorted(date, side="right") - 1
+        if idx + 1 < ma100_p + lookback:
+            continue
+        # 마지막 봉이 너무 오래된 종목(거래정지·데이터 누락)은 순위에서 뺀다
+        if (pd.Timestamp(date) - df.index[idx]).days > MAX_BAR_AGE_DAYS:
             continue
 
         sub   = df.iloc[: idx + 1]

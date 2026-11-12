@@ -140,6 +140,8 @@ def build_summary() -> str:
         pnl_amt  = bal.get("total_pnl_usd", 0.0)
         # cash_usd 는 KIS 주문가능금액 — 결제 전 매도 대금은 빠져 있다 (daily_close 와 같은 라벨)
         line(f"잔고: 주문가능 ${cash:,.2f} | 평가 ${sum_eval:,.2f} | 평가손익 ${pnl_amt:+,.2f}")
+        if bal.get("_cash_failed"):
+            line("🚨 현금(주문가능금액) 조회 실패 — 위 현금 $0 은 실제 값이 아님")
 
     # SPY 대비 (daily_close 가 기록한 실계좌 NAV 기준). 낙폭·당일 손익은 06:30 장마감 메시지에 있다
     try:

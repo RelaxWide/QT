@@ -51,6 +51,33 @@ def session_after(ts) -> pd.Timestamp | None:
     return None
 
 
+ORDER_CLOSE_BUFFER_MIN = 10   # 마감 직후 잔고 반영 지연 여유
+
+
+def order_session_closed(submitted_at, now: pd.Timestamp | None = None) -> bool | None:
+    """
+    주문이 유효했던 세션(접수 이후 처음 마감하는 NYSE 세션)이 이미 끝났는가.
+    끝나기 전에는 "미체결" 로 판정하면 안 된다 — 06:30 KST 에 낸 매도는 그날 밤 개장에야 체결된다.
+    submitted_at 이 naive 면 KST. 달력을 못 쓰면 None (호출측이 시간 기준으로 폴백).
+    """
+    try:
+        import exchange_calendars as xcals
+        cal = xcals.get_calendar("XNYS")
+        ts = pd.Timestamp(submitted_at)
+        if ts.tzinfo is None:
+            ts = ts.tz_localize("Asia/Seoul")
+        ts = ts.tz_convert("UTC")
+        now = pd.Timestamp.now(tz="UTC") if now is None else pd.Timestamp(now).tz_convert("UTC")
+        d = pd.Timestamp(ts.tz_convert("America/New_York").date())
+        for s in cal.sessions_in_range(d, d + pd.Timedelta(days=15)):
+            close = cal.session_close(s)
+            if close > ts:
+                return bool(now >= close + pd.Timedelta(minutes=ORDER_CLOSE_BUFFER_MIN))
+    except Exception as e:
+        log.warning(f"[freshness] 주문 세션 종료 판정 실패 ({submitted_at!r}): {e}")
+    return None
+
+
 def is_stale(data_today: pd.Timestamp, expected: pd.Timestamp | None) -> bool:
     """기대 세션보다 하루라도 뒤면 정체. 달력이 없으면 3영업일 허용 (예전 기준)."""
     if expected is None:

@@ -39,6 +39,7 @@ logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 log = logging.getLogger("kis")
 
 WED_BUY_PENDING = Path("live_trading/wed_buy_pending.json")
+MIN_TODAY_COVERAGE = 0.90   # 요청 종목 중 data_today 봉이 있어야 하는 비율 (미만이면 불완전 데이터 → 신호 판정 중단)
 # 끝까지 정상 처리된 실행만 남기는 완료 기록 — catchup.py 가 "오늘 처리됐는가" 를 이걸로 판단한다.
 # NAV 는 실행 초반에 기록되므로 완료 여부의 근거가 못 된다 (이후 단계에서 죽어도 NAV 는 남는다).
 DONE_MARKER = Path("live_trading/daily_close_done.json")
@@ -98,10 +99,17 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
     from src.fetch.universe import get_sp500_tickers
     from src.fetch.prices import fetch_all
     tickers    = get_sp500_tickers()
+    # 추적 중인 보유 종목은 유니버스(현재 S&P 500 구성)에서 빠졌어도 가격을 받는다.
+    # 안 그러면 지수에서 제외된 보유 종목은 가격이 없어 청산 주문이 조용히 건너뛰어진다.
+    held_all = sorted({s for strat in ("clenow", "weinstein") for s in load_live_positions(strat)})
+    extra = [s for s in held_all if s not in set(tickers)]
+    if extra:
+        log.warning(f"[daily_close] 유니버스 밖 보유 종목 가격 추가 수집: {extra}")
+        tickers = tickers + extra
     price_data = fetch_all(tickers, cfg["data"]["start_date"],
                            cfg["data"]["end_date"], min_bars=150,
                            refresh=refresh)
-    log.info(f"[daily_close] {len(price_data)} 종목 로드 완료")
+    log.info(f"[daily_close] {len(price_data)} / {len(tickers)} 종목 로드 완료")
 
     # 데이터의 마지막 거래일을 today 로 사용 (실행 시점/타임존 영향 제거)
     latest_dates = [df.index.max() for df in price_data.values() if not df.empty]
@@ -114,8 +122,14 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
     # 데이터 신선도 가드 — NYSE 달력상 "지금 있어야 할 마지막 거래일" 과 비교.
     # 하루라도 밀리면 강제 재다운로드, 그래도 밀리면 신호 판정 중단.
     # (2026-06 한 달 정체, 07 3회 재발 — 예전 BDay(3) 허용폭 안에서 낡은 신호·지정가가 나갔다)
+    # 날짜 하나(max)만 보면 1종목만 최신이어도 전체가 최신으로 통과한다 → 요청 종목 대비
+    # "data_today 봉이 있는 종목 비율" 도 본다 (페이퍼와 같은 90% 기준).
+    def _coverage(pdata, day) -> float:
+        return sum(1 for df in pdata.values() if not df.empty and df.index.max() == day) / max(len(tickers), 1)
+
     expected = expected_us_session()
-    if is_stale(today, expected) and not refresh:
+    coverage = _coverage(price_data, today)
+    if (is_stale(today, expected) or coverage < MIN_TODAY_COVERAGE) and not refresh:
         log.warning(f"[daily_close] 가격 데이터 정체 감지 (data_today={today.date()}, "
                     f"expected={expected.date() if expected is not None else '?'}) "
                     f"— 캐시 무시하고 강제 재다운로드")
@@ -125,11 +139,13 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
         latest_dates = [df.index.max() for df in price_data.values() if not df.empty]
         if latest_dates:
             today = max(latest_dates)
+        coverage = _coverage(price_data, today)
         log.info(f"[daily_close] refresh 후 data_today={today.date()}")
-    data_stale = is_stale(today, expected)
+    data_stale = is_stale(today, expected) or coverage < MIN_TODAY_COVERAGE
+    log.info(f"[daily_close] 당일({today.date()}) 봉 커버리지 {coverage:.0%} (기준 {MIN_TODAY_COVERAGE:.0%})")
     if data_stale:
-        log.error(f"[daily_close] 데이터 정체 (data_today={today.date()}, "
-                  f"expected={expected.date() if expected is not None else '?'}) "
+        log.error(f"[daily_close] 데이터 정체/불완전 (data_today={today.date()}, "
+                  f"expected={expected.date() if expected is not None else '?'}, 커버리지 {coverage:.0%}) "
                   f"— 신호 판정 중단, 미체결 재매도만 KIS 종가로")
 
     # SPY 벤치마크 — NAV 이력에 같은 세션의 SPY 종가를 붙인다 (판정 기준: SPY 보유 대비).
@@ -197,6 +213,20 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
         "sell_ranked": cl_ranked,
         "buy":         [],
     }
+    sell_px = dict(sell_px)          # 아래에서 KIS 시세를 덧붙이므로 사본
+    sell_no_price: list[str] = []    # 가격을 끝내 못 구해 매도 주문을 못 낸 종목
+
+    def _ensure_sell_prices(symbols) -> None:
+        """매도 대상 중 data_today 봉이 없는 종목은 KIS 현재가(장 마감 후 = 종가)로 채운다."""
+        def _lacks(s):
+            return s not in sell_px or today not in sell_px[s].index
+        missing = [s for s in symbols if _lacks(s)]
+        if missing:
+            log.warning(f"[daily_close] 매도 대상 가격 없음 → KIS 시세 조회: {missing}")
+            sell_px.update(_kis_close_frames(om.kis, missing, today))
+            sell_no_price.extend(s for s in missing if _lacks(s))
+
+    _ensure_sell_prices(cl_sell_only["sell_ma100"] + cl_sell_only["sell_ranked"])
     cl_sell_orders = om.place_clenow_orders(cl_sell_only, sell_px, today, dry_run)
     log.info(f"[daily_close] Clenow 매도 주문 {len(cl_sell_orders)}건")
 
@@ -227,7 +257,32 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
         "sell_ma30": list(dict.fromkeys(w_ma30 + retry_sells["weinstein"] + liq_syms.get("weinstein", []))),
         "buy":       [],
     }
+    _ensure_sell_prices(w_sell_only["sell_ma30"])
     w_sell_orders = om.place_weinstein_orders(w_sell_only, sell_px, today, dry_run)
+
+    # 당일 봉이 없는 보유 종목은 추세 이탈 청산을 판정하지 못했다 (정체가 아닐 때만 의미 있음)
+    # (이번에 매도 주문이 나간 종목은 제외. 한 종목의 데이터 누락은 재실행으로 풀리는 경우가 드물어
+    #  완료 판정에는 넣지 않고 경고만 한다 — 전체적인 지연은 위 커버리지 기준이 잡는다)
+    ordered = {r.symbol for r in cl_sell_orders + w_sell_orders if r.ok}
+    held_no_bar = [] if data_stale else sorted(
+        s for s in held_all if s not in ordered
+        and (s not in price_data or today not in price_data[s].index))
+    if held_no_bar:
+        log.warning(f"[daily_close] 당일 봉 없는 보유 종목 — 청산 판정 못 함: {held_no_bar}")
+
+    # 이 실행이 "끝까지 정상" 이었는지 — 아니면 완료 기록을 남기지 않아 catchup 이 다시 돌린다
+    problems = []
+    if recon_error:
+        problems.append("체결 확정 실패")
+    if nav_error:
+        problems.append("NAV 기록 실패")
+    failed_sells = [r.symbol for r in cl_sell_orders + w_sell_orders if not r.ok]
+    if failed_sells:
+        problems.append("매도 주문 실패 " + ",".join(failed_sells))
+    if sell_no_price:
+        problems.append("매도 가격 없음 " + ",".join(sell_no_price))
+    if data_stale:
+        problems.append("데이터 정체/불완전")
     log.info(f"[daily_close] Weinstein 매도 주문 {len(w_sell_orders)}건")
 
     if is_wed and allow_new and w_sigs.get("buy"):
@@ -287,19 +342,28 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
             msg += "\n" + bench
         if nav_error:
             msg += f"\n🚨 NAV 기록 실패: {nav_error}"
+        if (report.get("balance") or {}).get("_cash_failed"):
+            msg += "\n🚨 현금(주문가능금액) 조회 실패 — 위 잔고의 현금 $0 은 실제 값이 아님. NAV 기록·매수 보류"
+        if sell_no_price:
+            msg += "\n🚨 매도 가격을 못 구해 주문 못 냄: " + ", ".join(sell_no_price)
+        if held_no_bar:
+            msg += "\n⚠️ 당일 봉 없는 보유 종목 (청산 판정 못 함): " + ", ".join(held_no_bar)
+        if problems:
+            msg += "\n🔁 미완료 처리 — 따라잡기 실행이 다시 시도: " + " / ".join(problems)
         if not allow_new:
             msg += f"\n🛑 <b>신규 매수 중단</b>: {reason} (청산은 계속)"
         if data_stale:
             exp = f"{expected:%m/%d}" if expected is not None else "?"
-            msg = (f"⚠️ <b>가격 데이터 정체</b> — 데이터 {today:%m/%d}, 있어야 할 날 {exp}\n"
+            msg = (f"⚠️ <b>가격 데이터 정체/불완전</b> — 데이터 {today:%m/%d} (당일 봉 {coverage:.0%}), 있어야 할 날 {exp}\n"
                    f"신호 판정 중단 (신규 매도·매수 없음, 미체결 재매도만 KIS 종가로). "
                    f"캐시/네트워크 점검 필요\n") + msg
         log.info("[daily_close] " + msg.replace("\n", " | "))
         _notify(msg, cfg_live)
 
-    # 완료 기록: 실제 실행(dry-run 아님)이 끝까지 왔고 데이터가 정체되지 않았을 때만.
-    # 데이터 정체로 신호 판정을 건너뛴 실행은 미완료로 남겨 catchup 이 나중에 다시 시도하게 한다.
-    if not dry_run and not data_stale:
+    # 완료 기록: 실제 실행(dry-run 아님)이 끝까지 왔고 **필수 단계가 전부 성공**했을 때만.
+    # 체결 확정·NAV 기록·매도 주문 중 하나라도 실패했거나 데이터가 정체/불완전하면 미완료로 남겨
+    # catchup 이 나중에 다시 시도하게 한다. (텔레그램 전송 성공 여부는 조건이 아니다)
+    if not dry_run and not problems:
         try:
             DONE_MARKER.parent.mkdir(exist_ok=True)
             DONE_MARKER.write_text(json.dumps({
@@ -308,8 +372,8 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
             }, indent=2), encoding="utf-8")
         except Exception as e:
             log.error(f"[daily_close] 완료 기록 실패: {e}")
-    elif data_stale:
-        log.warning("[daily_close] 데이터 정체 — 완료 기록을 남기지 않음 (catchup 재시도 대상)")
+    elif problems:
+        log.warning(f"[daily_close] 미완료 — 완료 기록을 남기지 않음 (catchup 재시도 대상): {problems}")
 
     log.info("[daily_close] 완료")
 

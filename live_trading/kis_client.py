@@ -535,12 +535,20 @@ class KISClient:
         import time as _t; _t.sleep(0.5)
         cash_usd, fx = self._get_psamount()
 
-        return {
-            "cash_usd":       cash_usd,
+        out = {
+            "cash_usd":       cash_usd if cash_usd is not None else 0.0,
             "total_pnl_usd":  float(out2.get("ovrs_tot_pfls", 0) or 0),
-            "fx_rate":        fx,
+            "fx_rate":        fx or 0.0,
             "positions":      positions,
         }
+        if cash_usd is None:
+            # 현금 조회 실패는 "현금 0" 이 아니다. 그대로 두면 NAV 가 현금만큼 줄어든 채 기록된다
+            # (평가 $5,000 + 현금 $5,000 계좌가 $5,000 으로). 보유 목록은 유효하므로 남기되
+            # 잔고 전체를 실패로 표시해 NAV 기록·체결 확정·매수를 보류시킨다.
+            log.error("[balance] 현금(주문가능금액) 조회 실패 — 잔고를 실패로 표시 (_failed, _cash_failed)")
+            out["_failed"] = True
+            out["_cash_failed"] = True
+        return out
 
     def _get_balance_kr(self) -> dict:
         """국내 주식 잔고 조회."""
@@ -670,8 +678,9 @@ class KISClient:
             time.sleep(0.5)
         return out
 
-    def _get_psamount(self) -> tuple[float, float]:
-        """해외주식 매수가능금액 조회. 반환: (orderable_usd, fx_rate). 초당 한도 시 1회 재시도."""
+    def _get_psamount(self) -> tuple[float | None, float | None]:
+        """해외주식 매수가능금액 조회. 반환: (orderable_usd, fx_rate). 초당 한도 시 1회 재시도.
+        **조회 실패는 (None, None)** — 실제 현금 0 과 구별한다."""
         import time as _t
         url = f"{self.base_url}/uapi/overseas-stock/v1/trading/inquire-psamount"
         params = {
@@ -695,7 +704,7 @@ class KISClient:
                 r.raise_for_status()
                 if d.get("rt_cd") != "0":
                     log.warning(f"[psamount] 실패: {msg}")
-                    return 0.0, 0.0
+                    return None, None
                 out = d.get("output", {}) or {}
                 return (
                     float(out.get("ord_psbl_frcr_amt", 0) or 0),
@@ -707,8 +716,8 @@ class KISClient:
                     _t.sleep(1.0)
                     continue
                 log.warning(f"[psamount] 최종 실패: {e}")
-                return 0.0, 0.0
-        return 0.0, 0.0
+                return None, None
+        return None, None
 
     def _get_psamount_kr(self, item_cd: str = "005930", ord_unpr: int = 1) -> float:
         """국내 매수가능 현금 조회. 반환: ord_psbl_cash (KRW)."""

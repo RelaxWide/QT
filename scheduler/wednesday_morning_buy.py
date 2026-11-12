@@ -66,6 +66,10 @@ def main(dry_run: bool = False, no_wait: bool = False):
     guard = RiskGuard.from_config(market="us")
     ok, reason = guard.check()
     if not ok:
+        if dry_run:
+            log.warning(f"[DRY-RUN] 신규 주문 차단 상태: {reason} — 실제 실행이면 pending 을 지우고 "
+                        f"중단 알림을 보낸다 (모의 실행이라 아무것도 건드리지 않음)")
+            return
         log.warning(f"[wed_buy] 신규 주문 차단: {reason} - pending 삭제, 종료")
         if WED_BUY_PENDING.exists():
             WED_BUY_PENDING.unlink()
@@ -107,7 +111,12 @@ def main(dry_run: bool = False, no_wait: bool = False):
         WED_BUY_PENDING.unlink()
         log.info(f"[wed_buy] pending 파일 삭제")
 
-    # 텔레그램 알림
+    # 텔레그램 알림 (모의 실행은 로그만 — 실제 접수처럼 보이는 알림을 보내지 않는다)
+    if dry_run:
+        for r in total_orders:
+            log.info(f"[DRY-RUN] 주문 예정: {r.side} {r.symbol} x{r.qty} @${r.price:.2f} (${r.qty * r.price:,.0f})")
+        log.info("[wed_buy] 모의 실행 완료 — 주문·파일 변경·알림 없음")
+        return
     if total_orders:
         n_fail = sum(1 for r in total_orders if not r.ok)
         head = f"🌅 <b>US 매수 주문 접수</b> (수 11:00 ET) {len(total_orders) - n_fail}건"

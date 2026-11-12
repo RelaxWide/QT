@@ -137,9 +137,18 @@ def record_nav(market: str, balance: dict, today: str | None = None,
     total = cash + unsettled + sum(float(p.get("eval_amt", 0) or 0) for p in balance.get("positions", []))
     today = today or date.today().isoformat()
 
-    rows = [r for r in load_nav(market) if r["date"] != today]
+    all_rows = load_nav(market)
+    rows = [r for r in all_rows if r["date"] != today]
     fp = _flow_path(market)
     flow = sum(x["amount"] for x in json.loads(fp.read_text(encoding="utf-8"))) if fp.exists() else 0.0
+    # 같은 날 재기록: 첫 기록 때 반영하고 지운 입출금을 잃으면 그 금액이 그대로 손익으로 바뀐다
+    # (출금 $3,000 → 재기록 시 unit_nav 0.7, 낙폭 -30%). 기존 당일 행의 flow 를 이어받는다.
+    for r in all_rows:
+        if r["date"] == today:
+            try:
+                flow += float(r.get("flow") or 0)
+            except (TypeError, ValueError):
+                pass
 
     if rows and rows[-1]["total"] > 0:
         unit = rows[-1]["unit_nav"] * (total - flow) / rows[-1]["total"]

@@ -33,3 +33,4 @@ paper_trading/kw_sv_overdue_alert.json
 logs/
 docs_cache/
 live_trading/daily_close_done.json
+live_trading/unsettled_sells_*.json

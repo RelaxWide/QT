@@ -196,6 +196,17 @@ class OrderManager:
     ) -> OrderResult:
         key = self._order_key(strategy, symbol, signal_date, side)
 
+        # 같은 키의 매도가 이미 나갔는데 포지션이 다시 open 이면, 앞 주문은 세션이 끝나 미체결로
+        # 확정된 것이다 → 재주문은 새 키로 실제 전송한다. (예전엔 이전 결과만 돌려주고 아무 주문도
+        # 내지 않아, 데이터 날짜가 안 바뀌는 동안에는 재매도가 조용히 사라졌다)
+        if side == "SELL" and self.market == "us" and self._already_sent(key) \
+                and self._position_status(strategy, symbol) == "open":
+            n = 2
+            while self._already_sent(f"{key}#retry{n}"):
+                n += 1
+            log.info(f"[orders] {key} 앞 주문 미체결 확정 — 재주문 (#{n})")
+            key = f"{key}#retry{n}"
+
         if self._already_sent(key):
             log.info(f"[orders] 중복 방지 — {key} 이미 전송됨")
             prev = self._map[key]
@@ -225,6 +236,16 @@ class OrderManager:
             # positions_live_{strategy}.json 갱신 (매수=추가 / 매도=제거)
             self._update_live_positions(strategy, symbol, signal_date, side, qty, price, result.order_no)
         return result
+
+    @staticmethod
+    def _position_status(strategy: str, symbol: str) -> str | None:
+        """positions_live 의 상태 (open | pending_buy | pending_sell). 없거나 못 읽으면 None."""
+        try:
+            from live_trading.tracker_live import load_live_positions
+            pos = load_live_positions(strategy).get(symbol)
+            return pos.status if pos else None
+        except Exception:
+            return None
 
     def _update_live_positions(self, strategy: str, symbol: str, signal_date: str,
                                 side: str, qty: int, price: float, order_no: str) -> None:
@@ -447,6 +468,12 @@ class OrderManager:
         """
         if strategy not in ("clenow", "weinstein", "kw_super_value"):
             raise ValueError(f"strategy must be clenow|weinstein|kw_super_value, got {strategy}")
+
+        # 잔고·현금을 모르는 상태에서는 사지 않는다 (US 주간 전략). 예전엔 config 의 고정 예산으로
+        # 현금 확인 없이 주문이 나갈 수 있었다. 매수는 한 주 미뤄져도 되지만 초과 매수는 되돌릴 수 없다.
+        if self.market == "us" and self.cap.get("auto_allocate") and self._get_balance().get("_failed"):
+            log.error(f"[{strategy}] KIS 잔고/현금 조회 실패 — 매수 생략")
+            return []
 
         budget = self._strategy_budget(strategy)
         if budget <= 0:

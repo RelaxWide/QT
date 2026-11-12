@@ -22,14 +22,19 @@ from live_trading.tracker_live import (
     append_slippage,
 )
 
+from live_trading.freshness import order_session_closed
+
 CONFIG_PATH = Path("config_live.yaml")
 log = logging.getLogger("kis")
 
 STRATEGIES = ("phase4", "clenow", "weinstein")
 
-# 접수 후 이 시간이 안 지난 주문은 아직 장이 안 돌았을 수 있으니 판정 보류
-# (daily_close 수동 재실행 시 방금 낸 매도를 "미체결" 로 오판해 중복 주문하는 것 방지)
-MIN_ORDER_AGE_HOURS = 4
+# 미체결 판정은 "주문이 유효했던 세션이 끝난 뒤" 에만 한다 (freshness.order_session_closed).
+# 예전엔 접수 후 4시간만 지나면 판정해서, 06:30 에 낸 매도를 같은 날 낮에 다시 확인하면
+# 장이 열리기도 전에 "미체결" 로 보고 pending_sell 을 open 으로 되돌렸다 → 이후 실제 체결이
+# 추적되지 않음 (따라잡기 재실행이 생기면서 자동으로 진입 가능한 경로가 됐다).
+# 달력을 못 쓸 때만 아래 시간 기준으로 폴백 (하루 주기 실행 가정).
+FALLBACK_ORDER_AGE_HOURS = 20
 
 
 def reconcile_fills(kis: KISClient, strategies=STRATEGIES) -> dict:
@@ -82,16 +87,24 @@ def reconcile_fills(kis: KISClient, strategies=STRATEGIES) -> dict:
         if len(owners[sym]) > 1:
             result["skipped"].append(f"{tag} (복수 전략 보유)")
             continue
-        try:
-            age_h = (now - pd.Timestamp(pos.submitted_at)).total_seconds() / 3600
-        except Exception:
-            age_h = MIN_ORDER_AGE_HOURS   # 기록 없는 옛 포지션은 판정 진행
-        if age_h < MIN_ORDER_AGE_HOURS:
-            result["skipped"].append(f"{tag} (접수 {age_h:.1f}h 경과, 판정 보류)")
-            continue
-
         held = int(kis_pos.get(sym, {}).get("qty", 0))
         positions = all_pos[strategy]
+
+        # 주문 세션이 끝났는가 — 끝나기 전에는 "전량 체결" 이 잔고로 확인된 경우만 확정한다
+        if not pos.submitted_at:
+            session_done = True                      # 접수 시각 기록이 없는 옛 포지션
+        else:
+            session_done = order_session_closed(pos.submitted_at)
+            if session_done is None:
+                try:
+                    age_h = (now - pd.Timestamp(pos.submitted_at)).total_seconds() / 3600
+                except Exception:
+                    age_h = FALLBACK_ORDER_AGE_HOURS
+                session_done = age_h >= FALLBACK_ORDER_AGE_HOURS
+        fully_filled = (held <= 0) if pos.status == "pending_sell" else (held >= pos.qty)
+        if not session_done and not fully_filled:
+            result["skipped"].append(f"{tag} (주문 세션 미종료 — 판정 보류)")
+            continue
 
         if pos.status == "pending_buy":
             if held <= 0:
