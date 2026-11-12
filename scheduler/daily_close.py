@@ -5,7 +5,8 @@ scheduler/daily_close.py
 역할:
   1. Clenow / Weinstein 매도 신호 (MA 이탈, rank_exit) → 즉시 주문
   2. KR 수요일: 매수 후보를 live_trading/wed_buy_pending.json 으로 저장
-     (wednesday_morning_buy.py 가 Wed 11 AM ET 에 KIS 주문 전송)
+     (wednesday_morning_buy.py 가 Wed 11 AM ET 에 KIS 주문 전송 — Clenow 후 남는 현금으로 코어 SPY 보충)
+     Clenow: SPY > MA200 일 때만 매수 후보, 업종당 종목 수 제한, 변동성 역가중 배율 포함
   3. 종료 전략(config_live capital.liquidate_strategies) 보유분 전량 매도
   4. KIS 잔고 동기화 + 텔레그램 1건
 
@@ -40,7 +41,7 @@ log = logging.getLogger("kis")
 WED_BUY_PENDING = Path("live_trading/wed_buy_pending.json")
 
 
-def main(dry_run: bool = False, refresh: bool = False):
+def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
     cfg_live = yaml.safe_load(Path("config_live.yaml").read_text(encoding="utf-8"))
     cfg      = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
 
@@ -88,7 +89,7 @@ def main(dry_run: bool = False, refresh: bool = False):
 
     # KR 시간 기준 요일 (Wed 06:30 KR = Tue close 처리 → 그날 11 AM ET 매수 준비)
     now_kst = pd.Timestamp.now(tz="Asia/Seoul")
-    is_wed  = now_kst.weekday() == 2
+    is_wed  = now_kst.weekday() == 2 or force_wed   # --force-wed: 수요일 매수 후보 미리보기 (dry-run 용)
 
     # ── 1. 가격 데이터 로드 ──────────────────────────────────────────────
     from src.fetch.universe import get_sp500_tickers
@@ -130,12 +131,24 @@ def main(dry_run: bool = False, refresh: bool = False):
 
     # SPY 벤치마크 — NAV 이력에 같은 세션의 SPY 종가를 붙인다 (판정 기준: SPY 보유 대비).
     # 실패해도 매매에는 영향 없음. SPY 가 밀려 있으면 오늘 행은 비워 두고 다음 실행에서 채운다.
-    if not dry_run:
+    spy_closes = None
+    try:
+        spy_closes = load_spy_closes(cfg)
+    except Exception as e:
+        log.warning(f"[daily_close] SPY 가격 조회 실패: {e}")
+    if not dry_run and spy_closes is not None:
         try:
-            n = update_benchmark("us", load_spy_closes(cfg), session)
+            n = update_benchmark("us", spy_closes, session)
             log.info(f"[daily_close] SPY 벤치마크 {n}행 반영")
         except Exception as e:
             log.warning(f"[daily_close] SPY 벤치마크 갱신 실패: {e}")
+
+    # Clenow 레짐 — SPY 종가 > MA200 일 때만 신규 매수 (원래 설계). 판정 불가(None)면 매수 보류.
+    from src.strategy.clenow_momentum import spy_regime_ok
+    regime = None
+    if spy_closes is not None:
+        regime = spy_regime_ok(spy_closes, today, cfg.get("clenow_strategy", {}).get("spy_ma200_period", 200))
+    log.info(f"[daily_close] Clenow 레짐: {'ON' if regime else 'OFF' if regime is False else '판정 불가'}")
 
     om = OrderManager.from_config(allow_prod=True)
 
@@ -164,7 +177,13 @@ def main(dry_run: bool = False, refresh: bool = False):
     else:
         sell_px = price_data
         cl_pos  = load_live_positions("clenow")
-        cl_sigs = get_clenow_signals(price_data, set(cl_pos.keys()), cfg, today, is_wed)
+        sectors = {}
+        if is_wed:
+            from src.fetch.universe import get_sp500_sectors
+            sectors = get_sp500_sectors()
+        cl_sigs = get_clenow_signals(price_data, set(cl_pos.keys()), cfg, today, is_wed,
+                                     regime_ok=(regime is True), sectors=sectors,
+                                     max_per_sector=int(om.cap.get("clenow_max_per_sector", 2)))
 
     # 매도 (MA100 이탈 + rank 탈락) 는 즉시 주문
     cl_ma100  = cl_sigs.get("sell_ma100", [])
@@ -184,6 +203,7 @@ def main(dry_run: bool = False, refresh: bool = False):
         pending_payload["clenow"] = {
             "signal_date": str(today.date()),
             "symbols":     cl_sigs["buy"],
+            "size_mult":   cl_sigs.get("size_mult", {}),    # 변동성 역가중 배율
         }
         log.info(f"[daily_close] Clenow 매수 후보 {len(cl_sigs['buy'])}건 → pending 저장")
 
@@ -210,8 +230,16 @@ def main(dry_run: bool = False, refresh: bool = False):
         }
         log.info(f"[daily_close] Weinstein 매수 후보 {len(w_sigs['buy'])}건 → pending 저장")
 
-    # pending 파일 저장 / 정리
-    if pending_payload:
+    # pending 파일 저장 / 정리 (dry-run 은 파일을 건드리지 않고 후보만 보여 준다)
+    if dry_run:
+        view = _pending_view(pending_payload, om)
+        log.info(f"[DRY-RUN] 매수 후보(파일 미저장): { {k: v['buy'] for k, v in view.items()} } "
+                 f"| 배율 {pending_payload.get('clenow', {}).get('size_mult', {})}")
+        core = om.core_status()
+        if core:
+            log.info(f"[DRY-RUN] 코어 {core['symbol']}: 보유 ${core['held']:,.0f} ({core['held_pct']:.0f}%) / "
+                     f"목표 {core['target_pct']:.0f}% / 차이 ${core['gap']:,.0f} / 현금 ${core['cash']:,.0f}")
+    elif pending_payload:
         WED_BUY_PENDING.parent.mkdir(exist_ok=True)
         WED_BUY_PENDING.write_text(
             json.dumps(pending_payload, indent=2, ensure_ascii=False),
@@ -231,6 +259,17 @@ def main(dry_run: bool = False, refresh: bool = False):
                                   _pending_view(pending_payload, om), data_stale, now_kst,
                                   unsettled=(nav_row or {}).get("unsettled", 0))
         msg += _build_recon_message(recon, recon_error)
+        if is_wed and regime is not True and "clenow" not in liquidate:
+            msg += ("\n⏸️ Clenow 매수 보류: " +
+                    ("SPY 가 200일선 아래 (레짐 OFF)" if regime is False else "SPY 조회 실패로 레짐 판정 불가"))
+        core = om.core_status()
+        if core:
+            line = (f"\n🧱 코어 {core['symbol']}: ${core['held']:,.0f} "
+                    f"({core['held_pct']:.0f}% / 목표 {core['target_pct']:.0f}%)")
+            buyable = min(core["gap"], core["cash"] - core["reserve"])
+            if is_wed and allow_new and core["gap"] >= core["total"] * om.CORE_MIN_GAP_PCT / 100 and buyable > 0:
+                line += f" → 매수 예정 약 ${buyable:,.0f}"
+            msg += line
         for strat in sorted(liquidate):
             left = sorted(load_live_positions(strat).keys())
             if left:
@@ -337,6 +376,8 @@ def _build_core_message(report, today, cl_sells, w_sells, pending,
     line = f"보유: KIS {report.get('kis_count', 0)}종목"
     if parts:
         line += " = " + " · ".join(parts)
+    if report.get("core"):
+        line += " + 코어 " + "·".join(report["core"])
     if report.get("untracked"):
         line += f" + 미할당 {len(report['untracked'])}"
     L.append(line)
@@ -406,5 +447,9 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--refresh", action="store_true", help="가격 캐시 강제 갱신")
+    p.add_argument("--force-wed", action="store_true",
+                   help="수요일이 아니어도 매수 후보를 계산 (--dry-run 과 함께 미리보기용)")
     args = p.parse_args()
-    main(dry_run=args.dry_run, refresh=args.refresh)
+    if args.force_wed and not args.dry_run:
+        p.error("--force-wed 는 --dry-run 과 함께만 쓸 수 있습니다 (실제 매수 후보 저장 방지)")
+    main(dry_run=args.dry_run, refresh=args.refresh, force_wed=args.force_wed)

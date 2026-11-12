@@ -3,6 +3,7 @@ Paper Trading 일일 실행 스크립트 (Clenow 단일)
 장 마감 후 실행: python run_daily.py [--force] [--reset]
 
   [Clenow] 매일: MA100 이탈 청산 / 수요일: 스코어 리밸런싱
+           (SPY > MA200 일 때만 매수, 급등락 종목 제외, 업종당 종목 수 제한, 변동성 역가중 — 2026-11-12 원래 설계 복원)
 
 마지막 NAV 이후 아직 처리 안 한 거래일을 날짜순으로 전부 처리한다 (하루 여러 번 실행해도 안전).
 예전엔 최신 봉 하나만 처리해서, 실행 시점에 yfinance 당일 봉이 없으면 그날이 영영 빠졌다
@@ -26,8 +27,9 @@ try:
 except ImportError:
     from backports.zoneinfo import ZoneInfo
 
-from src.fetch.universe import get_sp500_tickers
-from src.fetch.prices import fetch_all
+from src.fetch.universe import get_sp500_tickers, get_sp500_sectors
+from src.fetch.prices import fetch_all, fetch_prices
+from src.strategy.clenow_momentum import spy_regime_ok
 from src.notify import telegram
 from paper_trading.live_signals import get_clenow_signals
 from paper_trading.simple_tracker import (
@@ -39,6 +41,7 @@ from paper_trading.splits import adjust_simple_positions
 
 NAV_FILE           = Path("paper_trading/daily_nav.csv")
 NAV_FIELDS         = ["date", "cl_total", "cl_cash", "cl_invested"]
+PAPER_MAX_PER_SECTOR = 5    # 20종목 기준 업종당 최대 (실계좌는 8종목에 2)
 MIN_TODAY_COVERAGE = 0.90   # 당일 봉이 있어야 하는 종목 비율 (미만이면 아직 데이터가 덜 온 날로 보고 미룸)
 STALE_ALERT_BDAYS  = 3      # NAV 가 이만큼 영업일 밀리면 텔레그램 경고 (그 전엔 다음 실행이 따라잡는다)
 
@@ -243,11 +246,20 @@ def main():
                 telegram.send(msg, token=tg.get("bot_token", ""), chat_id=tg.get("chat_id", ""))
         return
 
+    # 레짐(SPY > MA200)·업종 정보 — 못 받으면 매수는 보류/업종 제한 없이 진행
+    try:
+        spy_close = fetch_prices("SPY", "2015-01-01", None, refresh=args.refresh)["close"]
+    except Exception as e:
+        print(f"  SPY 가격 조회 실패 — 이번 실행은 신규 매수 보류: {e}")
+        spy_close = pd.Series(dtype=float)
+    sectors = get_sp500_sectors()
+
     cl_exits_all, cl_buys_all = [], []
     tag = len(days) > 1
     for today in days:
         is_wed = today.weekday() == 2 or (args.force_wednesday and today == days[-1])
-        exits, buys, cl_pos = _process_day(today, is_wed, price_data, cfg, initial_capital, slippage)
+        exits, buys, cl_pos = _process_day(today, is_wed, price_data, cfg, initial_capital, slippage,
+                                           spy_close, sectors)
         d = f" {today:%m/%d}"
         cl_exits_all += [(s, pnl, reason + d) if tag else (s, pnl, reason) for s, pnl, reason in exits]
         cl_buys_all  += buys
@@ -257,13 +269,15 @@ def main():
     today = days[-1]
     is_wednesday = any(d.weekday() == 2 for d in days) or args.force_wednesday
     msg = build_telegram_message(today, cl_pos, cl_exits_all, cl_buys_all, is_wednesday, price_data, cfg)
+    if is_wednesday and spy_regime_ok(spy_close, today) is not True:
+        msg += "\n⏸️ 레짐 OFF (SPY 200일선 아래 또는 판정 불가) — 신규 매수 보류"
     if tag:
         msg += "\n\n⏪ 밀린 날 함께 처리: " + ", ".join(f"{d:%m/%d}" for d in days)
     telegram.send(msg, token=tg.get("bot_token", ""), chat_id=tg.get("chat_id", ""))
     print(msg.replace("<b>", "").replace("</b>", ""))
 
 
-def _process_day(today, is_wednesday, price_data, cfg, initial_capital, slippage):
+def _process_day(today, is_wednesday, price_data, cfg, initial_capital, slippage, spy_close, sectors):
     """하루치 Clenow 처리: 청산 → (수요일) 매수 → 포지션 저장 → NAV 한 줄. (exits, buys, positions) 반환."""
     cap          = initial_capital
     cl_cfg       = cfg.get("clenow_strategy", {})
@@ -272,7 +286,11 @@ def _process_day(today, is_wednesday, price_data, cfg, initial_capital, slippage
     if cl_split_msgs:
         save_simple_positions("clenow", cl_pos)
         print(f"  [분할 보정] Clenow: {', '.join(cl_split_msgs)}")
-    cl_sigs      = get_clenow_signals(price_data, set(cl_pos.keys()), cfg, today, is_wednesday)
+    regime_ok    = spy_regime_ok(spy_close, today, cl_cfg.get("spy_ma200_period", 200)) is True
+    cl_sigs      = get_clenow_signals(price_data, set(cl_pos.keys()), cfg, today, is_wednesday,
+                                      regime_ok=regime_ok, sectors=sectors,
+                                      max_per_sector=PAPER_MAX_PER_SECTOR)
+    size_mult    = cl_sigs.get("size_mult", {})
     cl_exits     = []  # (sym, pnl, reason)
     cl_buys      = []  # (sym, entry_px, shares, alloc)
     slippage_r   = 1 - slippage
@@ -301,7 +319,7 @@ def _process_day(today, is_wednesday, price_data, cfg, initial_capital, slippage
     for sym in cl_sigs["buy"][:n_slots - len(cl_pos)]:
         if sym not in price_data or today not in price_data[sym].index:
             continue
-        buy_amt = _buy_amount(alloc, cl_cash)
+        buy_amt = _buy_amount(alloc * size_mult.get(sym, 1.0), cl_cash)   # 변동성 역가중
         if buy_amt <= 0:
             print(f"  [Clenow] 현금 부족 (${cl_cash:,.0f} < 슬롯 ${alloc:,.0f} 의 "
                   f"{MIN_SLOT_FILL:.0%}) — {sym} 이후 매수 생략")

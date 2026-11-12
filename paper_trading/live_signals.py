@@ -8,7 +8,7 @@ market 인자는 신호 자체는 시장 독립적이라 영향 작지만,
 """
 import pandas as pd
 
-from src.strategy.clenow_momentum import compute_scores
+from src.strategy.clenow_momentum import compute_scores, atr_pct_at, size_multiplier
 from src.strategy.weinstein_stage2 import generate_weinstein_signals, _resample_weekly
 
 
@@ -23,12 +23,18 @@ def get_clenow_signals(
     cfg: dict,
     today: pd.Timestamp,
     is_wednesday: bool,
+    regime_ok: bool = True,
+    sectors: dict | None = None,
+    max_per_sector: int | None = None,
 ) -> dict:
     """
+    regime_ok:      SPY > MA200 여부 (호출측에서 판정). False 면 신규 매수 후보를 내지 않는다 (매도는 그대로).
+    sectors:        {종목: 업종}. max_per_sector 와 함께 주면 보유 + 신규 합산으로 업종당 종목 수를 제한한다.
     Returns:
         sell_ma100:  MA100 이탈 종목 (매일 체크)
         sell_ranked: 모멘텀 상위 N 밖으로 밀려난 종목 (수요일에만)
-        buy:         신규 진입 후보 (수요일에만)
+        buy:         신규 진입 후보 (수요일에만, 순위순 — 앞에서부터 빈자리만큼 산다)
+        size_mult:   {매수 후보: 슬롯 금액 배율} — 변동성 역가중
     """
     cl_p    = dict(cfg.get("clenow_strategy", {}))   # 변형 방지 사본
     ma100_p = cl_p.get("ma100_period", 100)
@@ -58,12 +64,36 @@ def get_clenow_signals(
         top_set      = set(top_syms_ord)
 
         sell_ranked = [s for s in holdings if s not in top_set and s not in sell_ma100]
-        new_buys    = [s for s in top_syms_ord if s not in holdings]   # score 순서 유지
+        if regime_ok:
+            new_buys = [s for s in top_syms_ord if s not in holdings]   # score 순서 유지
+
+        # 업종 제한 — 남는 보유분 + 앞선 후보를 합쳐 업종당 max_per_sector 까지
+        if new_buys and sectors and max_per_sector:
+            counts: dict = {}
+            for s in holdings:
+                if s not in sell_ma100 and s not in sell_ranked:
+                    sec = sectors.get(s)
+                    if sec:
+                        counts[sec] = counts.get(sec, 0) + 1
+            kept = []
+            for s in new_buys:
+                sec = sectors.get(s)
+                if sec and counts.get(sec, 0) >= max_per_sector:
+                    continue
+                if sec:
+                    counts[sec] = counts.get(sec, 0) + 1
+                kept.append(s)
+            new_buys = kept
+
+    atr_p = cl_p.get("atr_period", 20)
+    size_mult = {s: round(size_multiplier(atr_pct_at(price_data[s], today, atr_p), cl_p), 3)
+                 for s in new_buys if s in price_data}
 
     return {
         "sell_ma100":    sell_ma100,
         "sell_ranked":   sell_ranked,
         "buy":           new_buys,
+        "size_mult":     size_mult,
     }
 
 

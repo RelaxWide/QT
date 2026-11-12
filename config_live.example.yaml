@@ -46,11 +46,14 @@ us:
   capital:
     auto_allocate: true
     buffer_pct:      1.0
-    clenow_pct:     60
+    core_symbol: SPY             # 코어 보유 — 목표 비중까지 채워 두는 지수 (자동 매도 없음)
+    core_pct:       60           # 2026-11-12 SPY 60 : Clenow 40
+    clenow_pct:     40
     weinstein_pct:   0           # 2026-11-12 Weinstein 실계좌 종료 (40% 는 새 배분 결정 전까지 현금)
     # liquidate_strategies: [weinstein]   # 종료 전략 보유분 전량 매도 (daily_close). 청산 끝나면 삭제
     phase4_pct:      0
-    clenow_max_positions:    5
+    clenow_max_positions:    6   # 변동성 역가중 + 업종 제한 (2026-11-12, 이전 5)
+    clenow_max_per_sector:   2   # 업종당 최대 종목 수
     weinstein_max_positions: 4
     # 명시값 (auto_allocate=false 일 때 사용)
     total_usd:    10000
@@ -80,11 +83,14 @@ kr:
 capital:
   auto_allocate: true
   buffer_pct:      1.0
-  clenow_pct:     60
+  core_symbol: SPY             # 코어 보유 — 목표 비중까지 채워 두는 지수 (자동 매도 없음)
+  core_pct:       60           # 2026-11-12 SPY 60 : Clenow 40
+  clenow_pct:     40
   weinstein_pct:   0           # 2026-11-12 Weinstein 실계좌 종료 (40% 는 새 배분 결정 전까지 현금)
   # liquidate_strategies: [weinstein]   # 종료 전략 보유분 전량 매도 (daily_close). 청산 끝나면 삭제
   phase4_pct:      0
-  clenow_max_positions:    5
+  clenow_max_positions:    6   # 변동성 역가중 + 업종 제한 (2026-11-12, 이전 5)
+  clenow_max_per_sector:   2   # 업종당 최대 종목 수
   weinstein_max_positions: 4
   total_usd:     10000
   phase4_usd:        0

@@ -235,6 +235,8 @@ class OrderManager:
         (2026-10: 접수 즉시 삭제하던 탓에 미체결 매도 ON/ORLY/MU 가 추적에서 사라져 방치됨)
         KR: 기존 동작 유지 (접수 = 반영). KR 은 아직 reconcile 경로가 없음.
         """
+        if strategy == "core":
+            return   # 코어(SPY)는 포지션 파일 없이 KIS 잔고 기준 (place_core_topup 주석)
         try:
             from live_trading.tracker_live import LivePosition, load_live_positions, save_live_positions
             positions = load_live_positions(strategy)
@@ -425,6 +427,7 @@ class OrderManager:
         signal_date: str,
         dry_run: bool = False,
         allow_overflow: bool = True,
+        size_mult: dict | None = None,
     ) -> list:
         """
         KIS 현재가를 직접 조회해 LIMIT 매수 주문.
@@ -432,6 +435,9 @@ class OrderManager:
 
         allow_overflow=True (기본): 종목별 예산 초과 시에도 실잔여 cash 충분하면 1주 매수.
                   → Weinstein 신호 0 등 다른 전략 미사용 자본 활용.
+        size_mult: {종목: 슬롯 금액 배율} — 변동성 역가중 (Clenow). 주면 overflow 는 끈다
+                  (비싼 종목 1주가 슬롯을 몇 배 넘겨 들어오면 가중이 무의미해진다).
+        Clenow 는 전략 예산 대비 남은 여유(예산 − 현재 보유 평가액 − 이번에 낸 주문)도 넘지 않는다.
         """
         if strategy not in ("clenow", "weinstein", "kw_super_value"):
             raise ValueError(f"strategy must be clenow|weinstein|kw_super_value, got {strategy}")
@@ -461,9 +467,13 @@ class OrderManager:
             if slots < len(candidates):
                 log.info(f"[{strategy}] 보유 {len(held)} / 한도 {max_pos} — "
                          f"신규 매수 {slots}종목으로 제한 (후보 {len(candidates)})")
-            candidates = candidates[:slots]
+            # 변동성 역가중(size_mult)일 때는 후보를 자르지 않는다 — 종목 예산이 작아 1주도 못 사는
+            # 후보를 건너뛰고 다음 순위로 내려가 빈자리를 채운다 (아래 루프에서 slots 만큼만 주문).
+            if not size_mult:
+                candidates = candidates[:slots]
         else:
             # 분기 전략 (kw_super_value): 리밸런싱 목록 전체가 목표 포트폴리오
+            slots = max_pos
             candidates = candidates[:max_pos]
 
         # 실잔여 cash — 예산/종목이 맞아도 결제가능 현금을 넘는 주문은 거부됨 (APBK0952)
@@ -473,8 +483,28 @@ class OrderManager:
         else:
             remaining_cash = float(bal.get(self._cash_key, 0) or 0)
 
+        if size_mult:
+            allow_overflow = False
+
+        # 전략 예산 여유 — 예전 큰 슬롯으로 산 보유분이 남아 있으면 종목 수 빈자리가 있어도 예산은 찼을 수 있다
+        room = float("inf")
+        if strategy == "clenow" and not bal.get("_failed"):
+            eval_by_sym = {p["symbol"]: float(p.get("eval_amt", 0) or 0) for p in bal.get("positions", [])}
+            invested = 0.0
+            for s, p in load_live_positions(strategy).items():
+                invested += eval_by_sym.get(s) or p.qty * p.fill_price     # 체결 대기분은 주문 금액으로
+            room = budget - invested
+            log.info(f"[{strategy}] 보유 평가 {self._fmt_price(invested)} / 예산 {self._fmt_price(budget)} "
+                     f"→ 여유 {self._fmt_price(room)}")
+
         results = []
+        filled = 0
         for sym in candidates:
+            if filled >= slots:
+                break
+            if room <= 0:
+                log.info(f"[{strategy}] 전략 예산 여유 없음 — 남은 후보 생략")
+                break
             try:
                 price_info = self.kis.get_price(sym)
             except Exception as e:
@@ -489,8 +519,10 @@ class OrderManager:
             price = self._adjust_limit_price(raw_price, "BUY")
 
             qty = 0
-            if self._price_fits(price, budget_per_pos):
-                qty = self._calc_qty(price, budget_per_pos)
+            slot_budget = budget_per_pos * float((size_mult or {}).get(sym, 1.0))
+            slot_budget = min(slot_budget, room)
+            if self._price_fits(price, slot_budget):
+                qty = self._calc_qty(price, slot_budget)
                 affordable = int(remaining_cash // price) if remaining_cash != float("inf") else qty
                 if qty > affordable:
                     log.info(f"[{strategy}] {sym} 잔여 cash {self._fmt_price(remaining_cash)} 한도로 "
@@ -505,16 +537,79 @@ class OrderManager:
                              f"{self._fmt_price(remaining_cash)} 로 1주 매수 (overflow)")
                 else:
                     log.warning(f"[{strategy}] {sym} 가격 {self._fmt_price(price)} > "
-                                f"예산 {self._fmt_price(budget_per_pos)}, 잔여 cash 부족 - 스킵")
+                                f"종목 예산 {self._fmt_price(slot_budget)} 또는 잔여 cash 부족 - 스킵")
                     continue
 
             r = self._send(strategy, sym, signal_date, "BUY", qty, price, dry_run)
             results.append(r)
+            if r.ok:
+                filled += 1
+                room -= price * qty
             if r.ok and not r.dry_run:
                 remaining_cash -= price * qty
             if not dry_run:
                 time.sleep(0.5)
         return results
+
+    # ── 코어 보유 (SPY) ───────────────────────────────────────────────────
+    # 코어는 전략이 아니라 "목표 비중까지 채워 두는 지수 보유"다. 포지션 파일을 두지 않고
+    # 매번 KIS 잔고를 기준으로 판단한다 (추가 매수가 반복되므로 접수/체결 추적이 필요 없다).
+    # 자동 매도는 없다 — 비중이 목표를 넘어도 팔지 않는다 (양도세·회전 방지).
+    CORE_MIN_GAP_PCT = 2.0     # 목표와의 차이가 총자산의 이 비율 미만이면 주문하지 않는다
+
+    def core_status(self) -> dict | None:
+        """{symbol, target_pct, target, held, held_pct, gap, total, cash}. 코어 미설정·잔고 실패면 None."""
+        sym = self.cap.get("core_symbol", "SPY")
+        pct = float(self.cap.get("core_pct", 0) or 0)
+        if pct <= 0:
+            return None
+        bal = self._get_balance()
+        if bal.get("_failed"):
+            return None
+        cash  = float(bal.get(self._cash_key, 0) or 0)
+        evals = {p["symbol"]: float(p.get("eval_amt", 0) or 0) for p in bal.get("positions", [])}
+        qtys  = {p["symbol"]: int(p.get("qty", 0) or 0) for p in bal.get("positions", [])}
+        total = cash + sum(evals.values())
+        buffer = float(self.cap.get("buffer_pct", 1.0)) / 100.0
+        target = total * (1.0 - buffer) * pct / 100.0
+        held = evals.get(sym, 0.0)
+        return {"symbol": sym, "target_pct": pct, "target": target, "held": held, "qty": qtys.get(sym, 0),
+                "held_pct": held / total * 100 if total > 0 else 0.0, "gap": target - held,
+                "total": total, "cash": cash, "reserve": total * buffer}
+
+    def place_core_topup(self, signal_date: str, dry_run: bool = False,
+                         cash_committed: float = 0.0) -> list:
+        """
+        코어(SPY) 비중이 목표에 못 미치면 남는 현금으로 채운다 (KIS 현재가 +0.5% LIMIT).
+        cash_committed: 이번 실행에서 이미 다른 주문에 쓴 현금 (잔고 캐시에는 아직 안 빠져 있다).
+        """
+        st = self.core_status()
+        if st is None:
+            log.info("[core] 코어 미설정 또는 잔고 조회 실패 — 생략")
+            return []
+        sym = st["symbol"]
+        spendable = st["cash"] - cash_committed - st["reserve"]
+        spend = min(st["gap"], spendable)
+        log.info(f"[core] {sym} 목표 {self._fmt_price(st['target'])} ({st['target_pct']:.0f}%) / "
+                 f"보유 {self._fmt_price(st['held'])} ({st['held_pct']:.1f}%) / 쓸 수 있는 현금 "
+                 f"{self._fmt_price(spendable)}")
+        if st["gap"] < st["total"] * self.CORE_MIN_GAP_PCT / 100:
+            log.info(f"[core] 목표와의 차이 {self._fmt_price(st['gap'])} — 기준 미만, 매수 없음")
+            return []
+        try:
+            cur = float(self.kis.get_price(sym).get("last", 0) or 0)
+        except Exception as e:
+            log.error(f"[core] {sym} KIS 현재가 조회 실패: {e}")
+            return []
+        if cur <= 0:
+            log.warning(f"[core] {sym} 현재가 0 — 생략")
+            return []
+        price = self._adjust_limit_price(cur * 1.005, "BUY")
+        qty = int(spend // price)
+        if qty < 1:
+            log.info(f"[core] 쓸 수 있는 금액 {self._fmt_price(spend)} < 1주 {self._fmt_price(price)} — 매수 없음")
+            return []
+        return [self._send("core", sym, signal_date, "BUY", qty, price, dry_run)]
 
     # ── KW Super Value: 분기 리밸런싱 탈락분 매도 ─────────────────────────
     def place_kw_sv_exits(

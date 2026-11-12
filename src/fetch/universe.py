@@ -44,6 +44,19 @@ def get_sp500_tickers() -> list[str]:
     return df["Symbol"].str.replace(".", "-", regex=False).tolist()
 
 
+def get_sp500_sectors() -> dict[str, str]:
+    """{티커: GICS 업종}. 같은 위키 표에서 읽는다 — 실패하면 빈 dict (호출측은 업종 제한 없이 진행)."""
+    try:
+        url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+        resp = requests.get(url, headers=_HEADERS, timeout=15)
+        resp.raise_for_status()
+        df = pd.read_html(io.StringIO(resp.text))[0]
+        return dict(zip(df["Symbol"].str.replace(".", "-", regex=False), df["GICS Sector"]))
+    except Exception as e:
+        print(f"[universe] 업종 정보 조회 실패 — 업종 제한 없이 진행: {e}")
+        return {}
+
+
 def get_russell2000_tickers() -> list[str]:
     """
     iShares IWM ETF 구성종목에서 Russell 2000 티커 추출.

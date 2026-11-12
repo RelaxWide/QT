@@ -10,7 +10,7 @@
 
 | 트랙 | 전략 | 상태 |
 |---|---|---|
-| US 실계좌 (한국투자증권 API) | Clenow 모멘텀 60% (최대 5종목) + 현금 40% (SPY:Clenow 비율 결정 대기) | ✅ 운영 중 |
+| US 실계좌 (한국투자증권 API) | 코어 SPY 60% + Clenow 모멘텀 40% (최대 6종목, 변동성 역가중·업종 제한) | ✅ 운영 중 |
 | US 페이퍼 (GitHub Actions) | Clenow | 운영 중 |
 | Weinstein Stage 2 · Phase 4 | — | ❌ 2026-11-12 종료 |
 | KR 실계좌 | — | ⏸️ 2026-10-19 중단 (KW Super Value 전량 청산) |

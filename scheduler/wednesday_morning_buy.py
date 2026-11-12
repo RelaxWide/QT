@@ -53,15 +53,12 @@ def _wait_until_target_et():
 
 
 def main(dry_run: bool = False, no_wait: bool = False):
-    if not WED_BUY_PENDING.exists():
-        log.info(f"[wed_buy] pending 파일 없음 - 매수 후보 없음, 종료")
-        return
-
-    payload = json.loads(WED_BUY_PENDING.read_text(encoding="utf-8"))
-    if not payload:
-        log.info(f"[wed_buy] pending 비어있음 - 종료")
-        WED_BUY_PENDING.unlink()
-        return
+    # 전략 매수 후보가 없어도 코어(SPY) 보충은 확인한다
+    payload = {}
+    if WED_BUY_PENDING.exists():
+        payload = json.loads(WED_BUY_PENDING.read_text(encoding="utf-8")) or {}
+    else:
+        log.info("[wed_buy] pending 파일 없음 - 전략 매수 후보 없음 (코어 보충만 확인)")
 
     cfg_live = yaml.safe_load(Path("config_live.yaml").read_text(encoding="utf-8"))
 
@@ -70,7 +67,8 @@ def main(dry_run: bool = False, no_wait: bool = False):
     ok, reason = guard.check()
     if not ok:
         log.warning(f"[wed_buy] 신규 주문 차단: {reason} - pending 삭제, 종료")
-        WED_BUY_PENDING.unlink()
+        if WED_BUY_PENDING.exists():
+            WED_BUY_PENDING.unlink()
         _notify(f"🛑 <b>US 신규 매수 중단</b>\n{reason}\n"
                 f"매수 후보 {sum(len(v.get('symbols', [])) for v in payload.values())}종목 건너뜀 "
                 f"(보유 종목 청산은 계속 진행)", cfg_live)
@@ -90,12 +88,20 @@ def main(dry_run: bool = False, no_wait: bool = False):
         signal_date = section["signal_date"]
         symbols     = section["symbols"]
         log.info(f"[wed_buy] {strategy} 매수 시작 - {len(symbols)} 종목 (signal_date={signal_date})")
-        orders = om.place_buys_at_kis_price(strategy, symbols, signal_date, dry_run=dry_run)
+        orders = om.place_buys_at_kis_price(strategy, symbols, signal_date, dry_run=dry_run,
+                                            size_mult=section.get("size_mult") or None)
         total_orders.extend(orders)
         log.info(f"[wed_buy] {strategy} 매수 주문 {len(orders)}건")
 
+    # 코어(SPY) — 목표 비중에 못 미치면 전략 매수 후 남는 현금으로 보충
+    committed = sum(r.qty * r.price for r in total_orders if r.ok)
+    core_date = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    core_orders = om.place_core_topup(core_date, dry_run=dry_run, cash_committed=committed)
+    total_orders.extend(core_orders)
+    log.info(f"[wed_buy] 코어 매수 주문 {len(core_orders)}건")
+
     # 처리 완료 - pending 삭제 (재실행 방지)
-    if not dry_run:
+    if not dry_run and WED_BUY_PENDING.exists():
         WED_BUY_PENDING.unlink()
         log.info(f"[wed_buy] pending 파일 삭제")
 

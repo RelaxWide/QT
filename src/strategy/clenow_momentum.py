@@ -2,11 +2,15 @@
 Clenow "Stocks on the Move" — 주간 상대강도 모멘텀
 
 진입/보유 조건:
-  1. SPY > MA200 (레짐)
+  1. SPY > MA200 (레짐) — 아래면 신규 매수 중단 (spy_regime_ok, 호출측에서 판정)
   2. 종가 > MA100 (개별주 상승추세)
   3. ATR(20) / close < atr_pct_max (과변동 제외)
-  4. 모멘텀 스코어 = 연환산 기울기 × R² (지수회귀 90일)
-  5. 상위 N종목 동일비중 보유
+  4. 최근 gap_lookback 일 안에 하루 max_gap_pct 넘게 움직인 종목 제외 (실적 쇼크·급등주)
+  5. 모멘텀 스코어 = 연환산 기울기 × R² (지수회귀 90일)
+  6. 상위 N종목 보유, **변동성 역가중** (size_multiplier — ATR% 가 클수록 적게 산다)
+
+2026-11-12: 4·6 과 레짐 확인을 원래 설계(Clenow, Stocks on the Move)대로 복원.
+이전 구현은 동일 금액 매수 + 급등락 필터 없음이라 가장 요동치는 종목에 같은 돈이 들어갔다.
 
 리밸런싱: 매주 금요일 종가 기준 스코어 계산 → 다음 월요일 시가 집행
 """
@@ -34,12 +38,49 @@ def _exp_reg_score(prices: pd.Series, lookback: int) -> float:
     return float(annualized * r2)
 
 
+REF_ATR_PCT = 0.025          # 이 변동성의 종목이 슬롯 하나를 꽉 채운다
+SIZE_MULT_RANGE = (0.4, 1.5)  # 슬롯 금액 대비 매수 배율 범위
+
+
+def atr_pct_at(df: pd.DataFrame, date: pd.Timestamp, period: int = 20) -> float:
+    """date 기준 ATR(period) / 종가. 계산 불가면 nan."""
+    sub = df.loc[:date]
+    if len(sub) < period + 1:
+        return float("nan")
+    close, high, low = sub["close"], sub["high"], sub["low"]
+    tr = pd.concat([high - low, (high - close.shift(1)).abs(), (low - close.shift(1)).abs()],
+                   axis=1).max(axis=1)
+    atr = tr.rolling(period).mean().iloc[-1]
+    c = close.iloc[-1]
+    return float(atr / c) if c > 0 and pd.notna(atr) else float("nan")
+
+
+def size_multiplier(atr_pct: float, params: dict | None = None) -> float:
+    """슬롯 금액에 곱할 배율 = 기준 변동성 / 종목 변동성 (범위 제한). 변동성을 모르면 1."""
+    p = params or {}
+    ref = p.get("ref_atr_pct", REF_ATR_PCT)
+    lo, hi = p.get("size_mult_min", SIZE_MULT_RANGE[0]), p.get("size_mult_max", SIZE_MULT_RANGE[1])
+    if not atr_pct or atr_pct != atr_pct or atr_pct <= 0:
+        return 1.0
+    return float(min(hi, max(lo, ref / atr_pct)))
+
+
+def spy_regime_ok(spy_close: pd.Series, date: pd.Timestamp, ma_period: int = 200) -> bool | None:
+    """SPY 종가 > MA(ma_period) 인가. 데이터가 모자라면 None (호출측이 판단)."""
+    s = spy_close.loc[:date].dropna()
+    if len(s) < ma_period:
+        return None
+    return bool(s.iloc[-1] > s.rolling(ma_period).mean().iloc[-1])
+
+
 def compute_scores(
     price_data: dict[str, pd.DataFrame],
     date: pd.Timestamp,
     params: dict,
 ) -> dict[str, float]:
     """date 기준 각 종목의 모멘텀 스코어 반환."""
+    gap_lookback = params.get("gap_lookback", 90)
+    max_gap_pct  = params.get("max_gap_pct", 0.15)     # None/0 이면 필터 끔
     lookback    = params.get("reg_lookback", 90)
     ma100_p     = params.get("ma100_period", 100)
     ma50_p      = params.get("ma50_period", 50)
@@ -88,6 +129,12 @@ def compute_scores(
         atr = tr.rolling(atr_p).mean().iloc[-1]
         if pd.isna(atr) or atr / c > atr_pct_max:
             continue
+
+        # 급등락 필터 — 최근 gap_lookback 일 안에 하루 max_gap_pct 넘게 움직였으면 제외
+        if max_gap_pct:
+            day_moves = close.pct_change().iloc[-gap_lookback:].abs()
+            if day_moves.max() > max_gap_pct:
+                continue
 
         score = _exp_reg_score(close, lookback)
         if not np.isnan(score) and score > min_score:

@@ -146,6 +146,19 @@ def reconcile_fills(kis: KISClient, strategies=STRATEGIES) -> dict:
     return result
 
 
+def _core_symbols() -> set[str]:
+    """config_live capital.core_symbol (core_pct > 0 일 때). 읽기 실패 시 빈 집합."""
+    try:
+        import yaml
+        cfg = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+        cap = (cfg.get("us") or {}).get("capital") or cfg.get("capital", {})
+        if float(cap.get("core_pct", 0) or 0) > 0:
+            return {cap.get("core_symbol", "SPY")}
+    except Exception as e:
+        log.warning(f"[sync] 코어 설정 읽기 실패: {e}")
+    return set()
+
+
 def sync_all(kis: KISClient) -> dict:
     """
     KIS 전체 잔고를 조회해 **계정 단위**로 로컬 추적과 대조.
@@ -175,8 +188,10 @@ def sync_all(kis: KISClient) -> dict:
             tracked.setdefault(sym, {})[strategy] = pos.qty
     tracked_syms = set(tracked)
 
+    # 코어 보유(SPY)는 전략 추적 대상이 아니다 — 미할당 경고에서 제외
+    core = _core_symbols()
     # 미할당: KIS 에 있는데 어느 전략에도 없음 (진짜 등록 필요 케이스)
-    untracked = sorted(kis_syms - tracked_syms)
+    untracked = sorted(kis_syms - tracked_syms - core)
 
     # 외부 청산·미체결: 전략이 추적 중인데 KIS 잔고에 없음
     missing = sorted(
@@ -210,6 +225,7 @@ def sync_all(kis: KISClient) -> dict:
         "missing":   missing,
         "mismatch":  mismatch,
         "kis_count": len(kis_syms),
+        "core": sorted(kis_syms & core),
         "by_strategy": {s: sum(1 for t in tracked.values() if s in t) for s in STRATEGIES},
         "balance":   balance,
     }

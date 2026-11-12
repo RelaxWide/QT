@@ -259,7 +259,24 @@ def build_summary() -> str:
         total_realized += s_realized
 
     # 미할당 KIS 포지션 (전략에 등록되지 않은 보유)
-    untracked = [sym for sym in cur_map if sym not in all_tracked]
+    # 코어 보유 (SPY) — 전략이 아니라 목표 비중까지 채워 두는 지수 보유
+    core_sym = cap.get("core_symbol", "SPY") if float(cap.get("core_pct", 0) or 0) > 0 else None
+    if core_sym and not err:
+        line()
+        line(bold(f"━━━ 🧱 코어 {core_sym} ━━━"))
+        info = cur_map.get(core_sym)
+        tot  = cash + sum_eval
+        if info:
+            ev  = float(info.get("eval_amt", 0))
+            avg = float(info.get("avg_price", 0))
+            cur = float(info.get("cur_price", 0))
+            pct = (cur / avg - 1) * 100 if avg > 0 else 0.0
+            line(f"  {int(info.get('qty', 0))}주 ${avg:.2f}→${cur:.2f} ({pct:+.1f}%) | 평가 ${ev:,.2f} "
+                 f"| 비중 {ev / tot * 100 if tot > 0 else 0:.0f}% (목표 {float(cap.get('core_pct')):.0f}%)")
+        else:
+            line(f"  보유 없음 (목표 {float(cap.get('core_pct')):.0f}%) — 수요일 매수 때 채운다")
+
+    untracked = [sym for sym in cur_map if sym not in all_tracked and sym != core_sym]
     if untracked:
         line()
         line(bold("━━━ ⚠️  미할당 KIS 보유 ━━━"))
