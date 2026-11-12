@@ -27,11 +27,15 @@ function Register-QTTask {
     } else {
         $limit = New-TimeSpan -Minutes 30
     }
+    # AllowStartIfOnBatteries / DontStopIfGoingOnBatteries: the default is "AC power only" - on a laptop
+    # running on battery the task is skipped and counted as missed (2026-11-12: 05:40/06:30/07:00 all missed).
     $settings = New-ScheduledTaskSettingsSet `
         -ExecutionTimeLimit $limit `
         -StartWhenAvailable `
         -RunOnlyIfNetworkAvailable `
-        -WakeToRun
+        -WakeToRun `
+        -AllowStartIfOnBatteries `
+        -DontStopIfGoingOnBatteries
 
     # 인자 변환 오류는 -ErrorAction Stop 으로 안 멈춰서 실패해도 [OK] 가 찍혔다 → try/catch
     try {

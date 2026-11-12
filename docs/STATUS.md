@@ -153,7 +153,7 @@
 | 2-2 | ~~기존 전략 재채점~~ ✅ 11/12 | — | 99개 중 통과 0. 기존 전략 중 SPY+Clenow 에 얹을 것 없음 ([`RESCORE.md`](RESCORE.md)) |
 | 3 | 새 전략 통과 기준 | 정해짐 | `RESCORE.md` 1절 기준을 그대로 쓴다 (20% 편입 시 ΔSharpe ≥ +0.05, MDD·CAGR 1%p 이내, 전·후반·장기 유지). 기준선과 상관 0.5 미만이어야 의미가 있다 — 미국 주식 롱 추세 계열은 제외 |
 | 4 | 후보 탐색 (분기당 2개까지) | 3번 뒤 | 팩터 포트폴리오(가치·퀄리티·저변동), 실적 발표 후 드리프트, Clenow 중소형주 적용 등. 백테스트 게이트 → 페이퍼 → 5% 파일럿 → 편입 |
-| 5 | **11/12 스케줄 누락 원인 확인** | 중간 | 작업에는 이미 "놓치면 가능한 빨리 실행"·"절전 해제" 가 설정돼 있는데도 05:40·06:30 실행 기록이 없다 (03:00 까지는 정상). PowerShell `Get-ScheduledTask QT_* \| Get-ScheduledTaskInfo` 로 LastRunTime·LastTaskResult 확인 |
+| 5 | **11/12 스케줄 누락** — 원인 미확정 | 중간 | 작업 정보상 03:00 실행 후 04:00·05:40·06:30·07:00 이 전부 "놓침 1회"로 기록, 이후 따라잡기 실행도 없었다 (PC 가 03~04시 사이 절전/종료 또는 배터리 전환 추정). 11/12 에 작업 설정에 "배터리에서도 실행" 추가 → `register_tasks.ps1` 재실행 필요. 그래도 재발하면 절전 설정·`powercfg /waketimers` 확인 |
 | 5-2 | 판정 시점까지 규칙대로 운영 | 계속 | 입출금 시 반드시 `python -m live_trading.risk_guard --cashflow 금액 --market us` |
 | 6 | 최소 회귀 테스트 | 중간 | `tests/` 가 비어 있음. NAV·미결제·벤치마크·reconcile 처럼 돈이 걸린 계산부터 |
 | 7 | 저장소 정리 | 낮음 | `.codex-review/`·`output/` (NVMe-MI 세미나 자료 — QT 와 무관, 미추적. 영구 삭제라 손대지 않음), `fix/full-system-hardening` 워크트리(`..\QT-hardening`, master 에 전부 병합됨 → `git worktree remove ..\QT-hardening` 후 `git branch -d`) |
