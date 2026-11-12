@@ -1,12 +1,15 @@
 name: Research Data Fetch
 
-# 수동 실행 전용 — 리서치용 장기 가격 데이터를 받아 artifact 로 올린다 (저장소에는 커밋하지 않음)
+# 수동 실행 전용 — 리서치용 장기 가격 데이터를 받아 research-data 브랜치에 올린다 (master 에는 커밋하지 않음)
 on:
   workflow_dispatch:
     inputs:
       tickers:
         description: "공백으로 구분한 티커"
         default: "^GSPC ^IRX SPY SSO UPRO"
+
+permissions:
+  contents: write
 
 jobs:
   fetch:
@@ -19,8 +22,12 @@ jobs:
           cache: "pip"
       - run: pip install -r requirements.txt
       - run: python scripts/fetch_research_data.py ${{ inputs.tickers }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: research-data
-          path: research_data/
-          retention-days: 7
+      - name: Push to research-data branch
+        run: |
+          cd research_data
+          git init -q -b research-data
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "research data $(date -u +%Y-%m-%d)"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" research-data
