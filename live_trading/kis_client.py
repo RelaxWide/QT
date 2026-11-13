@@ -58,6 +58,11 @@ log = _build_logger()
 
 
 # ── 토큰 캐시 ──────────────────────────────────────────────────────────────
+class OrderOutcomeUnknown(RuntimeError):
+    """주문 요청은 보냈는데 결과(접수/거부)를 확인하지 못했다 — 타임아웃, 연결 끊김, 5xx, 응답 해석 실패,
+    접수 성공인데 주문번호 없음. 접수됐을 수 있으므로 호출측은 실패로 처리해 재전송하면 안 된다."""
+
+
 @dataclass
 class Token:
     access_token: str
@@ -800,18 +805,32 @@ class KISClient:
         headers = self._headers(tr_id)
         headers["hashkey"] = hashkey
         log.info(f"[order US] {side} {symbol} x{qty} @{ord_unpr} (tr_id={tr_id})")
-        r = requests.post(url, headers=headers,
-                          data=json.dumps(body), timeout=10)
+        # 여기부터는 요청이 브로커에 닿았을 수 있다. "거부" 로 확인된 것(4xx, rt_cd != 0)만 실패로 돌려주고
+        # 나머지는 전부 OrderOutcomeUnknown — 호출측이 재전송하지 않고 잔고로 확정한다.
+        try:
+            r = requests.post(url, headers=headers,
+                              data=json.dumps(body), timeout=10)
+        except requests.exceptions.RequestException as e:
+            raise OrderOutcomeUnknown(f"주문 요청 중 통신 오류: {e}") from e
         if not r.ok:
             log.error(f"[order US] HTTP {r.status_code}: {r.text}")
+            if r.status_code >= 500:
+                raise OrderOutcomeUnknown(f"HTTP {r.status_code}")
             r.raise_for_status()
-        d = r.json()
+        try:
+            d = r.json()
+            if not isinstance(d, dict):
+                raise ValueError("응답이 객체가 아님")
+        except ValueError as e:
+            raise OrderOutcomeUnknown(f"주문 응답 해석 실패: {e}") from e
         if d.get("rt_cd") != "0":
             log.error(f"[order US] 실패: {d.get('msg1')} / {d.get('msg_cd')}")
             return {"order_no": "", "raw": d}
 
-        out = d.get("output", {})
+        out = d.get("output", {}) or {}
         order_no = out.get("ODNO", "")
+        if not order_no:
+            raise OrderOutcomeUnknown("접수 성공 응답인데 주문번호가 없음")
         log.info(f"[order US] 성공 order_no={order_no}")
         return {
             "order_no":     order_no,

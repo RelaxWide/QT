@@ -118,9 +118,9 @@ def add_cashflow(market: str, amount: float) -> float:
     p = _flow_path(market)
     pending = json.loads(p.read_text(encoding="utf-8")) if p.exists() else []
     pending.append({"date": date.today().isoformat(), "amount": amount})
-    LIVE_DIR.mkdir(exist_ok=True)
-    p.write_text(json.dumps(pending, indent=2), encoding="utf-8")
-    return sum(x["amount"] for x in pending)
+    from live_trading.tracker_live import atomic_write_text
+    atomic_write_text(p, json.dumps(pending, indent=2))
+    return sum(x["amount"] for x in pending if not x.get("applied_date"))
 
 
 def record_nav(market: str, balance: dict, today: str | None = None,
@@ -142,16 +142,36 @@ def record_nav(market: str, balance: dict, today: str | None = None,
 
     all_rows = load_nav(market)
     rows = [r for r in all_rows if r["date"] != today]
+    # 입출금은 정확히 한 번만 반영한다. 대기 파일의 각 항목에 "어느 날짜 NAV 에 반영했는지"(applied_date)
+    # 를 먼저 찍고 → NAV 를 쓰고 → 지난 날짜에 반영이 끝난 항목만 다음 실행에서 지운다.
+    #   · 오늘 반영분은 오늘 안에는 지우지 않는다 → 같은 날 재기록해도 flow 가 유지된다
+    #     (예전엔 지워서, 재기록 때 출금 $3,000 이 손실로 바뀌어 낙폭 -30%)
+    #   · NAV 저장 뒤 정리 단계에서 끊겨도 다시 더해지지 않는다
+    #     (예전엔 "당일 행 flow + 대기 파일" 을 더해서, 삭제가 실패하면 같은 출금이 두 번 잡혀 unit_nav 1.3)
+    #   · 표시만 찍고 NAV 를 못 쓴 채 날이 넘어가면, 그 날짜의 NAV 행이 없으므로 미반영으로 다시 집는다
+    from live_trading.tracker_live import atomic_write_text
     fp = _flow_path(market)
-    flow = sum(x["amount"] for x in json.loads(fp.read_text(encoding="utf-8"))) if fp.exists() else 0.0
-    # 같은 날 재기록: 첫 기록 때 반영하고 지운 입출금을 잃으면 그 금액이 그대로 손익으로 바뀐다
-    # (출금 $3,000 → 재기록 시 unit_nav 0.7, 낙폭 -30%). 기존 당일 행의 flow 를 이어받는다.
-    for r in all_rows:
-        if r["date"] == today:
-            try:
-                flow += float(r.get("flow") or 0)
-            except (TypeError, ValueError):
-                pass
+    items = json.loads(fp.read_text(encoding="utf-8")) if fp.exists() else []
+    nav_dates = {r["date"] for r in rows}
+    keep = [x for x in items if not (x.get("applied_date") and x["applied_date"] != today
+                                     and x["applied_date"] in nav_dates)]
+    mine = [x for x in keep]                      # 남은 것은 전부 오늘 행에 반영할 항목
+    restamp = any(x.get("applied_date") != today for x in mine)
+    for x in mine:
+        x["applied_date"] = today
+    if mine:
+        flow = sum(float(x["amount"]) for x in mine)
+    else:
+        # 대기 항목이 없으면 기존 당일 행의 flow 를 이어받는다 (이 방식 도입 전에 기록된 행)
+        flow = 0.0
+        for r in all_rows:
+            if r["date"] == today:
+                try:
+                    flow = float(r.get("flow") or 0)
+                except (TypeError, ValueError):
+                    pass
+    if fp.exists() and (restamp or len(keep) != len(items)):
+        atomic_write_text(fp, json.dumps(keep, indent=2))
 
     if rows and rows[-1]["total"] > 0:
         unit = rows[-1]["unit_nav"] * (total - flow) / rows[-1]["total"]
@@ -162,8 +182,6 @@ def record_nav(market: str, balance: dict, today: str | None = None,
     rows.append(row)
 
     _write_nav(market, rows)
-    if fp.exists():
-        fp.unlink()
     return row
 
 

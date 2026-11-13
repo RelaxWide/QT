@@ -255,7 +255,8 @@ class OrderManager:
                 else:
                     log.error(f"[orders] {last} 접수됐으나 포지션 장부 미반영 — 장부만 접수 대기로 정정, 재전송 안 함")
                     if self._update_live_positions(strategy, symbol, signal_date, "SELL",
-                                                   prev["qty"], prev["price"], prev_no):
+                                                   prev["qty"], prev["price"], prev_no,
+                                                   submitted_at=prev.get("timestamp")):
                         self._mark_applied(last)
                     key = last
             else:
@@ -346,7 +347,7 @@ class OrderManager:
             if rec.get("status") != "sending" or rec.get("order_no"):
                 continue
             order_no = f"{UNKNOWN_ORDER_NO}:{rec.get('local_id') or k}"
-            rec.update(order_no=order_no, status="unknown")
+            rec.update(order_no=order_no, status="unknown", applied=False)   # 포지션 반영 전까지 미반영
             self._map[k] = rec
             try:
                 self._save_map()
@@ -358,7 +359,11 @@ class OrderManager:
             # 장부를 pending 으로 맞춰 다음 장마감 처리가 KIS 잔고로 확정하게 한다
             st = self._position_status(strategy, symbol)
             if (side == "SELL" and st == "open") or (side == "BUY" and st is None):
-                self._update_live_positions(strategy, symbol, signal_date, side, rec["qty"], rec["price"], order_no)
+                if self._update_live_positions(strategy, symbol, signal_date, side, rec["qty"], rec["price"],
+                                               order_no, submitted_at=rec.get("timestamp")):
+                    self._mark_applied(k)
+            else:
+                self._mark_applied(k)
             self.__dict__.setdefault("unknown_orders", []).append(result)
             return result
         return None
@@ -429,7 +434,8 @@ class OrderManager:
             return None
 
     def _update_live_positions(self, strategy: str, symbol: str, signal_date: str,
-                                side: str, qty: int, price: float, order_no: str) -> bool:
+                                side: str, qty: int, price: float, order_no: str,
+                                submitted_at: str | None = None) -> bool:
         """매수/매도 주문 접수 시 positions_live_{strategy}.json 자동 갱신. 반영에 성공하면 True.
 
         US: 접수 ≠ 체결. 매수는 pending_buy 로 추가, 매도는 삭제하지 않고 pending_sell
@@ -442,7 +448,9 @@ class OrderManager:
         try:
             from live_trading.tracker_live import LivePosition, load_live_positions, save_live_positions
             positions = load_live_positions(strategy)
-            now_iso = pd.Timestamp.now().isoformat()
+            # 복구로 뒤늦게 반영할 때는 원래 접수 시각을 쓴다 — 이 시각으로 주문 세션 종료와
+            # 미결제 매도대금의 세션을 정하므로, 복구 시각으로 바꾸면 확정이 하루 밀리고 세션이 틀어진다.
+            now_iso = submitted_at or pd.Timestamp.now().isoformat()
             pending = self.market == "us"
             if side == "BUY":
                 from datetime import date as _date
@@ -930,9 +938,6 @@ def _get_live_qty(strategy: str, symbol: str) -> int:
     return int(pos.get("qty", 0))
 
 
-RECOVER_MAX_AGE_DAYS = 7
-
-
 def recover_incomplete_orders() -> list[str]:
     """
     끝까지 처리되지 못한 US 주문을 주문 장부(order_map) 전체에서 찾아 포지션 장부에 반영한다.
@@ -950,7 +955,7 @@ def recover_incomplete_orders() -> list[str]:
     disk = json.loads(ORDER_MAP.read_text(encoding="utf-8"))
     helper = object.__new__(OrderManager)        # _update_live_positions 는 market 만 쓴다
     helper.market = "us"
-    now, out, changed = pd.Timestamp.now(), [], False
+    out, changed = [], False
     for key, rec in disk.items():
         if not isinstance(rec, dict) or rec.get("dry_run"):
             continue
@@ -962,14 +967,12 @@ def recover_incomplete_orders() -> list[str]:
         if len(parts) != 4:
             continue
         strategy, symbol, signal_date, side = parts
-        try:
-            if (now - pd.Timestamp(rec.get("timestamp"))).days > RECOVER_MAX_AGE_DAYS:
-                rec["applied"] = True; changed = True     # 너무 오래된 기록은 건드리지 않고 닫는다
-                continue
-        except Exception:
-            pass
+        # 기록이 오래됐어도 닫지 않는다 — 체결된 보유는 시간이 지나도 사라지지 않는다.
+        # 포지션 장부에 올려 두면 체결 확정이 KIS 잔고와 대조해 (보유 → 확정 / 없음 → 만료) 정리한다.
         if sending:
-            rec.update(order_no=f"{UNKNOWN_ORDER_NO}:{rec.get('local_id') or key}", status="unknown")
+            # applied=False 를 함께 남긴다: 아래 포지션 저장이 또 실패해도 다음 실행이 다시 집는다
+            rec.update(order_no=f"{UNKNOWN_ORDER_NO}:{rec.get('local_id') or key}", status="unknown",
+                       applied=False)
             changed = True
         ok = True
         if strategy != "core":
@@ -983,7 +986,8 @@ def recover_incomplete_orders() -> list[str]:
                 and pos.unfilled_sell_no != rec["order_no"])
             if need:
                 ok = helper._update_live_positions(strategy, symbol, signal_date, side,
-                                                   rec["qty"], rec["price"], rec["order_no"])
+                                                   rec["qty"], rec["price"], rec["order_no"],
+                                                   submitted_at=rec.get("timestamp"))
                 if ok:
                     out.append(f"{side} {symbol} x{rec['qty']} ({strategy}, "
                                f"{'접수 불명' if rec.get('status') == 'unknown' else '장부 미반영'})")
@@ -1006,7 +1010,14 @@ def _is_ambiguous_send_error(e: Exception) -> bool:
     KIS 가 명시적으로 거부한 경우(rt_cd != 0, 4xx)는 여기 오지 않거나 False."""
     try:
         import requests
+        from live_trading.kis_client import OrderOutcomeUnknown
+        if isinstance(e, OrderOutcomeUnknown):
+            return True
         if isinstance(e, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)):
+            return True
+        # 응답 본문을 못 읽었다 — 요청은 이미 나갔다 (requests 의 JSONDecodeError 는 ValueError 계열)
+        if isinstance(e, (json.JSONDecodeError, requests.exceptions.JSONDecodeError,
+                          requests.exceptions.ContentDecodingError, requests.exceptions.ChunkedEncodingError)):
             return True
         if isinstance(e, requests.exceptions.HTTPError):
             code = getattr(getattr(e, "response", None), "status_code", 0) or 0
