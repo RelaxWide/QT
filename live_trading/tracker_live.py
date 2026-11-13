@@ -68,7 +68,7 @@ def append_live_trade(strategy: str, record: dict) -> None:
     # 같은 매도 주문(종목+주문번호)은 한 번만 기록한다. 체결 확정이 거래 기록 뒤·포지션 저장 전에
     # 끊기면 다음 실행이 같은 체결을 다시 확정하는데, 그때 손익이 두 번 잡히지 않도록.
     order_no = str(record.get("order_no") or "")
-    if not is_new and order_no and order_no != "UNKNOWN":
+    if not is_new and order_no and order_no != "UNKNOWN":   # 접수 불명도 "UNKNOWN:<로컬 ID>" 로 고유하다
         with f.open(newline="", encoding="utf-8") as fh:
             for row in csv.DictReader(fh):
                 if row.get("symbol") == record.get("symbol") and str(row.get("order_no") or "") == order_no:

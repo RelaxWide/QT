@@ -64,7 +64,7 @@ class OrderResult:
     @property
     def unknown(self) -> bool:
         """접수 여부를 모르는 주문 (전송 후 응답 유실). ok 로 취급해 재전송을 막는다."""
-        return self.order_no == UNKNOWN_ORDER_NO
+        return self.order_no.startswith(UNKNOWN_ORDER_NO)
 
 
 # 전송은 했는데 응답을 못 받은 주문의 order_no 자리표시. 접수됐을 수 있으므로 같은 키로 다시
@@ -214,6 +214,13 @@ class OrderManager:
     ) -> OrderResult:
         key = self._order_key(strategy, symbol, signal_date, side)
 
+        # 전송 직전에 남긴 "보내는 중" 기록이 그대로면, 앞 실행이 전송 전후 어딘가에서 끊긴 것이다
+        # (접수 후 기록 저장 실패 포함). 접수됐을 수 있으므로 다시 보내지 않고 접수 불명으로 넘긴다.
+        if self.market == "us" and not dry_run:
+            stuck = self._recover_interrupted(strategy, symbol, signal_date, side, key)
+            if stuck is not None:
+                return stuck
+
         # 같은 키의 매도가 이미 나갔는데 포지션이 다시 open 이면, 앞 주문은 세션이 끝나 미체결로
         # 확정된 것이다 → 재주문은 새 키로 실제 전송한다. (예전엔 이전 결과만 돌려주고 아무 주문도
         # 내지 않아, 데이터 날짜가 안 바뀌는 동안에는 재매도가 조용히 사라졌다)
@@ -243,6 +250,20 @@ class OrderManager:
             return OrderResult(symbol=symbol, side=side, qty=qty,
                                price=price, order_no="DRY_RUN", dry_run=True)
 
+        # 전송 전에 주문 의도를 먼저 저장한다 (US). 접수 뒤 기록 저장이 실패하거나 프로세스가 죽어도
+        # 다음 실행이 이 기록을 보고 재전송을 멈춘다. 저장 자체가 안 되면 보내지 않는다.
+        local_id = f"L{pd.Timestamp.now():%Y%m%d%H%M%S%f}"
+        if self.market == "us":
+            try:
+                self._map[key] = {"order_no": "", "status": "sending", "local_id": local_id, "qty": qty,
+                                  "price": price, "timestamp": pd.Timestamp.now().isoformat(), "dry_run": False}
+                self._save_map()
+            except Exception as e:
+                self._map.pop(key, None)
+                log.error(f"[orders] {side} {symbol} 주문 기록 저장 실패 — 전송하지 않음: {e}")
+                return OrderResult(symbol=symbol, side=side, qty=qty, price=price, order_no="",
+                                   error=f"주문 기록 저장 실패: {e}")
+
         try:
             resp = self.kis.place_order(symbol, qty, side=side,
                                         order_type="LIMIT", price=price)
@@ -256,18 +277,60 @@ class OrderManager:
                 log.error(f"[orders] {side} {symbol} 접수 불명 (응답 유실): {e} — 재전송하지 않음, "
                           f"다음 장마감 처리에서 KIS 잔고로 확정")
                 result = OrderResult(symbol=symbol, side=side, qty=qty, price=price,
-                                     order_no=UNKNOWN_ORDER_NO, error=f"접수 불명: {e}")
+                                     order_no=f"{UNKNOWN_ORDER_NO}:{local_id}", error=f"접수 불명: {e}")
                 self.__dict__.setdefault("unknown_orders", []).append(result)
             else:
                 log.error(f"[orders] {side} {symbol} 실패: {e}")
                 result = OrderResult(symbol=symbol, side=side, qty=qty,
                                      price=price, order_no="", error=str(e))
 
+        if not result.ok and self.market == "us":
+            self._drop_intent(key)       # 명시적 거부·전송 전 오류 — 다시 시도할 수 있게 의도 기록 제거
         if result.ok:
-            self._record(key, result)
+            try:
+                self._record(key, result)
+            except Exception as e:
+                # 접수는 됐는데 기록을 못 남겼다. 디스크에는 "보내는 중" 기록이 남아 있어 재전송은 막힌다.
+                log.error(f"[orders] {side} {symbol} 접수됨(order_no={result.order_no}) — 기록 저장 실패: {e}")
             # positions_live_{strategy}.json 갱신 (매수=추가 / 매도=제거)
             self._update_live_positions(strategy, symbol, signal_date, side, qty, price, result.order_no)
         return result
+
+    def _drop_intent(self, key: str) -> None:
+        try:
+            disk = self._load_map()
+            disk.pop(key, None)
+            self._map.pop(key, None)
+            ORDER_MAP.write_text(json.dumps(disk, indent=2, ensure_ascii=False), encoding="utf-8")
+        except Exception as e:
+            # 못 지우면 "보내는 중" 으로 남아 접수 불명 취급 — 재전송이 하루 미뤄질 뿐 중복은 없다
+            log.warning(f"[orders] 의도 기록 제거 실패 ({key}): {e}")
+
+    def _recover_interrupted(self, strategy: str, symbol: str, signal_date: str, side: str,
+                             key: str) -> "OrderResult | None":
+        """key (또는 그 재주문 키) 중 '보내는 중' 으로 남은 기록이 있으면 접수 불명으로 확정해 돌려준다."""
+        disk = self._load_map()
+        for k in [key] + sorted(x for x in disk if x.startswith(key + "#retry")):
+            rec = disk.get(k) or {}
+            if rec.get("status") != "sending" or rec.get("order_no"):
+                continue
+            order_no = f"{UNKNOWN_ORDER_NO}:{rec.get('local_id') or k}"
+            rec.update(order_no=order_no, status="unknown")
+            self._map[k] = rec
+            try:
+                self._save_map()
+            except Exception as e:
+                log.error(f"[orders] 접수 불명 기록 저장 실패 ({k}): {e}")
+            result = OrderResult(symbol=symbol, side=side, qty=rec["qty"], price=rec["price"],
+                                 order_no=order_no, error="접수 불명: 앞 실행이 전송 도중 중단됨")
+            log.error(f"[orders] {k} 앞 실행이 전송 도중 중단 — 접수 불명 처리, 재전송하지 않음")
+            # 장부를 pending 으로 맞춰 다음 장마감 처리가 KIS 잔고로 확정하게 한다
+            st = self._position_status(strategy, symbol)
+            if (side == "SELL" and st == "open") or (side == "BUY" and st is None):
+                self._update_live_positions(strategy, symbol, signal_date, side, rec["qty"], rec["price"], order_no)
+            self.__dict__.setdefault("unknown_orders", []).append(result)
+            return result
+        return None
 
     def _pre_send_block(self, strategy: str, symbol: str, side: str, qty: int, price: float) -> str:
         """전송 직전 안전 확인 (US). 막아야 하면 사유, 아니면 빈 문자열. 모의 실행에도 적용해 미리 보인다."""
@@ -279,14 +342,18 @@ class OrderManager:
             if KILL_SWITCH.exists():
                 return "KILL_SWITCH 파일 존재 — 수동 정지"
             pct = getattr(self, "_max_order_pct", 0) or 0
-            if pct > 0 and self.cap.get("auto_allocate"):
-                bal = self._get_balance()
-                if not bal.get("_failed"):
-                    total = float(bal.get(self._cash_key, 0) or 0) + sum(
-                        float(p.get("eval_amt", 0) or 0) for p in bal.get("positions", []))
-                    if total > 0 and qty * price > total * pct / 100:
-                        return (f"주문 금액 ${qty * price:,.0f} > 단일 주문 한도 ${total * pct / 100:,.0f} "
-                                f"(총자산의 {pct:g}%)")
+            if pct > 0:
+                total = 0.0
+                if self.cap.get("auto_allocate"):
+                    bal = self._get_balance()
+                    if not bal.get("_failed"):
+                        total = float(bal.get(self._cash_key, 0) or 0) + sum(
+                            float(p.get("eval_amt", 0) or 0) for p in bal.get("positions", []))
+                else:
+                    total = float(self.cap.get("total_usd", 0) or 0)     # 고정 예산 모드
+                if total > 0 and qty * price > total * pct / 100:
+                    return (f"주문 금액 ${qty * price:,.0f} > 단일 주문 한도 ${total * pct / 100:,.0f} "
+                            f"(총자산의 {pct:g}%)")
             return ""
         # SELL — 장부 수량과 KIS 실보유가 다르면 보내지 않는다 (분할·수동 거래). 장부 수량으로 팔면
         # 일부만 팔리거나(분할 후) 거부된다. 자동 보정은 하지 않는다: KIS 수량에는 전략 밖 수동 보유가
