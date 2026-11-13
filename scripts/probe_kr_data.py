@@ -32,16 +32,21 @@ def attempt(label, fn):
 
 
 def naver_frgn(code, page):
+    """네이버 금융 '외국인·기관 순매매 거래량' 표 한 쪽. 열: 날짜, 종가, 전일비, 등락률, 거래량,
+    기관 순매매량, 외국인 순매매량, 외국인 보유주수, 외국인 보유율"""
+    import re
+    from bs4 import BeautifulSoup
     r = requests.get(f"https://finance.naver.com/item/frgn.naver?code={code}&page={page}", headers=UA, timeout=15)
     r.raise_for_status()
     r.encoding = "euc-kr"
-    tables = pd.read_html(io.StringIO(r.text))
-    df = max(tables, key=lambda t: t.shape[0] * t.shape[1])
-    df.columns = ["_".join(str(x) for x in c if "Unnamed" not in str(x)) if isinstance(c, tuple) else str(c)
-                  for c in df.columns]
-    df = df.dropna(how="all")
-    df = df[df.iloc[:, 0].astype(str).str.match(r"\d{4}\.\d{2}\.\d{2}")]
-    import re
+    soup = BeautifulSoup(r.text, "lxml")
+    rows = []
+    for tr in soup.find_all("tr"):
+        tds = [td.get_text(strip=True) for td in tr.find_all("td")]
+        if len(tds) >= 9 and re.match(r"\d{4}\.\d{2}\.\d{2}$", tds[0]):
+            rows.append(tds[:9])
+    df = pd.DataFrame(rows, columns=["date", "close", "diff", "pct", "volume", "inst_net", "frgn_net",
+                                     "frgn_hold", "frgn_ratio"])
     m = re.findall(r"page=(\d+)", r.text)
     return df, max(int(x) for x in m) if m else None
 
