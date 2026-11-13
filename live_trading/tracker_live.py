@@ -30,6 +30,9 @@ class LivePosition:
     sell_order_no: str   = ""
     sell_price:    float = 0.0      # 매도 LIMIT 가
     sell_attempts: int   = 0        # 미체결 재주문 횟수 판단용
+    # reconcile 이 "세션이 끝났는데 안 팔렸다" 고 확정한 매도 주문번호. 재매도는 이 기록이 있을 때만
+    # 나간다 — status 가 open 이라는 것만으로는 (포지션 저장 실패로 open 에 머문 경우와) 구별이 안 된다.
+    unfilled_sell_no: str = ""
 
 
 def _pos_file(strategy: str) -> Path:
@@ -48,17 +51,31 @@ def load_live_positions(strategy: str) -> dict[str, LivePosition]:
     return {sym: LivePosition(**pos) for sym, pos in data.items()}
 
 
+def atomic_write_text(path: Path, text: str) -> None:
+    """임시 파일에 다 쓰고 교체한다 — 쓰는 도중 꺼져도 원래 파일이 깨지지 않는다 (옛 내용 아니면 새 내용)."""
+    path = Path(path)
+    path.parent.mkdir(exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8", newline="") as fh:
+        fh.write(text)
+        fh.flush()
+        os.fsync(fh.fileno())
+    # Windows 는 백신·동기화 프로그램이 대상 파일을 잠깐 잡고 있으면 교체가 거부된다 → 짧게 재시도
+    import time
+    for attempt in range(5):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 4:
+                raise
+            time.sleep(0.2)
+
+
 def save_live_positions(strategy: str, positions: dict[str, LivePosition]) -> None:
-    LIVE_DIR.mkdir(exist_ok=True)
-    # 임시 파일에 쓰고 교체 — 쓰는 도중 꺼져도 반쯤 쓰인 장부가 남지 않는다
-    f = _pos_file(strategy)
-    tmp = f.with_name(f.name + ".tmp")
-    tmp.write_text(
-        json.dumps({sym: asdict(pos) for sym, pos in positions.items()},
-                   indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    os.replace(tmp, f)
+    atomic_write_text(_pos_file(strategy),
+                      json.dumps({sym: asdict(pos) for sym, pos in positions.items()},
+                                 indent=2, ensure_ascii=False))
 
 
 def append_live_trade(strategy: str, record: dict) -> None:

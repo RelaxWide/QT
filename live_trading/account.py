@@ -152,6 +152,7 @@ def reconcile_fills(kis: KISClient, strategies=STRATEGIES, fallback_session: str
         else:
             # 미체결/부분체결 → 남은 수량으로 open 복귀, sell_attempts 는 유지(재주문가 인하용)
             pos.qty, pos.status = min(held, pos.qty), "open"
+            pos.unfilled_sell_no = pos.sell_order_no      # 재매도 허가 (orders._send 가 확인)
             result["sells_unfilled"].append((strategy, sym))
             log.warning(f"[reconcile] {tag} 매도 미체결 (잔고 {held}주) — 재매도 대상")
 

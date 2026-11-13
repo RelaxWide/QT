@@ -28,7 +28,7 @@ from scheduler._log_helper import setup_file_logger
 setup_file_logger("daily_close")
 
 from live_trading.kis_client import KISClient
-from live_trading.orders import OrderManager
+from live_trading.orders import OrderManager, recover_incomplete_orders
 from live_trading.account import sync_all, reconcile_fills
 from live_trading.risk_guard import (RiskGuard, record_nav, add_unsettled,
                                      load_spy_closes, update_benchmark, benchmark_line)
@@ -55,7 +55,16 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
     session = _current_session()
     recon, recon_error = None, ""
     retry_sells: dict[str, list[str]] = {"clenow": [], "weinstein": []}
+    recovered: list[str] = []
     if not dry_run:
+        # 앞 실행이 주문 도중 끊겼으면 (전송 직후 종료, 포지션 저장 실패) 그 주문을 먼저 장부에 올린다.
+        # 그래야 바로 아래 체결 확정이 KIS 잔고와 대조할 수 있다.
+        try:
+            recovered = recover_incomplete_orders()
+        except Exception as e:
+            recon_error = f"주문 장부 복구 실패: {e}"
+            log.error(f"[daily_close] {recon_error}")
+    if not dry_run and not recon_error:
         try:
             recon = reconcile_fills(KISClient.from_config(allow_prod=True), fallback_session=session)
             for strat, sym in recon["sells_unfilled"]:
@@ -344,6 +353,9 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
             msg += "\n🚨 현금(주문가능금액) 조회 실패 — 위 잔고의 현금 $0 은 실제 값이 아님. NAV 기록·매수 보류"
         if sell_no_price:
             msg += "\n🚨 매도 가격을 못 구해 주문 못 냄: " + ", ".join(sell_no_price)
+        if recovered:
+            msg += ("\n🚨 <b>중단됐던 주문 복구</b>: " + ", ".join(recovered)
+                    + " — 장부에 접수 대기로 올림, 체결은 KIS 잔고로 확정")
         for strat, sym, local_qty, kis_qty in getattr(om, "qty_mismatch", []):
             msg += (f"\n🚨 <b>수량 불일치로 매도 보류</b>: {sym} 장부 {local_qty}주 / KIS {kis_qty}주 ({strat}) — "
                     f"분할·수동 거래 확인 후 live_trading/positions_live_{strat}.json 수량을 맞추면 다음 실행에서 나감")
@@ -560,3 +572,13 @@ if __name__ == "__main__":
             except Exception:
                 pass
             sys.exit(1)
+        except Exception as e:
+            # 예기치 못한 중단 (예: 주문 장부 파일 손상) — 조용히 죽으면 아무 알림도 안 간다
+            log.exception("[daily_close] 예외로 중단")
+            try:
+                _notify(f"🚨 <b>US 장마감 처리 오류로 중단</b>\n{type(e).__name__}: {str(e)[:300]}\n"
+                        f"완료 기록 없음 — 따라잡기 실행이 다시 시도. 반복되면 로그 확인 필요",
+                        yaml.safe_load(Path("config_live.yaml").read_text(encoding="utf-8")))
+            except Exception:
+                pass
+            raise

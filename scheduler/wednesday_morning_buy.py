@@ -91,6 +91,14 @@ def _run(dry_run: bool, allow_stale: bool):
 
     cfg_live = yaml.safe_load(Path("config_live.yaml").read_text(encoding="utf-8"))
 
+    # 앞 실행이 주문 도중 끊겼으면 그 주문을 먼저 장부에 올린다 (같은 종목을 다시 사지 않도록)
+    if not dry_run:
+        from live_trading.orders import recover_incomplete_orders
+        recovered = recover_incomplete_orders()
+        if recovered:
+            _notify("🚨 <b>중단됐던 주문 복구</b>\n" + "\n".join(recovered)
+                    + "\n장부에 접수 대기로 올림 — 체결은 다음 장마감 처리에서 KIS 잔고로 확정", cfg_live)
+
     # 리스크 가드 재확인
     guard = RiskGuard.from_config(market="us")
     ok, reason = guard.check()

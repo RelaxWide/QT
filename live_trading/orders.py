@@ -157,8 +157,10 @@ class OrderManager:
         on_disk = self._load_map()
         on_disk.update(self._map)
         self._map = on_disk
-        ORDER_MAP.write_text(json.dumps(self._map, indent=2, ensure_ascii=False),
-                             encoding="utf-8")
+        # 임시 파일 → 교체. 직접 덮어쓰면 쓰는 도중 꺼졌을 때 장부 전체가 깨져, 선기록한
+        # "보내는 중" 기록까지 사라지고 다음 실행이 JSONDecodeError 로 멈췄다.
+        from live_trading.tracker_live import atomic_write_text
+        atomic_write_text(ORDER_MAP, json.dumps(self._map, indent=2, ensure_ascii=False))
 
     def _order_key(self, strategy: str, symbol: str, signal_date: str, side: str) -> str:
         return f"{strategy}:{symbol}:{signal_date}:{side}"
@@ -182,7 +184,19 @@ class OrderManager:
             "timestamp": pd.Timestamp.now().isoformat(),
             "dry_run":   result.dry_run,
         }
+        if self.market == "us":
+            # applied: 이 주문이 포지션 장부에 반영됐는가. False 로 남으면 다음 실행 시작 때
+            # recover_incomplete_orders 가 마저 반영한다.
+            self._map[key].update(status="unknown" if result.unknown else "accepted", applied=False)
         self._save_map()
+
+    def _mark_applied(self, key: str) -> None:
+        try:
+            if self.market == "us" and key in self._map:
+                self._map[key]["applied"] = True
+                self._save_map()
+        except Exception as e:
+            log.warning(f"[orders] 반영 표시 저장 실패 ({key}): {e}")   # 복구가 한 번 더 확인할 뿐 해가 없다
 
     # ── 수량 계산 ─────────────────────────────────────────────────────────
     def _calc_qty(self, price: float, budget: float) -> int:
@@ -224,13 +238,28 @@ class OrderManager:
         # 같은 키의 매도가 이미 나갔는데 포지션이 다시 open 이면, 앞 주문은 세션이 끝나 미체결로
         # 확정된 것이다 → 재주문은 새 키로 실제 전송한다. (예전엔 이전 결과만 돌려주고 아무 주문도
         # 내지 않아, 데이터 날짜가 안 바뀌는 동안에는 재매도가 조용히 사라졌다)
-        if side == "SELL" and self.market == "us" and self._already_sent(key) \
-                and self._position_status(strategy, symbol) == "open":
-            n = 2
+        # 재매도의 근거는 "포지션이 open" 이 아니라 reconcile 이 남긴 명시적 미체결 확정 기록이다
+        # (LivePosition.unfilled_sell_no). 접수는 됐는데 포지션 저장만 실패해 open 에 머문 경우를
+        # 미체결로 오판하면 같은 매도가 한 번 더 나간다 — 그때는 장부만 접수 대기로 바로잡는다.
+        if side == "SELL" and self.market == "us" and not dry_run and self._already_sent(key):
+            last, n = key, 2
             while self._already_sent(f"{key}#retry{n}"):
-                n += 1
-            log.info(f"[orders] {key} 앞 주문 미체결 확정 — 재주문 (#{n})")
-            key = f"{key}#retry{n}"
+                last, n = f"{key}#retry{n}", n + 1
+            pos = self._position(strategy, symbol)
+            if pos is not None and pos.status == "open":
+                prev = self._map[last]
+                prev_no = str(prev.get("order_no") or "")
+                if prev_no and pos.unfilled_sell_no == prev_no:
+                    log.info(f"[orders] {last} 미체결 확정됨 — 재주문 (#{n})")
+                    key = f"{key}#retry{n}"
+                else:
+                    log.error(f"[orders] {last} 접수됐으나 포지션 장부 미반영 — 장부만 접수 대기로 정정, 재전송 안 함")
+                    if self._update_live_positions(strategy, symbol, signal_date, "SELL",
+                                                   prev["qty"], prev["price"], prev_no):
+                        self._mark_applied(last)
+                    key = last
+            else:
+                key = last
 
         if self._already_sent(key):
             log.info(f"[orders] 중복 방지 — {key} 이미 전송됨")
@@ -292,8 +321,9 @@ class OrderManager:
             except Exception as e:
                 # 접수는 됐는데 기록을 못 남겼다. 디스크에는 "보내는 중" 기록이 남아 있어 재전송은 막힌다.
                 log.error(f"[orders] {side} {symbol} 접수됨(order_no={result.order_no}) — 기록 저장 실패: {e}")
-            # positions_live_{strategy}.json 갱신 (매수=추가 / 매도=제거)
-            self._update_live_positions(strategy, symbol, signal_date, side, qty, price, result.order_no)
+            # positions_live_{strategy}.json 갱신 (US: 매수=pending_buy 추가 / 매도=pending_sell 표시)
+            if self._update_live_positions(strategy, symbol, signal_date, side, qty, price, result.order_no):
+                self._mark_applied(key)
         return result
 
     def _drop_intent(self, key: str) -> None:
@@ -301,7 +331,8 @@ class OrderManager:
             disk = self._load_map()
             disk.pop(key, None)
             self._map.pop(key, None)
-            ORDER_MAP.write_text(json.dumps(disk, indent=2, ensure_ascii=False), encoding="utf-8")
+            from live_trading.tracker_live import atomic_write_text
+            atomic_write_text(ORDER_MAP, json.dumps(disk, indent=2, ensure_ascii=False))
         except Exception as e:
             # 못 지우면 "보내는 중" 으로 남아 접수 불명 취급 — 재전송이 하루 미뤄질 뿐 중복은 없다
             log.warning(f"[orders] 의도 기록 제거 실패 ({key}): {e}")
@@ -380,6 +411,14 @@ class OrderManager:
             return True
 
     @staticmethod
+    def _position(strategy: str, symbol: str):
+        try:
+            from live_trading.tracker_live import load_live_positions
+            return load_live_positions(strategy).get(symbol)
+        except Exception:
+            return None
+
+    @staticmethod
     def _position_status(strategy: str, symbol: str) -> str | None:
         """positions_live 의 상태 (open | pending_buy | pending_sell). 없거나 못 읽으면 None."""
         try:
@@ -390,8 +429,8 @@ class OrderManager:
             return None
 
     def _update_live_positions(self, strategy: str, symbol: str, signal_date: str,
-                                side: str, qty: int, price: float, order_no: str) -> None:
-        """매수/매도 주문 접수 시 positions_live_{strategy}.json 자동 갱신.
+                                side: str, qty: int, price: float, order_no: str) -> bool:
+        """매수/매도 주문 접수 시 positions_live_{strategy}.json 자동 갱신. 반영에 성공하면 True.
 
         US: 접수 ≠ 체결. 매수는 pending_buy 로 추가, 매도는 삭제하지 않고 pending_sell
         로 표시 → 다음 daily_close 의 account.reconcile_fills() 가 KIS 실잔고로 확정.
@@ -399,7 +438,7 @@ class OrderManager:
         KR: 기존 동작 유지 (접수 = 반영). KR 은 아직 reconcile 경로가 없음.
         """
         if strategy == "core":
-            return   # 코어(SPY)는 포지션 파일 없이 KIS 잔고 기준 (place_core_topup 주석)
+            return True   # 코어(SPY)는 포지션 파일 없이 KIS 잔고 기준 (place_core_topup 주석)
         try:
             from live_trading.tracker_live import LivePosition, load_live_positions, save_live_positions
             positions = load_live_positions(strategy)
@@ -430,8 +469,10 @@ class OrderManager:
                 else:
                     del positions[symbol]
             save_live_positions(strategy, positions)
+            return True
         except Exception as e:
-            log.warning(f"[orders] positions_live 갱신 실패 ({strategy}/{symbol}): {e}")
+            log.error(f"[orders] positions_live 갱신 실패 ({strategy}/{symbol}): {e} — 다음 실행 시작 때 복구")
+            return False
 
     # ── Phase 4: pending → 장개시 MOO 주문 ───────────────────────────────
     def place_phase4_entries(self, dry_run: bool = False) -> list[OrderResult]:
@@ -887,6 +928,77 @@ def _get_live_qty(strategy: str, symbol: str) -> int:
     data = json.loads(path.read_text(encoding="utf-8"))
     pos = data.get(symbol, {})
     return int(pos.get("qty", 0))
+
+
+RECOVER_MAX_AGE_DAYS = 7
+
+
+def recover_incomplete_orders() -> list[str]:
+    """
+    끝까지 처리되지 못한 US 주문을 주문 장부(order_map) 전체에서 찾아 포지션 장부에 반영한다.
+    daily_close · wednesday_morning_buy 가 **시작할 때** 부른다 (체결 확정보다 먼저).
+
+      - status=sending  : 전송 전후에 끊김 → 접수 불명으로 바꾸고 pending 으로 반영
+      - applied=False   : 접수·기록은 됐는데 포지션 저장이 실패 → pending 으로 반영
+    반영만 하면 뒤따르는 reconcile_fills 가 KIS 실잔고로 체결/미체결을 확정한다.
+    예전엔 같은 키로 다시 주문할 때만 복구돼서, 매수 후보가 만료되면 실제 보유가 장부에 영영 안 잡혔다.
+    반환: 복구한 주문 설명 목록 (알림용).
+    """
+    if not ORDER_MAP.exists():
+        return []
+    from live_trading.tracker_live import atomic_write_text, load_live_positions
+    disk = json.loads(ORDER_MAP.read_text(encoding="utf-8"))
+    helper = object.__new__(OrderManager)        # _update_live_positions 는 market 만 쓴다
+    helper.market = "us"
+    now, out, changed = pd.Timestamp.now(), [], False
+    for key, rec in disk.items():
+        if not isinstance(rec, dict) or rec.get("dry_run"):
+            continue
+        sending = rec.get("status") == "sending" and not rec.get("order_no")
+        unapplied = bool(rec.get("order_no")) and rec.get("applied") is False
+        if not (sending or unapplied):
+            continue
+        parts = key.split("#")[0].split(":")
+        if len(parts) != 4:
+            continue
+        strategy, symbol, signal_date, side = parts
+        try:
+            if (now - pd.Timestamp(rec.get("timestamp"))).days > RECOVER_MAX_AGE_DAYS:
+                rec["applied"] = True; changed = True     # 너무 오래된 기록은 건드리지 않고 닫는다
+                continue
+        except Exception:
+            pass
+        if sending:
+            rec.update(order_no=f"{UNKNOWN_ORDER_NO}:{rec.get('local_id') or key}", status="unknown")
+            changed = True
+        ok = True
+        if strategy != "core":
+            try:
+                pos = load_live_positions(strategy).get(symbol)
+            except Exception as e:
+                log.error(f"[recover] {key} 포지션 읽기 실패: {e}")
+                continue
+            need = (side == "BUY" and pos is None) or (
+                side == "SELL" and pos is not None and pos.status == "open"
+                and pos.unfilled_sell_no != rec["order_no"])
+            if need:
+                ok = helper._update_live_positions(strategy, symbol, signal_date, side,
+                                                   rec["qty"], rec["price"], rec["order_no"])
+                if ok:
+                    out.append(f"{side} {symbol} x{rec['qty']} ({strategy}, "
+                               f"{'접수 불명' if rec.get('status') == 'unknown' else '장부 미반영'})")
+            elif sending:
+                out.append(f"{side} {symbol} x{rec['qty']} ({strategy}, 접수 불명)")
+        elif sending:
+            out.append(f"{side} {symbol} x{rec['qty']} (core, 접수 불명)")
+        if ok:
+            rec["applied"] = True
+            changed = True
+    if changed:
+        atomic_write_text(ORDER_MAP, json.dumps(disk, indent=2, ensure_ascii=False))
+    for line in out:
+        log.error(f"[recover] 중단됐던 주문 복구: {line}")
+    return out
 
 
 def _is_ambiguous_send_error(e: Exception) -> bool:

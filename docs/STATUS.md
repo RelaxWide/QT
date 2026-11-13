@@ -115,6 +115,11 @@ A8~A10 `src/backtest/engine.py`(Phase 4 용, 종료된 전략 — 결과를 다�
 - **접수 불명 주문의 체결 기록 중복**: 접수 불명 주문번호를 `UNKNOWN:<로컬 ID>` 로 고유하게 → 거래 기록 중복 방지가 똑같이 적용.
 - **고정 예산 모드에서 단일 주문 한도 미적용**: `auto_allocate: false` 면 `total_usd` 기준으로 확인 (현재 운용은 자동 배분이라 영향 없었음).
 
+후속 리뷰 3건 (2차, 같은 날 반영) — 주문 장부와 포지션 장부 사이의 틈:
+- **포지션 저장 실패가 재매도로 이어짐**: 재매도의 근거를 "포지션이 open" 에서 **reconcile 이 남긴 미체결 확정 기록**(`LivePosition.unfilled_sell_no`)으로 변경. 접수는 됐는데 장부만 open 에 머문 경우는 장부를 접수 대기로 정정할 뿐 재전송하지 않는다.
+- **미완료 주문이 같은 키로 다시 주문할 때만 복구됨**: `orders.recover_incomplete_orders()` — `daily_close`·`wednesday_morning_buy` 가 **시작할 때** 주문 장부 전체에서 "보내는 중"(`status=sending`)·"장부 미반영"(`applied=False`) 주문을 찾아 포지션 장부에 접수 대기로 올린다 → 바로 뒤의 체결 확정이 KIS 잔고와 대조. 복구하면 텔레그램에 표시.
+- **주문 장부 파일 손상**: `order_map.json`·포지션·NAV 를 임시 파일 → 교체(`atomic_write_text`)로 저장. 장마감 처리가 예외로 죽으면 텔레그램으로 알림.
+
 검증: 가짜 KIS 로 각 항목 재현 → 통과. Windows 잠금 동작은 이 PC 에서 `python -m live_trading.runlock` 으로 확인함 (11/13, OK).
 (잠금 장치 자체가 고장이면 잠금 없이 진행하도록 해 두었다 — 매매가 통째로 멈추지 않게.)
 

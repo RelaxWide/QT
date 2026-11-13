@@ -104,10 +104,13 @@ def load_nav(market: str) -> list[dict]:
 
 def _write_nav(market: str, rows: list[dict]) -> None:
     LIVE_DIR.mkdir(exist_ok=True)
-    with nav_path(market).open("w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=NAV_FIELDS, extrasaction="ignore")
-        w.writeheader()
-        w.writerows(rows)
+    import io
+    from live_trading.tracker_live import atomic_write_text
+    buf = io.StringIO(newline="")
+    w = csv.DictWriter(buf, fieldnames=NAV_FIELDS, extrasaction="ignore")
+    w.writeheader()
+    w.writerows(rows)
+    atomic_write_text(nav_path(market), buf.getvalue())
 
 
 def add_cashflow(market: str, amount: float) -> float:
