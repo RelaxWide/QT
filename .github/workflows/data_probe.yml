@@ -1,0 +1,17 @@
+name: KR Data Probe
+
+# 수동 실행 전용 — KR 수급 데이터를 어디서 받을 수 있는지 점검하고 결과를 로그에 출력한다 (저장·커밋 없음)
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -r requirements.txt
+      - run: python scripts/probe_kr_data.py
