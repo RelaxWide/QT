@@ -61,6 +61,16 @@ class OrderResult:
     def ok(self) -> bool:
         return bool(self.order_no) or self.dry_run
 
+    @property
+    def unknown(self) -> bool:
+        """접수 여부를 모르는 주문 (전송 후 응답 유실). ok 로 취급해 재전송을 막는다."""
+        return self.order_no == UNKNOWN_ORDER_NO
+
+
+# 전송은 했는데 응답을 못 받은 주문의 order_no 자리표시. 접수됐을 수 있으므로 같은 키로 다시
+# 보내지 않고 pending 으로 둔다 → 다음 장마감 처리의 reconcile 이 KIS 실잔고로 체결/미체결을 확정한다.
+UNKNOWN_ORDER_NO = "UNKNOWN"
+
 
 # ── OrderManager ──────────────────────────────────────────────────────────
 class OrderManager:
@@ -76,6 +86,9 @@ class OrderManager:
         # 통화 키 (auto_allocate 시 잔고 합산 필드)
         self._cash_key = "cash_krw" if self.market == "kr" else "cash_usd"
         self._sym      = "₩" if self.market == "kr" else "$"
+        # 단일 주문 금액 한도 (오류 보호) — 총자산 대비 %. 예전엔 설정만 있고 적용되지 않았다.
+        rg = (market_cfg.get("risk_guard") or cfg_live.get("risk_guard") or {})
+        self._max_order_pct = float(rg.get("max_order_pct_of_capital", 50) or 0)
 
     @classmethod
     def from_config(cls, path: Path = CONFIG_PATH, allow_prod: bool = False,
@@ -153,8 +166,13 @@ class OrderManager:
     def _already_sent(self, key: str) -> bool:
         if key in self._map:
             return True
-        # 다른 프로세스가 동시에 기록했을 수 있으니 디스크 최신 상태도 확인
-        return key in self._load_map()
+        # 다른 프로세스가 기록했을 수 있으니 디스크 최신 상태도 확인. 찾으면 메모리에도 올린다
+        # (예전엔 True 만 돌려줘서 호출측의 self._map[key] 가 KeyError 로 죽었다)
+        disk = self._load_map()
+        if key in disk:
+            self._map[key] = disk[key]
+            return True
+        return False
 
     def _record(self, key: str, result: OrderResult) -> None:
         self._map[key] = {
@@ -214,6 +232,11 @@ class OrderManager:
                                price=prev["price"], order_no=prev["order_no"],
                                dry_run=prev["dry_run"])
 
+        blocked = self._pre_send_block(strategy, symbol, side, qty, price)
+        if blocked:
+            log.error(f"[orders] {side} {symbol} x{qty} 보류: {blocked}")
+            return OrderResult(symbol=symbol, side=side, qty=qty, price=price, order_no="", error=blocked)
+
         if dry_run:
             log.info(f"[DRY-RUN] {side} {symbol} x{qty} @${price:.2f} ({strategy})")
             # dry_run 은 order_map 에 기록 안 함 — 실전 매수 시 중복 방지 오작동 방지
@@ -227,15 +250,67 @@ class OrderManager:
             result = OrderResult(symbol=symbol, side=side, qty=qty,
                                  price=price, order_no=order_no)
         except Exception as e:
-            log.error(f"[orders] {side} {symbol} 실패: {e}")
-            result = OrderResult(symbol=symbol, side=side, qty=qty,
-                                 price=price, order_no="", error=str(e))
+            if self.market == "us" and _is_ambiguous_send_error(e):
+                # 요청이 나간 뒤 응답을 못 받았다 — 접수됐을 수 있다. 실패로 처리하면 재실행 때
+                # 같은 주문이 한 번 더 나간다. 접수 불명으로 기록하고 재전송을 막는다.
+                log.error(f"[orders] {side} {symbol} 접수 불명 (응답 유실): {e} — 재전송하지 않음, "
+                          f"다음 장마감 처리에서 KIS 잔고로 확정")
+                result = OrderResult(symbol=symbol, side=side, qty=qty, price=price,
+                                     order_no=UNKNOWN_ORDER_NO, error=f"접수 불명: {e}")
+                self.__dict__.setdefault("unknown_orders", []).append(result)
+            else:
+                log.error(f"[orders] {side} {symbol} 실패: {e}")
+                result = OrderResult(symbol=symbol, side=side, qty=qty,
+                                     price=price, order_no="", error=str(e))
 
         if result.ok:
             self._record(key, result)
             # positions_live_{strategy}.json 갱신 (매수=추가 / 매도=제거)
             self._update_live_positions(strategy, symbol, signal_date, side, qty, price, result.order_no)
         return result
+
+    def _pre_send_block(self, strategy: str, symbol: str, side: str, qty: int, price: float) -> str:
+        """전송 직전 안전 확인 (US). 막아야 하면 사유, 아니면 빈 문자열. 모의 실행에도 적용해 미리 보인다."""
+        if self.market != "us":
+            return ""
+        if side == "BUY":
+            # 정지 스위치는 주문마다 다시 본다 — 실행 도중(대기·여러 종목 전송 사이)에 켜도 멈추도록
+            from live_trading.risk_guard import KILL_SWITCH
+            if KILL_SWITCH.exists():
+                return "KILL_SWITCH 파일 존재 — 수동 정지"
+            pct = getattr(self, "_max_order_pct", 0) or 0
+            if pct > 0 and self.cap.get("auto_allocate"):
+                bal = self._get_balance()
+                if not bal.get("_failed"):
+                    total = float(bal.get(self._cash_key, 0) or 0) + sum(
+                        float(p.get("eval_amt", 0) or 0) for p in bal.get("positions", []))
+                    if total > 0 and qty * price > total * pct / 100:
+                        return (f"주문 금액 ${qty * price:,.0f} > 단일 주문 한도 ${total * pct / 100:,.0f} "
+                                f"(총자산의 {pct:g}%)")
+            return ""
+        # SELL — 장부 수량과 KIS 실보유가 다르면 보내지 않는다 (분할·수동 거래). 장부 수량으로 팔면
+        # 일부만 팔리거나(분할 후) 거부된다. 자동 보정은 하지 않는다: KIS 수량에는 전략 밖 수동 보유가
+        # 섞여 있을 수 있어 그대로 팔면 남의 몫까지 청산한다. 사람이 장부를 맞춘 뒤 다음 실행에서 나간다.
+        if strategy == "core":
+            return ""
+        bal = self._get_balance()
+        if bal.get("_failed"):
+            return ""                      # 확인 불가 — 매도는 막지 않는다 (청산 지연이 더 위험)
+        held = sum(int(p.get("qty", 0) or 0) for p in bal.get("positions", []) if p.get("symbol") == symbol)
+        if held != qty and not self._shared_symbol(strategy, symbol):
+            self.__dict__.setdefault("qty_mismatch", []).append((strategy, symbol, qty, held))
+            return f"수량 불일치 — 장부 {qty}주 / KIS {held}주 (수동 확인 필요)"
+        return ""
+
+    def _shared_symbol(self, strategy: str, symbol: str) -> bool:
+        """다른 전략이나 코어도 이 종목을 들고 있으면 계좌 잔고로 전략별 수량을 가릴 수 없다."""
+        if symbol == self.cap.get("core_symbol", "SPY") and float(self.cap.get("core_pct", 0) or 0) > 0:
+            return True
+        try:
+            from live_trading.tracker_live import load_live_positions
+            return any(symbol in load_live_positions(s) for s in ("clenow", "weinstein") if s != strategy)
+        except Exception:
+            return True
 
     @staticmethod
     def _position_status(strategy: str, symbol: str) -> str | None:
@@ -600,7 +675,8 @@ class OrderManager:
                 room -= price * qty
                 if sec:
                     sector_count[sec] = sector_count.get(sec, 0) + 1
-            if r.ok and not r.dry_run:
+            if r.ok:
+                # 모의 실행에서도 차감한다 — 안 하면 미리보기가 현금보다 많은 주문을 보여 준다
                 remaining_cash -= price * qty
             if not dry_run:
                 time.sleep(0.5)
@@ -744,6 +820,21 @@ def _get_live_qty(strategy: str, symbol: str) -> int:
     data = json.loads(path.read_text(encoding="utf-8"))
     pos = data.get(symbol, {})
     return int(pos.get("qty", 0))
+
+
+def _is_ambiguous_send_error(e: Exception) -> bool:
+    """주문 요청이 브로커에 닿았을 수도 있는 오류인가 (타임아웃·연결 끊김·5xx).
+    KIS 가 명시적으로 거부한 경우(rt_cd != 0, 4xx)는 여기 오지 않거나 False."""
+    try:
+        import requests
+        if isinstance(e, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)):
+            return True
+        if isinstance(e, requests.exceptions.HTTPError):
+            code = getattr(getattr(e, "response", None), "status_code", 0) or 0
+            return code >= 500
+    except Exception:
+        pass
+    return False
 
 
 # 첫 매도는 종가 -0.5% LIMIT. 이미 한 번 미체결된 종목은 -3% 로 낮춰 체결을 우선한다.

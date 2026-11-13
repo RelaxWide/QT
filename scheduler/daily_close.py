@@ -57,14 +57,12 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
     retry_sells: dict[str, list[str]] = {"clenow": [], "weinstein": []}
     if not dry_run:
         try:
-            recon = reconcile_fills(KISClient.from_config(allow_prod=True))
+            recon = reconcile_fills(KISClient.from_config(allow_prod=True), fallback_session=session)
             for strat, sym in recon["sells_unfilled"]:
                 if strat in retry_sells:
                     retry_sells[strat].append(sym)
             log.info(f"[daily_close] reconcile: {recon}")
-            for sym, amount, submitted_at in recon["sell_fills"]:
-                s = session_after(submitted_at) if submitted_at else None
-                add_unsettled("us", str(s.date()) if s is not None else session, amount, sym)
+            # 미결제 매도대금 등록은 reconcile_fills 안에서 포지션 저장 전에 끝난다
         except Exception as e:
             recon_error = str(e)
             log.error(f"[daily_close] 체결 확정 실패: {e}")
@@ -346,6 +344,13 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
             msg += "\n🚨 현금(주문가능금액) 조회 실패 — 위 잔고의 현금 $0 은 실제 값이 아님. NAV 기록·매수 보류"
         if sell_no_price:
             msg += "\n🚨 매도 가격을 못 구해 주문 못 냄: " + ", ".join(sell_no_price)
+        for strat, sym, local_qty, kis_qty in getattr(om, "qty_mismatch", []):
+            msg += (f"\n🚨 <b>수량 불일치로 매도 보류</b>: {sym} 장부 {local_qty}주 / KIS {kis_qty}주 ({strat}) — "
+                    f"분할·수동 거래 확인 후 live_trading/positions_live_{strat}.json 수량을 맞추면 다음 실행에서 나감")
+        if getattr(om, "unknown_orders", []):
+            msg += ("\n🚨 <b>접수 불명 주문</b> (응답 유실): "
+                    + ", ".join(f"{r.side} {r.symbol} x{r.qty}" for r in om.unknown_orders)
+                    + " — 재전송 안 함. KIS 앱에서 접수 여부 확인, 체결은 다음 장마감 처리에서 잔고로 확정")
         if held_no_bar:
             msg += "\n⚠️ 당일 봉 없는 보유 종목 (청산 판정 못 함): " + ", ".join(held_no_bar)
         if problems:
@@ -419,7 +424,8 @@ def _buy_time_label(now_kst=None) -> str:
 
 
 def _syms(orders) -> str:
-    return ", ".join(r.symbol + ("" if r.ok else "(실패)") for r in orders) or "-"
+    return ", ".join(r.symbol + ("(접수 불명)" if getattr(r, "unknown", False) else "" if r.ok else "(실패)")
+                     for r in orders) or "-"
 
 
 def _build_core_message(report, today, cl_sells, w_sells, pending,
@@ -537,4 +543,20 @@ if __name__ == "__main__":
     args = p.parse_args()
     if args.force_wed and not args.dry_run:
         p.error("--force-wed 는 --dry-run 과 함께만 쓸 수 있습니다 (실제 매수 후보 저장 방지)")
-    main(dry_run=args.dry_run, refresh=args.refresh, force_wed=args.force_wed)
+    if args.dry_run:
+        main(dry_run=True, refresh=args.refresh, force_wed=args.force_wed)
+    else:
+        # 다른 주문 실행(따라잡기·수요일 매수)과 겹치지 않게 계좌 잠금을 잡는다. 못 잡으면 완료 기록
+        # 없이 끝나므로 다음 따라잡기 실행이 다시 시도한다.
+        from live_trading.runlock import account_lock, LockBusy
+        try:
+            with account_lock("us", wait_sec=900):
+                main(dry_run=False, refresh=args.refresh, force_wed=args.force_wed)
+        except LockBusy as e:
+            log.error(f"[daily_close] 실행 생략: {e}")
+            try:
+                _notify(f"🚨 <b>US 장마감 처리 실행 못 함</b>\n{e}\n다음 따라잡기 실행이 다시 시도",
+                        yaml.safe_load(Path("config_live.yaml").read_text(encoding="utf-8")))
+            except Exception:
+                pass
+            sys.exit(1)

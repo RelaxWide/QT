@@ -22,7 +22,8 @@ from live_trading.tracker_live import (
     append_slippage,
 )
 
-from live_trading.freshness import order_session_closed
+from live_trading.freshness import order_session_closed, session_after
+from live_trading.risk_guard import add_unsettled
 
 CONFIG_PATH = Path("config_live.yaml")
 log = logging.getLogger("kis")
@@ -37,7 +38,7 @@ STRATEGIES = ("phase4", "clenow", "weinstein")
 FALLBACK_ORDER_AGE_HOURS = 20
 
 
-def reconcile_fills(kis: KISClient, strategies=STRATEGIES) -> dict:
+def reconcile_fills(kis: KISClient, strategies=STRATEGIES, fallback_session: str | None = None) -> dict:
     """
     US pending 주문을 KIS 실잔고로 확정 (체결 여부 = 잔고, 체결가 = 체결내역 API).
 
@@ -154,6 +155,13 @@ def reconcile_fills(kis: KISClient, strategies=STRATEGIES) -> dict:
             result["sells_unfilled"].append((strategy, sym))
             log.warning(f"[reconcile] {tag} 매도 미체결 (잔고 {held}주) — 재매도 대상")
 
+    # 저장 순서: 거래 기록(위, 주문번호로 중복 방지) → 미결제 대금 등록(세션+종목으로 중복 방지)
+    # → 포지션. 어느 지점에서 끊겨도 다음 실행이 같은 체결을 다시 확정하며 빠진 것만 채운다.
+    # (예전엔 미결제 등록이 포지션 저장 뒤 호출측에 있어, 그 사이에 끊기면 대금이 NAV 에서 빠졌다)
+    for sym, amount, submitted_at in result["sell_fills"]:
+        s = session_after(submitted_at) if submitted_at else None
+        sess = str(s.date()) if s is not None else (fallback_session or today)
+        add_unsettled("us", sess, amount, sym)
     for s in strategies:
         save_live_positions(s, all_pos[s])
     return result

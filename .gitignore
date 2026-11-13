@@ -34,3 +34,5 @@ logs/
 docs_cache/
 live_trading/daily_close_done.json
 live_trading/unsettled_sells_*.json
+live_trading/run_*.lock
+live_trading/*.tmp
