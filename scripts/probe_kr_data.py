@@ -48,11 +48,24 @@ def naver_frgn(code, page):
     df = pd.DataFrame(rows, columns=["date", "close", "diff", "pct", "volume", "inst_net", "frgn_net",
                                      "frgn_hold", "frgn_ratio"])
     m = re.findall(r"page=(\d+)", r.text)
+    if df.empty and page == 1:      # 진단: 표를 못 찾았을 때 페이지가 어떻게 생겼는지
+        trs = soup.find_all("tr")
+        counts = sorted({len(tr.find_all("td")) for tr in trs})
+        print(f"  [진단] HTTP {r.status_code} 길이 {len(r.text)} | tr {len(trs)}개, td 수 종류 {counts} | "
+              f"'기관' 포함 {'기관' in r.text} | '순매매' 포함 {'순매매' in r.text} | iframe {len(soup.find_all('iframe'))} | "
+              f"제목 {soup.title.get_text(strip=True)[:60] if soup.title else None}")
+        dated = [tr for tr in trs if re.search(r"\d{4}\.\d{2}\.\d{2}", tr.get_text())]
+        for tr in dated[:2]:
+            print("  [진단] 날짜 있는 행:", [td.get_text(strip=True) for td in tr.find_all(["td", "th"])][:12])
+        i = r.text.find("순매매")
+        print("  [진단] 본문 일부:", re.sub(r"\s+", " ", r.text[max(0, i - 200): i + 300])[:500] if i >= 0 else re.sub(r"\s+", " ", r.text[:500]))
     return df, max(int(x) for x in m) if m else None
 
 
 def probe_naver(code):
     df1, last = naver_frgn(code, 1)
+    if df1.empty:
+        return "표를 못 찾음 (위 진단 참고)"
     info = f"열={list(df1.columns)} | 1쪽 {len(df1)}행 {df1.iloc[-1, 0]}~{df1.iloc[0, 0]} | 마지막 쪽 번호={last}"
     if last:
         dfl, _ = naver_frgn(code, last)
