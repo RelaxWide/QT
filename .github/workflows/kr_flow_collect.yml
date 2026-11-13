@@ -1,0 +1,34 @@
+name: KR Flow Collect
+
+# 수동 실행 전용 — KR 수급 사건 연구용 데이터를 받아 kr-flow-data 브랜치에 올린다 (master 에는 커밋하지 않음)
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "앞에서부터 N 종목만 (비우면 전체)"
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install pandas pyarrow requests
+      - run: python scripts/kr_flow/collect_naver.py ${{ inputs.limit }}
+      - name: Push to kr-flow-data branch
+        run: |
+          cd out
+          git init -q -b kr-flow-data
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "kr flow data $(date -u +%Y-%m-%d)"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" kr-flow-data
