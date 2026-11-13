@@ -2,7 +2,8 @@
 scheduler/git_sync.py
 실행 시각: 평일 05:40 KR (daily_close 06:30 전)
 역할:
-  GHA 페이퍼 커밋을 로컬로 당겨온다 (git pull --ff-only origin master).
+  원격(GitHub)의 코드 변경을 로컬로 당겨온다 (git pull --ff-only origin master).
+  (원래는 GHA 페이퍼 상태를 받아오는 용도였다. 페이퍼는 2026-11-13 종료 — 지금은 코드 수정 반영용)
   실패하면 텔레그램 경고 — 예전엔 git 을 직접 실행해서 실패가 아무 데도 안 보였고,
   로컬이 GHA 소유 파일을 덮어쓴 탓에 73커밋 뒤처진 채 방치됐다 (2026-10).
 
@@ -48,7 +49,7 @@ def main():
     ahead_behind = _git("rev-list", "--left-right", "--count",
                         "HEAD...origin/master").stdout.split()
     lines = ["🚨 <b>로컬 git 동기화 실패</b>",
-             "GHA 페이퍼 상태를 못 받아옴 — 방치하면 로컬이 계속 뒤처진다"]
+             "원격의 코드 변경을 못 받아옴 — 방치하면 로컬이 계속 뒤처진다"]
     if len(ahead_behind) == 2:
         lines.append(f"로컬 앞섬 {ahead_behind[0]} / 뒤처짐 {ahead_behind[1]}커밋")
     if dirty:

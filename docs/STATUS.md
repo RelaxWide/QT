@@ -12,7 +12,7 @@
 |---|---|---|---|
 | **US** | ✅ 실계좌 운영 | **코어 SPY 60% + Clenow 40%** (Clenow 최대 6종목·업종당 2·변동성 역가중, 11/12~). Weinstein 은 11/12 종료, 보유분 청산 중 | NAV $15,049 = 평가 $9,112 + 주문가능 $5,937. 기준일(10/20) 대비 **-3.0%**, 고점 대비 -4.17% (한도 -20%) |
 | **KR** | ⏸️ 중단 (재개 계획 없음) | 없음 | 보유 0. `QT_KR_*` 스케줄 4개 Disabled |
-| 페이퍼 | GHA `daily.yml` | **Clenow 단일** (Phase 4 · Weinstein 은 11/12 종료) | GHA 소유 — 로컬 수정 금지 |
+| 페이퍼 | ❌ **11/13 종료** | 없음 — GHA `daily.yml` 삭제, 텔레그램도 중단 | 마지막 NAV 11/11 $106,275. 상태 파일은 `paper_trading/` 에 보존. 새 전략은 백테스트 → 소액 실계좌로 검증 |
 
 - US 보유 8종목: Clenow CRL·VEEV·MRNA·MPC / Weinstein ALLE·DHR·HCA·EFX (**청산 대상** — 다음 daily_close 가 전량 매도 주문)
 - 체결 대기: Clenow **ACN 7주 @252.55** (11/12 01:00 KST 접수 → 11/13 06:30 daily_close 에서 확정)
