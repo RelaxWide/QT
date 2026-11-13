@@ -249,6 +249,10 @@ def main():
         days.append(d)
     if not days:
         print(f"  처리할 새 봉 없음 (NAV 마지막 {last_nav.date() if last_nav is not None else '-'}) — 종료")
+        # 진단: 받은 데이터의 마지막 봉 날짜 분포 (yfinance 가 직전 세션 봉을 아직 안 준 것인지 확인용)
+        from collections import Counter
+        ends = Counter(str(df.index[-1].date()) for df in price_data.values() if len(df))
+        print(f"  마지막 봉 날짜 분포: {dict(sorted(ends.items())[-3:])}")
         if last_nav is not None:
             behind = len(pd.bdate_range(last_nav, pd.Timestamp.today().normalize())) - 1
             if behind >= STALE_ALERT_BDAYS:
