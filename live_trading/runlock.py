@@ -91,4 +91,7 @@ if __name__ == "__main__":
             print("OK - 잠금 동작 (두 번째 시도는 거부됨)")
     with account_lock("selftest"):
         print("OK - 해제 후 다시 잡힘")
-    (LIVE_DIR / "run_selftest.lock").unlink(missing_ok=True)
+    try:
+        (LIVE_DIR / "run_selftest.lock").unlink()
+    except OSError:
+        pass
