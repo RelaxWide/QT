@@ -131,6 +131,61 @@ def main():
     for code in ["005930", "035720", "247540"] + sample[:2]:
         attempt(f"네이버 {code}", lambda c=code: probe_naver(c))
 
+    section("3b. 네이버·다음 JSON API 후보 (네이버 금융 PC 화면이 Next.js 로 바뀌어 표가 HTML 에 없음)")
+    import json as _json
+    import re as _re
+
+    def _get(url, headers=None):
+        r = requests.get(url, headers={**UA, **(headers or {})}, timeout=15)
+        body = r.text
+        desc = f"HTTP {r.status_code} 길이 {len(body)}"
+        try:
+            j = r.json()
+            if isinstance(j, list):
+                desc += f" | list {len(j)}개"
+                if j:
+                    desc += f" | 첫 항목 키 {list(j[0].keys())[:14] if isinstance(j[0], dict) else j[0]}"
+                    for k in ("bizdate", "date", "localDate", "tradeDate"):
+                        if isinstance(j[0], dict) and k in j[0]:
+                            desc += f" | {k}: {j[0][k]} ~ {j[-1][k]}"
+            elif isinstance(j, dict):
+                desc += f" | dict 키 {list(j.keys())[:12]}"
+                for k, v in j.items():
+                    if isinstance(v, list) and v and isinstance(v[0], dict):
+                        desc += f" | {k}[{len(v)}] 키 {list(v[0].keys())[:14]}"
+                        for dk in ("bizdate", "date", "localDate", "tradeDate"):
+                            if dk in v[0]:
+                                desc += f" | {dk}: {v[0][dk]} ~ {v[-1][dk]}"
+                        break
+                for k in ("totalPages", "totalCount", "pageCount", "totalPage"):
+                    if k in j:
+                        desc += f" | {k}={j[k]}"
+        except Exception:
+            head = " ".join(body[:120].split())
+            desc += f" | JSON 아님: {head!r}"
+        return desc
+
+    cands = [
+        ("네이버 m.stock trend (기본)", "https://m.stock.naver.com/api/stock/005930/trend", None),
+        ("네이버 m.stock trend pageSize=60", "https://m.stock.naver.com/api/stock/005930/trend?pageSize=60", None),
+        ("네이버 m.stock trend 2020-01 기준", "https://m.stock.naver.com/api/stock/005930/trend?pageSize=60&bizdate=20200131", None),
+        ("네이버 m.stock trend 2015-01 기준", "https://m.stock.naver.com/api/stock/005930/trend?pageSize=60&bizdate=20150130", None),
+        ("네이버 api.stock trend", "https://api.stock.naver.com/stock/005930/trend?pageSize=60", None),
+        ("네이버 m.stock investor", "https://m.stock.naver.com/api/stock/005930/investor", None),
+        ("다음 investor/days p1", "https://finance.daum.net/api/investor/days?symbolCode=A005930&page=1&perPage=30&pagination=true",
+         {"Referer": "https://finance.daum.net/quotes/A005930"}),
+        ("다음 investor/days p100", "https://finance.daum.net/api/investor/days?symbolCode=A005930&page=100&perPage=30&pagination=true",
+         {"Referer": "https://finance.daum.net/quotes/A005930"}),
+    ]
+    for label, url, h in cands:
+        attempt(label, lambda u=url, hh=h: _get(u, hh))
+    def _scan():
+        r = requests.get("https://finance.naver.com/item/frgn.naver?code=005930", headers=UA, timeout=15)
+        hits = sorted(set(_re.findall(r"https?://[a-zA-Z0-9./_-]*api[a-zA-Z0-9./_-]*", r.text)))[:25]
+        paths = sorted(set(_re.findall(r'"(/api/[a-zA-Z0-9/_{}.-]+)"', r.text)))[:25]
+        return f"URL {hits} | 경로 {paths}"
+    attempt("네이버 새 화면에 박힌 API 주소", _scan)
+
     section("4. marcap 데이터셋 (FinanceData/marcap — 일별 시가총액·상장주식수, 상장폐지 포함?)")
     def _marcap(year):
         url = f"https://raw.githubusercontent.com/FinanceData/marcap/master/data/marcap-{year}.parquet"
