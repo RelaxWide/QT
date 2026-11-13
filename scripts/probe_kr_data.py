@@ -177,6 +177,19 @@ def main():
         ("다음 investor/days p100", "https://finance.daum.net/api/investor/days?symbolCode=A005930&page=100&perPage=30&pagination=true",
          {"Referer": "https://finance.daum.net/quotes/A005930"}),
     ]
+    T = "https://m.stock.naver.com/api/stock/{}/trend?pageSize=60&bizdate={}"
+    cands += [
+        ("네이버 trend 005930 2008-01 기준", T.format("005930", "20080131"), None),
+        ("네이버 trend 005930 2003-01 기준", T.format("005930", "20030130"), None),
+        ("네이버 trend pageSize=200", "https://m.stock.naver.com/api/stock/005930/trend?pageSize=200&bizdate=20200131", None),
+        ("네이버 trend 상장폐지 048260 (2023-08 폐지) 2022-06 기준", T.format("048260", "20220630"), None),
+        ("네이버 trend 상장폐지 251960 (2020-12 폐지) 2019-06 기준", T.format("251960", "20190628"), None),
+        ("네이버 trend 코스닥 247540 2021-06 기준", T.format("247540", "20210630"), None),
+    ]
+    def _sample():
+        r = requests.get(T.format("005930", "20200131"), headers=UA, timeout=15)
+        return r.json()[:2]
+    attempt("네이버 trend 값 예시", _sample)
     for label, url, h in cands:
         attempt(label, lambda u=url, hh=h: _get(u, hh))
     def _scan():
