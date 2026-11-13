@@ -28,7 +28,7 @@ from scheduler._log_helper import setup_file_logger
 setup_file_logger("daily_close")
 
 from live_trading.kis_client import KISClient
-from live_trading.orders import OrderManager, recover_incomplete_orders
+from live_trading.orders import OrderManager, recover_incomplete_orders, unresolved_orders
 from live_trading.account import sync_all, reconcile_fills
 from live_trading.risk_guard import (RiskGuard, record_nav, add_unsettled,
                                      load_spy_closes, update_benchmark, benchmark_line)
@@ -281,6 +281,14 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
     problems = []
     if recon_error:
         problems.append("체결 확정 실패")
+    still_unresolved = []
+    if not dry_run:
+        try:
+            still_unresolved = unresolved_orders()
+        except Exception as e:
+            still_unresolved = [f"주문 장부 읽기 실패: {e}"]
+    if still_unresolved:
+        problems.append("미해결 주문 " + ",".join(k.split(":")[1] if ":" in k else k for k in still_unresolved))
     if nav_error:
         problems.append("NAV 기록 실패")
     failed_sells = [r.symbol for r in cl_sell_orders + w_sell_orders if not r.ok]

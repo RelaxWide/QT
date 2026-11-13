@@ -41,7 +41,8 @@ WARN_RATIO = 0.75
 
 log = logging.getLogger("kis")
 
-NAV_FIELDS = ["date", "total", "cash", "flow", "unit_nav", "unsettled", "spy"]
+# flow_ids: 그 행의 flow 에 반영된 입출금 항목 ID (|로 구분) — "어느 입출금이 어느 NAV 에 들어갔는지" 의 증거
+NAV_FIELDS = ["date", "total", "cash", "flow", "unit_nav", "unsettled", "spy", "flow_ids"]
 
 # SPY 종가를 붙일 때 기록일(KST)과 직전 세션 사이 허용 간격 (금→월 3일, 연휴 낀 주말 4일)
 BENCH_MAX_GAP_DAYS = 5
@@ -71,8 +72,8 @@ def add_unsettled(market: str, session: str, amount: float, symbol: str = "") ->
     if any(x["session"] == session and x["symbol"] == symbol for x in items):
         return   # 같은 날 재실행
     items.append({"session": session, "symbol": symbol, "amount": round(amount, 2)})
-    LIVE_DIR.mkdir(exist_ok=True)
-    p.write_text(json.dumps(items, indent=2), encoding="utf-8")
+    from live_trading.tracker_live import atomic_write_text
+    atomic_write_text(p, json.dumps(items, indent=2))     # 직접 덮어쓰면 쓰다 끊겼을 때 기존 장부까지 깨진다
 
 
 def _take_unsettled(market: str, session: str | None) -> float:
@@ -80,11 +81,15 @@ def _take_unsettled(market: str, session: str | None) -> float:
     p = _unsettled_path(market)
     if session is None or not p.exists():
         return 0.0
-    items = [x for x in json.loads(p.read_text(encoding="utf-8")) if x["session"] >= session]
-    if items:
-        p.write_text(json.dumps(items, indent=2), encoding="utf-8")
-    else:
-        p.unlink()
+    all_items = json.loads(p.read_text(encoding="utf-8"))
+    items = [x for x in all_items if x["session"] >= session]
+    if len(items) != len(all_items):
+        # 결제가 끝난 항목 정리 — 실패해도 금액 계산에는 영향이 없으므로 넘어간다 (다음에 다시 정리)
+        try:
+            from live_trading.tracker_live import atomic_write_text
+            atomic_write_text(p, json.dumps(items, indent=2))
+        except OSError as e:
+            log.warning(f"[nav] 미결제 장부 정리 실패 (다음 실행에서 재시도): {e}")
     return sum(x["amount"] for x in items)
 
 
@@ -117,10 +122,11 @@ def add_cashflow(market: str, amount: float) -> float:
     """입출금 예약. 다음 record_nav 에서 unit_nav 계산 시 제외된다."""
     p = _flow_path(market)
     pending = json.loads(p.read_text(encoding="utf-8")) if p.exists() else []
-    pending.append({"date": date.today().isoformat(), "amount": amount})
+    import uuid
+    pending.append({"id": uuid.uuid4().hex[:12], "date": date.today().isoformat(), "amount": amount})
     from live_trading.tracker_live import atomic_write_text
     atomic_write_text(p, json.dumps(pending, indent=2))
-    return sum(x["amount"] for x in pending if not x.get("applied_date"))
+    return sum(x["amount"] for x in pending)
 
 
 def record_nav(market: str, balance: dict, today: str | None = None,
@@ -142,46 +148,53 @@ def record_nav(market: str, balance: dict, today: str | None = None,
 
     all_rows = load_nav(market)
     rows = [r for r in all_rows if r["date"] != today]
-    # 입출금은 정확히 한 번만 반영한다. 대기 파일의 각 항목에 "어느 날짜 NAV 에 반영했는지"(applied_date)
-    # 를 먼저 찍고 → NAV 를 쓰고 → 지난 날짜에 반영이 끝난 항목만 다음 실행에서 지운다.
-    #   · 오늘 반영분은 오늘 안에는 지우지 않는다 → 같은 날 재기록해도 flow 가 유지된다
-    #     (예전엔 지워서, 재기록 때 출금 $3,000 이 손실로 바뀌어 낙폭 -30%)
-    #   · NAV 저장 뒤 정리 단계에서 끊겨도 다시 더해지지 않는다
-    #     (예전엔 "당일 행 flow + 대기 파일" 을 더해서, 삭제가 실패하면 같은 출금이 두 번 잡혀 unit_nav 1.3)
-    #   · 표시만 찍고 NAV 를 못 쓴 채 날이 넘어가면, 그 날짜의 NAV 행이 없으므로 미반영으로 다시 집는다
+    # 입출금은 정확히 한 번만 반영한다. 근거는 NAV 행 자체에 남긴다 (flow_ids = 그 행에 반영된 항목 ID).
+    # NAV 파일은 통째로 교체되므로 "flow 금액" 과 "어떤 항목이 들어갔는지" 가 항상 함께 저장된다.
+    #   · 다른 날짜의 행에 ID 가 있는 항목 = 반영 끝 → 대기 파일에서 지운다 (실패해도 다시 더해지지 않음)
+    #   · 어느 행에도 ID 가 없는 항목 = 미반영 → 오늘 행에 넣는다 (NAV 저장이 실패했던 항목 포함)
+    #   · 오늘 행에 이미 들어간 항목은 오늘 안에는 지우지 않고 다시 합산 → 같은 날 재기록에도 flow 유지
+    #   · 오늘 행의 flow 중 ID 로 설명되지 않는 부분(이 방식 도입 전에 기록된 금액)은 그대로 이어받는다
+    # 예전 방식들의 사고: 재기록 때 출금 $3,000 이 손실로 바뀜(-30%), 정리 실패 시 두 번 반영(unit_nav 1.3),
+    # 날짜 표시만 보고 반영 끝으로 오인(다음 날 0.7).
+    import uuid
     from live_trading.tracker_live import atomic_write_text
     fp = _flow_path(market)
     items = json.loads(fp.read_text(encoding="utf-8")) if fp.exists() else []
-    nav_dates = {r["date"] for r in rows}
-    keep = [x for x in items if not (x.get("applied_date") and x["applied_date"] != today
-                                     and x["applied_date"] in nav_dates)]
-    mine = [x for x in keep]                      # 남은 것은 전부 오늘 행에 반영할 항목
-    restamp = any(x.get("applied_date") != today for x in mine)
-    for x in mine:
-        x["applied_date"] = today
-    if mine:
-        flow = sum(float(x["amount"]) for x in mine)
-    else:
-        # 대기 항목이 없으면 기존 당일 행의 flow 를 이어받는다 (이 방식 도입 전에 기록된 행)
-        flow = 0.0
-        for r in all_rows:
-            if r["date"] == today:
-                try:
-                    flow = float(r.get("flow") or 0)
-                except (TypeError, ValueError):
-                    pass
-    if fp.exists() and (restamp or len(keep) != len(items)):
-        atomic_write_text(fp, json.dumps(keep, indent=2))
+    if any(not x.get("id") for x in items):          # 예전 형식 항목에 ID 부여
+        for x in items:
+            x.setdefault("id", uuid.uuid4().hex[:12])
+        atomic_write_text(fp, json.dumps(items, indent=2))
+    _ids = lambda r: {i for i in str(r.get("flow_ids") or "").split("|") if i}
+    applied_elsewhere = set().union(*[_ids(r) for r in rows]) if rows else set()
+    todays = [x for x in items if x["id"] not in applied_elsewhere]
+    base = 0.0
+    for r in all_rows:
+        if r["date"] == today:
+            try:
+                prev_flow = float(r.get("flow") or 0)
+            except (TypeError, ValueError):
+                prev_flow = 0.0
+            prev_ids = _ids(r)
+            base = prev_flow - sum(float(x["amount"]) for x in items if x["id"] in prev_ids)
+    flow = base + sum(float(x["amount"]) for x in todays)
+    flow_ids = "|".join(x["id"] for x in todays)
 
     if rows and rows[-1]["total"] > 0:
         unit = rows[-1]["unit_nav"] * (total - flow) / rows[-1]["total"]
     else:
         unit = 1.0
     row = {"date": today, "total": round(total, 2), "cash": round(cash, 2),
-           "flow": round(flow, 2), "unit_nav": round(unit, 6), "unsettled": round(unsettled, 2)}
+           "flow": round(flow, 2), "unit_nav": round(unit, 6), "unsettled": round(unsettled, 2),
+           "flow_ids": flow_ids}
     rows.append(row)
 
     _write_nav(market, rows)
+    # 다른 날짜 행에 반영이 끝난 항목 정리 — NAV 저장 뒤에 한다. 실패해도 위 규칙상 다시 반영되지 않는다.
+    if len(todays) != len(items):
+        try:
+            atomic_write_text(fp, json.dumps(todays, indent=2))
+        except OSError as e:
+            log.warning(f"[nav] 입출금 대기 파일 정리 실패 (다음 실행에서 재시도): {e}")
     return row
 
 

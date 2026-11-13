@@ -823,13 +823,20 @@ class KISClient:
                 raise ValueError("응답이 객체가 아님")
         except ValueError as e:
             raise OrderOutcomeUnknown(f"주문 응답 해석 실패: {e}") from e
-        if d.get("rt_cd") != "0":
+        # 거부로 인정하는 것은 "rt_cd 가 문자열이고 0 이 아닌" 응답뿐이다. rt_cd 가 없거나 형식이 다르면
+        # 접수 여부를 말해 주지 않는 응답이므로 불명으로 둔다 (예: {} 를 거부로 읽으면 재전송된다).
+        rt_cd = d.get("rt_cd")
+        if not isinstance(rt_cd, str) or not rt_cd.strip():
+            raise OrderOutcomeUnknown(f"주문 응답에 rt_cd 없음/형식 오류: {str(d)[:120]}")
+        if rt_cd != "0":
             log.error(f"[order US] 실패: {d.get('msg1')} / {d.get('msg_cd')}")
             return {"order_no": "", "raw": d}
 
-        out = d.get("output", {}) or {}
+        out = d.get("output")
+        if not isinstance(out, dict):
+            raise OrderOutcomeUnknown(f"접수 성공 응답인데 output 형식 오류: {str(out)[:120]}")
         order_no = out.get("ODNO", "")
-        if not order_no:
+        if not isinstance(order_no, str) or not order_no.strip():
             raise OrderOutcomeUnknown("접수 성공 응답인데 주문번호가 없음")
         log.info(f"[order US] 성공 order_no={order_no}")
         return {

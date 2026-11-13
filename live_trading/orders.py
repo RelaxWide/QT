@@ -372,6 +372,18 @@ class OrderManager:
         """전송 직전 안전 확인 (US). 막아야 하면 사유, 아니면 빈 문자열. 모의 실행에도 적용해 미리 보인다."""
         if self.market != "us":
             return ""
+        # 같은 전략·종목에 아직 확정되지 않은 주문이 있으면 신호 날짜가 달라도 새로 보내지 않는다.
+        # 중복 방지 키에는 신호 날짜가 들어 있어서, 체결 확정이 실패·보류된 채 다음 날 신호가 오면
+        # 같은 종목 주문이 한 번 더 나갈 수 있었다. (확정된 미체결의 재주문은 여기 오기 전에 open 으로 돌아와 있다)
+        if strategy != "core":
+            st = self._position_status(strategy, symbol)
+            if side == "SELL" and st in ("pending_sell", "pending_buy"):
+                return f"앞 주문 확정 전 ({st}) — 체결 확정 후 다시 판단"
+            if side == "BUY" and st is not None:
+                return f"이미 보유/접수 중 ({st})"
+            pending_keys = unresolved_orders(strategy, symbol)
+            if pending_keys:
+                return f"미해결 주문 있음 ({pending_keys[0]}) — 장부 복구 후 다시 판단"
         if side == "BUY":
             # 정지 스위치는 주문마다 다시 본다 — 실행 도중(대기·여러 종목 전송 사이)에 켜도 멈추도록
             from live_trading.risk_guard import KILL_SWITCH
@@ -936,6 +948,26 @@ def _get_live_qty(strategy: str, symbol: str) -> int:
     data = json.loads(path.read_text(encoding="utf-8"))
     pos = data.get(symbol, {})
     return int(pos.get("qty", 0))
+
+
+def unresolved_orders(strategy: str | None = None, symbol: str | None = None) -> list[str]:
+    """포지션 장부에 아직 반영되지 않은 US 주문의 키 (보내는 중 / 접수됐으나 미반영). 전략·종목으로 좁힐 수 있다.
+    주문 장부를 못 읽으면 예외 — 모르는 상태에서 "없음" 이라고 답하지 않는다."""
+    if not ORDER_MAP.exists():
+        return []
+    disk = json.loads(ORDER_MAP.read_text(encoding="utf-8"))
+    out = []
+    for key, rec in disk.items():
+        if not isinstance(rec, dict) or rec.get("dry_run"):
+            continue
+        if not (rec.get("status") == "sending" or rec.get("applied") is False):
+            continue
+        parts = key.split("#")[0].split(":")
+        if len(parts) != 4 or parts[0] == "core":
+            continue
+        if (strategy is None or parts[0] == strategy) and (symbol is None or parts[1] == symbol):
+            out.append(key)
+    return out
 
 
 def recover_incomplete_orders() -> list[str]:

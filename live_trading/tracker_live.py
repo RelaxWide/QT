@@ -101,6 +101,13 @@ def append_slippage(record: dict) -> None:
     """signal_price vs fill_price 기록."""
     LIVE_DIR.mkdir(exist_ok=True)
     is_new = not SLIPPAGE_LOG.exists() or SLIPPAGE_LOG.stat().st_size == 0
+    # 같은 매수 주문(종목+주문번호)은 한 번만 — 체결 확정이 포지션 저장 전에 끊겨 재실행돼도 중복 안 되게
+    order_no = str(record.get("order_no") or "")
+    if not is_new and order_no and order_no != "UNKNOWN":
+        with SLIPPAGE_LOG.open(newline="", encoding="utf-8") as fh:
+            for row in csv.DictReader(fh):
+                if row.get("symbol") == record.get("symbol") and str(row.get("order_no") or "") == order_no:
+                    return
     with SLIPPAGE_LOG.open("a", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=record.keys())
         if is_new:
