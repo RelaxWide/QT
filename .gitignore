@@ -36,3 +36,6 @@ live_trading/daily_close_done.json
 live_trading/unsettled_sells_*.json
 live_trading/run_*.lock
 live_trading/*.tmp
+
+# KR 수급 연구용 원자료 (PC 에서 수집)
+data/kr_flow/
