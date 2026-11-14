@@ -5,7 +5,7 @@ KR 수급 사건 연구: "기관·외국인 누적 순매수 강도가 높고 �
   대상   : 각 기준일의 시가총액 상위 200 (보통주, 관리종목·환기종목·SPAC 제외, 그 시점 기준)
   신호   : 과거 W 거래일 누적 순매수 수량 ÷ 상장주식수   (W = 20, 60 / 주체 = 기관, 외국인, 기관+외국인, 개인)
   결과   : 기준일 다음 날 종가 → H 거래일 뒤 종가 수익률 (H = 20, 60), 같은 날 대상 종목 평균 대비 초과수익
-  통계   : 겹치지 않는 기준일(H 간격)만으로 평균과 t 값
+  통계   : 주간 기준일 전체의 평균, t 값은 Newey-West (보유 기간 겹침 보정)
 
 사용: python scripts/kr_flow/event_study.py <flows.parquet> <marcap_cache_dir> [출처 이름]
 """
@@ -90,6 +90,8 @@ def study(flows: pd.DataFrame, mc: pd.DataFrame, label: str) -> str:
                     for k, nm in enumerate(("저", "중", "고")):
                         row[f"top_past_{nm}"] = ex[top & (pt == k)].mean()
                         row[f"all_past_{nm}"] = ex[pt == k].mean()
+                    row["top_pastret"] = np.expm1(p[top]).mean()
+                    row["bot_pastret"] = np.expm1(p[qs == 0]).mean()
                     row["top_abs"] = r[top].mean()
                     row["univ_abs"] = r.mean()
                     rows.append(row)
@@ -97,14 +99,21 @@ def study(flows: pd.DataFrame, mc: pd.DataFrame, label: str) -> str:
                 results.append((W, H, name, df))
 
     def stat(x: pd.Series, H: int):
-        x = x.dropna()
-        x = x.iloc[::max(1, H // 5)]                                  # 겹치지 않는 기준일만
-        if len(x) < 8:
-            return np.nan, np.nan, len(x)
-        return x.mean(), x.mean() / (x.std(ddof=1) / np.sqrt(len(x))), len(x)
+        """모든 주간 기준일의 평균과 Newey-West t (보유 기간이 겹치므로 시차 H/5 주까지 자기상관 보정).
+        처음엔 겹치지 않는 기준일만 골라 썼는데, 어느 주에서 시작하느냐에 따라 평균이 크게 달라져 버렸다."""
+        x = x.dropna().to_numpy(dtype=float)
+        n = len(x)
+        if n < 20:
+            return np.nan, np.nan, n
+        L = max(1, H // 5)
+        e = x - x.mean()
+        var = (e @ e) / n
+        for k in range(1, L + 1):
+            var += 2 * (1 - k / (L + 1)) * (e[k:] @ e[:-k]) / n
+        return x.mean(), x.mean() / np.sqrt(max(var, 1e-18) / n), n
 
     out += ["", "## 1. 수급 강도 5분위별 이후 초과수익 (전체 기간)", "",
-            "초과수익 = 같은 날 대상 종목 평균 대비. q5 = 순매수 강도 최상위. t 는 겹치지 않는 기준일 기준.", "",
+            "초과수익 = 같은 날 대상 종목 평균 대비. q5 = 순매수 강도 최상위. 주간 기준일 전체 평균, t 는 Newey-West (보유 기간 겹침 보정).", "",
             "| 주체 | 누적 W | 보유 H | q1 | q2 | q3 | q4 | q5 | q5−q1 | t(q5−q1) | 순위상관 | 기준일 수 |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for W, H, name, df in results:
         ls = df["q5"] - df["q1"]
@@ -137,7 +146,17 @@ def study(flows: pd.DataFrame, mc: pd.DataFrame, label: str) -> str:
                 cells.append(f"{m:+.2%} ({t:+.1f}, n={n})")
             out.append(f"| {name} | {W} | {H} | {metric} | " + " | ".join(cells) + " |")
 
-    out += ["", "## 4. 절대 수익 감각 (기관+외국인, W=60, H=60)", ""]
+    out += ["", "## 4. 점검 — 신호가 만들어지는 동안의 주가 (같은 W 일 수익률)", "",
+            "수급이 가격과 같은 방향으로 움직였는지 확인. q5 가 q1 보다 높으면 '사는 동안 이미 올랐다' 는 뜻.", "",
+            "| 주체 | W | q1 과거 수익 | q5 과거 수익 |", "|---|---|---|---|"]
+    seen = set()
+    for W, H, name, df in results:
+        if (W, name) in seen:
+            continue
+        seen.add((W, name))
+        out.append(f"| {name} | {W} | {df['bot_pastret'].mean():+.2%} | {df['top_pastret'].mean():+.2%} |")
+
+    out += ["", "## 5. 절대 수익 감각 (기관+외국인, W=60, H=60)", ""]
     for W, H, name, df in results:
         if (W, H, name) == (60, 60, "기관+외국인"):
             x = df.iloc[::12]
