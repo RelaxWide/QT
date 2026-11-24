@@ -300,7 +300,7 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
         problems.append("데이터 정체/불완전")
     log.info(f"[daily_close] Weinstein 매도 주문 {len(w_sell_orders)}건")
 
-    if is_wed and allow_new and w_sigs.get("buy"):
+    if is_wed and allow_new and w_sigs.get("buy") and om._strategy_budget("weinstein") > 0:
         pending_payload["weinstein"] = {
             "signal_date": str(today.date()),
             "symbols":     w_sigs["buy"],
@@ -420,9 +420,12 @@ def _pending_view(pending: dict, om) -> dict:
     view = {}
     for k, v in pending.items():
         syms = v.get("symbols", [])
-        held = set(load_live_positions(k).keys())
+        pos = load_live_positions(k)
+        held = set(pos)
         cands = [s for s in syms if s not in held]
-        slots = max(0, om._strategy_max_positions(k) - len(held))
+        # 매도 접수분은 수요일 매수 전에 체결되는 것이 보통 — 매수 시점에 잔고에서 빠졌으면 빈자리가 된다
+        keep = sum(1 for p in pos.values() if p.status != "pending_sell")
+        slots = max(0, om._strategy_max_positions(k) - keep)
         view[k] = {"n_cand": len(syms), "slots": slots, "buy": cands[:slots]}
     return view
 

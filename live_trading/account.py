@@ -205,9 +205,12 @@ def sync_all(kis: KISClient) -> dict:
 
     # 전 전략 합집합: symbol -> {strategy: qty}
     tracked: dict[str, dict[str, int]] = {}
+    selling: set[str] = set()
     for strategy in STRATEGIES:
         for sym, pos in load_live_positions(strategy).items():
             tracked.setdefault(sym, {})[strategy] = pos.qty
+            if pos.status == "pending_sell":
+                selling.add(sym)
     tracked_syms = set(tracked)
 
     # 코어 보유(SPY)는 전략 추적 대상이 아니다 — 미할당 경고에서 제외
@@ -218,7 +221,7 @@ def sync_all(kis: KISClient) -> dict:
     # 외부 청산·미체결: 전략이 추적 중인데 KIS 잔고에 없음
     missing = sorted(
         (sym, strat)
-        for sym in tracked_syms - kis_syms
+        for sym in tracked_syms - kis_syms - selling
         for strat in tracked[sym]
     )
 

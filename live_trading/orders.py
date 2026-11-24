@@ -298,8 +298,12 @@ class OrderManager:
             resp = self.kis.place_order(symbol, qty, side=side,
                                         order_type="LIMIT", price=price)
             order_no = resp.get("order_no", "")
+            why = ""
+            if not order_no:
+                raw = resp.get("raw") or {}
+                why = f"{str(raw.get('msg1', '')).strip()} ({raw.get('msg_cd', '')})".strip()
             result = OrderResult(symbol=symbol, side=side, qty=qty,
-                                 price=price, order_no=order_no)
+                                 price=price, order_no=order_no, error=why)
         except Exception as e:
             if self.market == "us" and _is_ambiguous_send_error(e):
                 # 요청이 나간 뒤 응답을 못 받았다 — 접수됐을 수 있다. 실패로 처리하면 재실행 때
@@ -690,10 +694,21 @@ class OrderManager:
         # 현재 실계좌 보유 — 이미 보유한 종목은 재매수하지 않는다
         from live_trading.tracker_live import load_live_positions
         try:
-            held = set(load_live_positions(strategy).keys())
+            tracked_all = load_live_positions(strategy)
         except Exception as e:
             log.warning(f"[{strategy}] positions_live 로드 실패: {e} — 보유 필터 없이 진행")
-            held = set()
+            tracked_all = {}
+        # 매도 접수(pending_sell) 종목이 매수 시점 KIS 잔고에 없으면 이미 팔린 것 — 빈자리·예산에서 뺀다.
+        # (예전엔 체결 확정 전까지 보유로 세서, 화요일에 3종목을 팔고도 수요일 매수 때 빈자리 1·예산 초과로
+        #  아무것도 못 사고 한 주를 현금으로 보냈다 — 2026-11-19)
+        _bal0 = self._get_balance() if self.market == "us" else {"_failed": True}
+        _in_kis0 = None if _bal0.get("_failed") else {p["symbol"] for p in _bal0.get("positions", [])
+                                                       if int(p.get("qty", 0) or 0) > 0}
+        sold_out = {s for s, p in tracked_all.items()
+                    if p.status == "pending_sell" and _in_kis0 is not None and s not in _in_kis0}
+        if sold_out:
+            log.info(f"[{strategy}] 매도 접수 후 잔고에서 빠진 종목 (팔린 것으로 봄): {sorted(sold_out)}")
+        held = set(tracked_all) - sold_out
 
         candidates = [s for s in symbols if s not in held]
         if strategy in ("clenow", "weinstein"):
@@ -728,6 +743,8 @@ class OrderManager:
             eval_by_sym = {p["symbol"]: float(p.get("eval_amt", 0) or 0) for p in bal.get("positions", [])}
             invested = 0.0
             for s, p in load_live_positions(strategy).items():
+                if s in sold_out:
+                    continue
                 invested += eval_by_sym.get(s) or p.qty * p.fill_price     # 체결 대기분은 주문 금액으로
             room = budget - invested
             log.info(f"[{strategy}] 보유 평가 {self._fmt_price(invested)} / 예산 {self._fmt_price(budget)} "

@@ -25,7 +25,9 @@ import csv
 import json
 import logging
 from bisect import bisect_left
-from datetime import date
+from datetime import date, datetime
+
+import pandas as pd
 from pathlib import Path
 
 import yaml
@@ -76,15 +78,59 @@ def add_unsettled(market: str, session: str, amount: float, symbol: str = "") ->
     atomic_write_text(p, json.dumps(items, indent=2))     # 직접 덮어쓰면 쓰다 끊겼을 때 기존 장부까지 깨진다
 
 
-def _take_unsettled(market: str, session: str | None) -> float:
-    """현재 세션(session)에 체결된 대금만 미결제로 본다. 다음 세션이 지나면 결제됐으니 정리."""
+SETTLE_MAX_DAYS = 6          # 이 이상 지나면 현금 확인 없이 정리 (달력일)
+
+
+def _buys_since(ts: str) -> float:
+    """ts 이후 접수된 US 매수 주문 금액 합 (현금이 그만큼 줄었을 수 있다)."""
+    try:
+        om = json.loads((LIVE_DIR / "order_map.json").read_text(encoding="utf-8"))
+    except Exception:
+        return 0.0
+    tot = 0.0
+    for k, v in om.items():
+        if (isinstance(v, dict) and k.split("#")[0].endswith(":BUY") and not v.get("dry_run")
+                and v.get("order_no") and str(v.get("timestamp", "")) > ts):
+            tot += float(v.get("qty", 0) or 0) * float(v.get("price", 0) or 0)
+    return tot
+
+
+def _take_unsettled(market: str, session: str | None, cash: float | None = None) -> float:
+    """
+    아직 주문가능금액(cash)에 안 들어온 매도대금.
+    - 현재 세션에 체결된 대금: 미결제로 센다.
+    - 그 전 세션 대금: **현금에 실제로 들어왔을 때만** 정리한다. 예전엔 "다음 세션이 지나면 결제됐다" 고
+      날짜로 정리했는데, KIS 반영이 하루 늦은 날(11/13 체결 → 11/16 아침에도 현금 그대로) 매도대금
+      $5,178 이 통째로 빠져 NAV 가 -37% 로 찍혔다 (가짜 낙폭 → 신규 매수 차단, MDD 기록 오염).
+      판정: 처음 셀 때의 현금(base_cash) 대비 현재 현금 + 그 뒤 매수 주문액 이 대금의 90% 이상 늘었으면 결제.
+      SETTLE_MAX_DAYS 가 지나면 확인 없이 정리한다.
+    """
     p = _unsettled_path(market)
     if session is None or not p.exists():
         return 0.0
     all_items = json.loads(p.read_text(encoding="utf-8"))
-    items = [x for x in all_items if x["session"] >= session]
-    if len(items) != len(all_items):
-        # 결제가 끝난 항목 정리 — 실패해도 금액 계산에는 영향이 없으므로 넘어간다 (다음에 다시 정리)
+    now = datetime.now().isoformat()
+    changed = False
+    for x in all_items:
+        if cash is not None and "base_cash" not in x:
+            x["base_cash"], x["base_ts"] = round(cash, 2), now
+            changed = True
+    old = sorted((x for x in all_items if x["session"] < session), key=lambda x: x["session"])
+    settled = set()
+    if old:
+        if cash is None:
+            settled = {id(x) for x in old}                     # 현금을 모르면 예전 규칙
+        else:
+            base = min(float(x.get("base_cash", cash)) for x in old)
+            ts = min(str(x.get("base_ts", now)) for x in old)
+            delta = cash - base + _buys_since(ts)
+            for x in old:
+                age = (pd.Timestamp(session) - pd.Timestamp(x["session"])).days
+                if delta >= 0.9 * float(x["amount"]) or age > SETTLE_MAX_DAYS:
+                    settled.add(id(x))
+                    delta -= float(x["amount"])
+    items = [x for x in all_items if id(x) not in settled]
+    if changed or len(items) != len(all_items):
         try:
             from live_trading.tracker_live import atomic_write_text
             atomic_write_text(p, json.dumps(items, indent=2))
@@ -142,7 +188,7 @@ def record_nav(market: str, balance: dict, today: str | None = None,
         return None
     cash_key = "cash_krw" if market == "kr" else "cash_usd"
     cash  = float(balance.get(cash_key, 0) or 0)
-    unsettled = _take_unsettled(market, session)
+    unsettled = _take_unsettled(market, session, cash)
     total = cash + unsettled + sum(float(p.get("eval_amt", 0) or 0) for p in balance.get("positions", []))
     today = today or date.today().isoformat()
 
