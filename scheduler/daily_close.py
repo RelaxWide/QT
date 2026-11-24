@@ -333,56 +333,12 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
     if not dry_run:
         kis = KISClient.from_config(allow_prod=True)
         report = sync_all(kis)
-        msg = _build_core_message(report, today, cl_sell_orders, w_sell_orders,
-                                  _pending_view(pending_payload, om), data_stale, now_kst,
-                                  unsettled=(nav_row or {}).get("unsettled", 0))
-        msg += _build_recon_message(recon, recon_error)
-        if is_wed and regime is not True and "clenow" not in liquidate:
-            msg += ("\n⏸️ Clenow 매수 보류: " +
-                    ("SPY 가 200일선 아래 (레짐 OFF)" if regime is False else "SPY 조회 실패로 레짐 판정 불가"))
-        core = om.core_status()
-        if core:
-            line = (f"\n🧱 코어 {core['symbol']}: ${core['held']:,.0f} "
-                    f"({core['held_pct']:.0f}% / 목표 {core['target_pct']:.0f}%)")
-            buyable = om.core_spend(core)      # 목표까지 남은 금액·현금·1회 한도 중 작은 값
-            if is_wed and allow_new and core["gap"] >= core["total"] * om.CORE_MIN_GAP_PCT / 100 and buyable > 0:
-                line += f" → 매수 예정 약 ${buyable:,.0f}"
-            msg += line
-        for strat in sorted(liquidate):
-            left = sorted(load_live_positions(strat).keys())
-            if left:
-                msg += f"\n🧹 <b>{strat.capitalize()} 종료 청산</b>: 잔여 {', '.join(left)} (매도 주문 중)"
-        msg += "\n" + guard.summary_line()
-        bench = benchmark_line("us")
-        if bench:
-            msg += "\n" + bench
-        if nav_error:
-            msg += f"\n🚨 NAV 기록 실패: {nav_error}"
-        if (report.get("balance") or {}).get("_cash_failed"):
-            msg += "\n🚨 현금(주문가능금액) 조회 실패 — 위 잔고의 현금 $0 은 실제 값이 아님. NAV 기록·매수 보류"
-        if sell_no_price:
-            msg += "\n🚨 매도 가격을 못 구해 주문 못 냄: " + ", ".join(sell_no_price)
-        if recovered:
-            msg += ("\n🚨 <b>중단됐던 주문 복구</b>: " + ", ".join(recovered)
-                    + " — 장부에 접수 대기로 올림, 체결은 KIS 잔고로 확정")
-        for strat, sym, local_qty, kis_qty in getattr(om, "qty_mismatch", []):
-            msg += (f"\n🚨 <b>수량 불일치로 매도 보류</b>: {sym} 장부 {local_qty}주 / KIS {kis_qty}주 ({strat}) — "
-                    f"분할·수동 거래 확인 후 live_trading/positions_live_{strat}.json 수량을 맞추면 다음 실행에서 나감")
-        if getattr(om, "unknown_orders", []):
-            msg += ("\n🚨 <b>접수 불명 주문</b> (응답 유실): "
-                    + ", ".join(f"{r.side} {r.symbol} x{r.qty}" for r in om.unknown_orders)
-                    + " — 재전송 안 함. KIS 앱에서 접수 여부 확인, 체결은 다음 장마감 처리에서 잔고로 확정")
-        if held_no_bar:
-            msg += "\n⚠️ 당일 봉 없는 보유 종목 (청산 판정 못 함): " + ", ".join(held_no_bar)
-        if problems:
-            msg += "\n🔁 미완료 처리 — 따라잡기 실행이 다시 시도: " + " / ".join(problems)
-        if not allow_new:
-            msg += f"\n🛑 <b>신규 매수 중단</b>: {reason} (청산은 계속)"
-        if data_stale:
-            exp = f"{expected:%m/%d}" if expected is not None else "?"
-            msg = (f"⚠️ <b>가격 데이터 정체/불완전</b> — 데이터 {today:%m/%d} (당일 봉 {coverage:.0%}), 있어야 할 날 {exp}\n"
-                   f"신호 판정 중단 (신규 매도·매수 없음, 미체결 재매도만 KIS 종가로). "
-                   f"캐시/네트워크 점검 필요\n") + msg
+        msg = _close_message(
+            today=today, now_kst=now_kst, report=report, recon=recon, recon_error=recon_error,
+            sells=cl_sell_orders + w_sell_orders, data_stale=data_stale, coverage=coverage, expected=expected,
+            pending=_pending_view(pending_payload, om) if is_wed else {}, is_wed=is_wed, regime=regime,
+            liquidate=liquidate, om=om, allow_new=allow_new, guard_reason=reason, problems=problems,
+            nav_error=nav_error, sell_no_price=sell_no_price, recovered=recovered, held_no_bar=held_no_bar)
         log.info("[daily_close] " + msg.replace("\n", " | "))
         _notify(msg, cfg_live)
 
@@ -442,72 +398,102 @@ def _buy_time_label(now_kst=None) -> str:
         while d.weekday() != 2:
             d += pd.Timedelta(days=1)
         t = (d + pd.Timedelta(hours=11)).tz_localize("America/New_York").tz_convert("Asia/Seoul")
-        return f"수 11:00 ET = {_KR_DOW[t.weekday()]} {t:%H:%M} KST"
+        return f"{_KR_DOW[t.weekday()]} {t:%H:%M}"
     except Exception:
         return "수 11:00 ET"
 
 
-def _syms(orders) -> str:
-    return ", ".join(r.symbol + ("(접수 불명)" if getattr(r, "unknown", False) else "" if r.ok else "(실패)")
-                     for r in orders) or "-"
+def _close_message(*, today, now_kst, report, recon, recon_error, sells, data_stale, coverage, expected,
+                   pending, is_wed, regime, liquidate, om, allow_new, guard_reason, problems, nav_error,
+                   sell_no_price, recovered, held_no_bar) -> str:
+    """
+    06:30 장마감 메시지 — **무슨 일이 있었고 무엇을 할지** 만. 잔고·수익률·낙폭은 07:00 요약에 있다.
+    정상이면 3~4줄, 이상이 있을 때만 🚨/⚠️ 줄이 붙는다.
+    """
+    sym = lambda xs: ", ".join(xs) if xs else "-"
+    tag = lambda t: t.split("/", 1)[-1]
+    head = "🔁" if problems else "✅"
+    L = [f"{head} <b>US 장마감</b> {today:%m/%d}"]
 
-
-def _build_core_message(report, today, cl_sells, w_sells, pending,
-                        data_stale=False, now_kst=None, unsettled=0.0) -> str:
-    """daily_close 핵심정보 텔레그램. 종목별 스팸 대신 요약 1건."""
-    # 헤더 날짜는 데이터 기준일. 실행일과 다를 수 있어(주말·휴장·정체) 둘 다 표기
-    run = f" · 실행 {now_kst:%m/%d %H:%M} KST" if now_kst is not None else ""
-    L = [f"🇺🇸 <b>US 장마감 처리</b> · 데이터 {today:%m/%d}{run}"]
-
-    bal = report.get("balance") or {}
-    cash = bal.get("cash_usd", 0.0)
-    sum_eval = sum(p.get("eval_amt", 0) for p in bal.get("positions", []))
-    pnl = bal.get("total_pnl_usd", 0.0)
-    # cash_usd 는 KIS 주문가능금액(inquire-psamount) — 결제 전 매도 대금은 빠져 있다
-    line = f"잔고: 주문가능 ${cash:,.2f} | 평가 ${sum_eval:,.2f} | 평가손익 ${pnl:+,.2f}"
-    if unsettled:
-        line += f" | 결제대기 매도대금 ${unsettled:,.2f}"
-    L.append(line)
-
-    n_sells = len(cl_sells) + len(w_sells)
+    # 오늘 낸 매도
+    ok_s = [r.symbol for r in sells if r.ok]
+    bad_s = [r.symbol for r in sells if not r.ok]
     if data_stale:
-        L.append(f"💸 미체결 재매도 {n_sells}건 (신호 판정 중단): {_syms(cl_sells + w_sells)}"
-                 if n_sells else "매도: 판정 안 함 (데이터 정체)")
-    elif n_sells:
-        L.append(f"💸 매도 주문 {n_sells}건 — Clenow: {_syms(cl_sells)} / Weinstein: {_syms(w_sells)}")
+        L.append("⚠️ 가격 데이터 정체 — 신호 판정 중단" + (f" (미체결 재매도 {sym(ok_s)})" if ok_s else ""))
+    elif ok_s:
+        L.append(f"💸 매도 주문: {sym(ok_s)}")
     else:
-        L.append("매도: 신호 없음")
+        L.append("매도 없음")
 
-    if pending:
-        parts = []
-        for k, v in pending.items():
-            buy = ", ".join(v["buy"]) if v["buy"] else "매수 없음"
-            parts.append(f"{k.capitalize()} {buy} (후보 {v['n_cand']} 중 빈자리 {v['slots']})")
-        L.append(f"🔔 매수 예정 ({_buy_time_label(now_kst)}): " + " / ".join(parts))
+    # 어제 주문의 체결 결과
+    if recon_error:
+        L.append(f"🚨 체결 확정 실패: {recon_error[:80]}")
+    elif recon:
+        done = []
+        if recon["sells_filled"]:
+            done.append("매도 " + sym([tag(x) for x in recon["sells_filled"]]))
+        if recon["buys_filled"]:
+            done.append("매수 " + sym([tag(x) for x in recon["buys_filled"]]))
+        if done:
+            L.append("✔️ 체결: " + " · ".join(done))
+        if recon["sells_unfilled"]:
+            L.append("⚠️ 매도 미체결 → 재매도: " + sym([s for _, s in recon["sells_unfilled"]]))
+        if recon["buys_expired"]:
+            L.append("⚠️ 매수 미체결 (취소됨): " + sym([tag(x) for x in recon["buys_expired"]]))
 
-    # 전략별 추적 수 — 예전 "KIS N종목 추적" 은 미할당 보유까지 세서 추적 중인 것처럼 보였다
-    by = report.get("by_strategy", {})
-    parts = [f"{k.capitalize()} {n}" for k, n in by.items() if n]
-    line = f"보유: KIS {report.get('kis_count', 0)}종목"
-    if parts:
-        line += " = " + " · ".join(parts)
-    if report.get("core"):
-        line += " + 코어 " + "·".join(report["core"])
+    # 수요일: 오늘 밤 매수 계획
+    if is_wed and not data_stale:
+        plan = []
+        core = om.core_status()
+        if core and allow_new:
+            buyable = om.core_spend(core)
+            if core["gap"] >= core["total"] * om.CORE_MIN_GAP_PCT / 100 and buyable > 0:
+                plan.append(f"{core['symbol']} ~${buyable:,.0f}")
+        cl = (pending or {}).get("clenow")
+        if "clenow" in liquidate:
+            pass
+        elif regime is not True:
+            plan.append("Clenow 보류 (" + ("SPY<200일선" if regime is False else "레짐 판정 불가") + ")")
+        elif cl and cl["buy"]:
+            plan.append("Clenow " + sym(cl["buy"]))
+        L.append(f"🛒 {_buy_time_label(now_kst)} 매수: " + (" · ".join(plan) if plan else "없음"))
+
+    for strat in sorted(liquidate):
+        left = sorted(load_live_positions(strat).keys())
+        if left:
+            L.append(f"🧹 {strat.capitalize()} 청산 중: {sym(left)}")
+
+    # 이상 — 있을 때만
+    if not allow_new:
+        L.append(f"🛑 신규 매수 중단: {guard_reason}")
+    if bad_s:
+        L.append(f"🚨 매도 주문 실패: {sym(bad_s)}")
+    if sell_no_price:
+        L.append(f"🚨 매도 가격 없음: {sym(sell_no_price)}")
+    if nav_error:
+        L.append(f"🚨 NAV 기록 실패: {str(nav_error)[:80]}")
+    if (report.get("balance") or {}).get("_cash_failed"):
+        L.append("🚨 현금 조회 실패 — NAV·매수 보류")
+    for strat, s, lq, kq in getattr(om, "qty_mismatch", []):
+        L.append(f"🚨 {s} 매도 보류: 장부 {lq}주 ≠ KIS {kq}주 → positions_live_{strat}.json 수정 필요")
+    if getattr(om, "unknown_orders", []):
+        L.append("🚨 접수 불명 (응답 유실): " + sym([f"{r.side} {r.symbol}" for r in om.unknown_orders])
+                 + " — KIS 앱 확인")
+    if recovered:
+        L.append("🚨 중단됐던 주문 복구: " + sym(recovered))
     if report.get("untracked"):
-        line += f" + 미할당 {len(report['untracked'])}"
-    L.append(line)
-
-    # 진짜 이상만 경고 (거짓 '미기록' 스팸 제거됨)
-    if report.get("untracked"):
-        L.append("⚠️ 미할당 KIS 보유 (등록 필요): " + ", ".join(report["untracked"]))
+        L.append("⚠️ 장부에 없는 KIS 보유: " + sym(report["untracked"]))
     if report.get("missing"):
-        items = ", ".join(f"{s}({st})" for s, st in report["missing"])
-        L.append(f"⚠️ 외부 청산·미체결 의심: {items}")
+        L.append("⚠️ 장부엔 있는데 KIS 에 없음: " + sym([s for s, _ in report["missing"]]))
     if report.get("mismatch"):
-        items = ", ".join(f"{m['symbol']} 로컬{m['local_qty']}/KIS{m['kis_qty']}"
-                          for m in report["mismatch"])
-        L.append(f"⚠️ 수량 불일치: {items}")
-
+        L.append("⚠️ 수량 불일치: " + sym([f"{m['symbol']} {m['local_qty']}/{m['kis_qty']}" for m in report["mismatch"]]))
+    if held_no_bar:
+        L.append("⚠️ 당일 봉 없음 (청산 판정 못 함): " + sym(held_no_bar))
+    if data_stale:
+        exp = f"{expected:%m/%d}" if expected is not None else "?"
+        L.append(f"⚠️ 데이터 {today:%m/%d} (당일 봉 {coverage:.0%}) / 기대 {exp}")
+    if problems:
+        L.append("🔁 미완료 — 따라잡기가 다시 시도: " + " / ".join(problems))
     return "\n".join(L)
 
 
@@ -523,28 +509,6 @@ def _kis_close_frames(kis, symbols, today) -> dict:
         if last > 0:
             out[sym] = pd.DataFrame({"close": [last]}, index=[today])
     return out
-
-
-def _build_recon_message(recon, error: str) -> str:
-    """체결 확정 결과. 정상(전부 체결)이면 한 줄, 이상만 상세."""
-    if error:
-        return f"\n🚨 <b>체결 확정 실패</b> — 포지션 미갱신: {error}"
-    if not recon:
-        return ""
-    L = []
-    if recon["buys_filled"] or recon["sells_filled"]:
-        sym = lambda tags: ", ".join(t.split("/", 1)[-1] for t in tags) or "-"
-        L.append(f"✅ 체결 확정: 매수 {sym(recon['buys_filled'])} / 매도 {sym(recon['sells_filled'])}")
-    if recon["sells_unfilled"]:
-        items = ", ".join(f"{s}({st})" for st, s in recon["sells_unfilled"])
-        L.append(f"⚠️ 매도 미체결 → 재매도(-3% LIMIT): {items}")
-    if recon["buys_expired"]:
-        L.append("⚠️ 매수 미체결 (추적 삭제): " + ", ".join(recon["buys_expired"]))
-    if recon["skipped"]:
-        L.append("ℹ️ 판정 보류: " + ", ".join(recon["skipped"]))
-    if recon["price_fallback"]:
-        L.append("ℹ️ 체결가 추정: " + ", ".join(recon["price_fallback"]))
-    return ("\n" + "\n".join(L)) if L else ""
 
 
 def _notify(msg: str, cfg_live: dict):

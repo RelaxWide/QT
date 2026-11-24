@@ -112,193 +112,120 @@ def _today_orders(today_str: str):
 
 
 def build_summary() -> str:
+    """
+    07:00 계좌 요약 — 한 화면에 들어가게. 순서: 총자산 → 성과(오늘·낙폭·SPY 대비) → 배분 → 보유 → 누적 손익.
+    매도·매수·체결 같은 "한 일" 은 06:30 장마감 메시지와 목 01:00 매수 메시지에 있다.
+    """
     cfg      = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
     cfg_live = yaml.safe_load(Path("config_live.yaml").read_text(encoding="utf-8"))
     cap      = cfg_live.get("capital", {})
-
     today_kst = pd.Timestamp.now(tz="Asia/Seoul")
-    today_str = today_kst.strftime("%Y-%m-%d")
-
     L = []
-    def line(s=""): L.append(s)
-    def bold(s): return f"<b>{s}</b>"
 
-    line(f"📅 {bold(today_str + ' KIS Live')}")
-
-    # KIS 잔고
     try:
         kis = KISClient.from_config(allow_prod=True)
     except Exception as e:
-        line(f"⚠️ KIS 클라이언트 초기화 실패: {e}")
-        return "\n".join(L)
-
+        return f"📊 <b>US 계좌</b> {today_kst:%m/%d}\n🚨 KIS 초기화 실패: {e}"
     cur_map, bal, err = _safe_get_balance(kis)
     if err:
-        line(f"⚠️ 잔고 조회 실패: {err}")
-    else:
-        cash     = bal.get("cash_usd", 0.0)
-        sum_eval = sum(p["eval_amt"] for p in bal.get("positions", []))
-        pnl_amt  = bal.get("total_pnl_usd", 0.0)
-        # cash_usd 는 KIS 주문가능금액 — 결제 전 매도 대금은 빠져 있다 (daily_close 와 같은 라벨)
-        line(f"잔고: 주문가능 ${cash:,.2f} | 평가 ${sum_eval:,.2f} | 평가손익 ${pnl_amt:+,.2f}")
-        if bal.get("_cash_failed"):
-            line("🚨 현금(주문가능금액) 조회 실패 — 위 현금 $0 은 실제 값이 아님")
+        return f"📊 <b>US 계좌</b> {today_kst:%m/%d}\n🚨 잔고 조회 실패: {err}"
 
-    # SPY 대비 (daily_close 가 기록한 실계좌 NAV 기준). 낙폭·당일 손익은 06:30 장마감 메시지에 있다
+    cash  = float(bal.get("cash_usd", 0.0) or 0)
+    evals = sum(float(p.get("eval_amt", 0) or 0) for p in bal.get("positions", []))
+    unsettled = 0.0
     try:
-        bench = benchmark_line("us")
-        if bench:
-            line(bench)
+        from live_trading.risk_guard import load_nav
+        rows = load_nav("us")
+        if rows and rows[-1]["date"][:10] == today_kst.strftime("%Y-%m-%d"):
+            unsettled = float(rows[-1].get("unsettled") or 0)
+    except Exception:
+        rows = []
+    total = cash + evals + unsettled
+    cash_all = cash + unsettled
+    L.append(f"📊 <b>US 계좌</b> {today_kst:%m/%d}  <b>${total:,.0f}</b>")
+    cash_s = f"현금 ${cash_all:,.0f} ({cash_all / total * 100 if total else 0:.0f}%)"
+    if unsettled:
+        cash_s += f" · 결제대기 ${unsettled:,.0f} 포함"
+    if bal.get("_cash_failed"):
+        cash_s = "🚨 현금 조회 실패 (총자산 부정확)"
+    L.append(cash_s)
+
+    # 성과
+    try:
+        from live_trading.risk_guard import RiskGuard, benchmark_stats
+        st = RiskGuard.from_config(market="us").status()
+        if not st.get("error") and not st.get("no_history"):
+            lim = RiskGuard.from_config(market="us").max_drawdown_pct
+            icon = "🛑" if st["drawdown_pct"] <= -lim else ("⚠️" if st["drawdown_pct"] <= -lim * 0.75 else "")
+            L.append(f"오늘 {st['daily_pct']:+.1f}% · 낙폭 {st['drawdown_pct']:.1f}% (한도 -{lim:.0f}%) {icon}".rstrip())
+        b = benchmark_stats("us")
+        if b:
+            icon = "🟢" if b["excess_pp"] >= 0 else "🔴"
+            L.append(f"{b['since'][5:].replace('-', '/')}~ 계좌 {b['acct_pct']:+.1f}% · SPY {b['spy_pct']:+.1f}% "
+                     f"{icon} {b['excess_pp']:+.1f}%p")
     except Exception as e:
-        line(f"⚠️ 리스크/벤치마크 요약 실패: {e}")
+        L.append(f"⚠️ 성과 계산 실패: {e}")
 
-    # 보유 종목만 가격 데이터 로드 (stop 계산용)
-    held_syms = set()
-    for strat in STRATEGIES:
-        held_syms.update(load_live_positions(strat).keys())
+    # 배분 (목표 대비)
+    core_sym = cap.get("core_symbol", "SPY") if float(cap.get("core_pct", 0) or 0) > 0 else None
+    core_val = float(cur_map.get(core_sym, {}).get("eval_amt", 0) or 0) if core_sym else 0.0
+    positions = {s: load_live_positions(s) for s in STRATEGIES}
+    sleeve_val = {s: sum(float(cur_map.get(sym, {}).get("eval_amt", 0) or 0) for sym in ps)
+                  for s, ps in positions.items()}
+    parts = []
+    if core_sym:
+        parts.append(f"{core_sym} {core_val / total * 100 if total else 0:.0f}%/{float(cap['core_pct']):.0f}%")
+    for s in STRATEGIES:
+        pct = float(cap.get(f"{s}_pct", 0) or 0)
+        if pct > 0 or positions[s]:
+            parts.append(f"{s.capitalize()} {sleeve_val[s] / total * 100 if total else 0:.0f}%/{pct:.0f}%")
+    if parts:
+        L.append("배분 " + " · ".join(parts) + "  (현재/목표)")
 
+    # 보유 — 종목당 한 줄
+    held_syms = {sym for ps in positions.values() for sym in ps}
     price_data = {}
     if held_syms:
         try:
             from src.fetch.prices import fetch_all
-            price_data = fetch_all(list(held_syms),
-                                   cfg["data"]["start_date"],
-                                   cfg["data"]["end_date"],
-                                   min_bars=150)
+            price_data = fetch_all(list(held_syms), cfg["data"]["start_date"], cfg["data"]["end_date"], min_bars=150)
         except Exception as e:
-            log.warning(f"가격 데이터 로드 실패 (stop 생략): {e}")
-
-    today_orders = _today_orders(today_str)
-
-    total_unreal   = 0.0
-    total_realized = 0.0
-
-    # 추적된 종목 모두 모아두기 (KIS 잔고 vs 로컬 비교용)
-    all_tracked = set()
-
-    # auto_allocate 모드면 KIS 총자산 기준 동적 예산 계산
-    auto = bool(cap.get("auto_allocate"))
-    total_assets = 0.0
-    if auto and not err:
-        total_assets = cash + sum_eval
-        buffer = float(cap.get("buffer_pct", 1.0)) / 100.0
-        usable = total_assets * (1.0 - buffer)
-
-    def strategy_budget(s):
-        if auto and not err:
-            pct = float(cap.get(f"{s}_pct", 0)) / 100.0
-            return usable * pct
-        return float(cap.get(f"{s}_usd", 0) or 0)
-
-    for strat in STRATEGIES:
-        positions = load_live_positions(strat)
-        all_tracked.update(positions.keys())
-        cap_usd = strategy_budget(strat)
-        max_pos = cap.get(f"{strat}_max_positions", 0)
-
-        # 자본 0 + 보유 0 + 오늘 주문 0 → 섹션 완전 생략
-        if cap_usd <= 0 and not positions and not today_orders.get(strat):
-            continue
-
-        label = STRATEGY_LABELS[strat]
-        line()
-        line(bold(f"━━━ {label} ━━━"))
-        if strat in (cap.get("liquidate_strategies") or []):
-            line("전략 종료 — 보유분 청산 중")
-
-        # 매수 접수만 된 종목(pending_buy)은 아직 보유가 아니다 — 체결 확정은 다음 daily_close
-        n_wait = sum(1 for p in positions.values() if p.status == "pending_buy")
-        head = f"보유 {len(positions) - n_wait}종목"
-        if n_wait:
-            head += f" + 체결 대기 {n_wait}"
-        line(bold(head))
-        s_unreal = 0.0
-        for sym in sorted(positions.keys()):
-            pos      = positions[sym]
+            log.warning(f"가격 데이터 로드 실패 (손절선 생략): {e}")
+    rows_out = []
+    if core_sym and core_sym in cur_map:
+        i = cur_map[core_sym]
+        avg, cur = float(i.get("avg_price", 0) or 0), float(i.get("cur_price", 0) or 0)
+        rows_out.append(f"  {core_sym} {int(i.get('qty', 0))}주 {(cur / avg - 1) * 100 if avg else 0:+.1f}% ${float(i.get('eval_amt', 0)):,.0f}")
+    total_unreal = 0.0
+    for s in STRATEGIES:
+        for sym in sorted(positions[s]):
+            pos = positions[s][sym]
             if pos.status == "pending_buy":
-                line(f"  {sym}: ⏳ 매수 접수 {pos.qty}주 @${pos.fill_price:.2f} (체결 대기)")
+                rows_out.append(f"  {sym} ⏳매수 대기 {pos.qty}주")
                 continue
-            cur_info = cur_map.get(sym, {})
-            cur      = float(cur_info.get("cur_price", pos.fill_price))
-            qty      = int(cur_info.get("qty", pos.qty))
-            unreal   = (cur - pos.fill_price) * qty
-            s_unreal += unreal
-            pct      = (cur / pos.fill_price - 1) * 100 if pos.fill_price > 0 else 0.0
-            sign     = "+" if unreal >= 0 else ""
-
-            if strat == "clenow":
-                stop = _ma_stop(sym, price_data, cfg.get("clenow_strategy", {}).get("ma100_period", 100))
-            elif strat == "weinstein":
-                stop = _ma_stop(sym, price_data, cfg.get("weinstein_strategy", {}).get("ma30_period", 30), weekly=True)
-            else:
-                stop = None
-            stop_s = f" | stop ${stop:.2f}" if stop is not None else ""
+            i = cur_map.get(sym, {})
+            cur = float(i.get("cur_price", pos.fill_price) or pos.fill_price)
+            qty = int(i.get("qty", pos.qty) or pos.qty)
+            total_unreal += (cur - pos.fill_price) * qty
+            pct = (cur / pos.fill_price - 1) * 100 if pos.fill_price else 0.0
             if pos.status == "pending_sell":
-                stop_s += " | ⏳ 매도 접수"
-            line(f"  {sym}: {qty}주 ${pos.fill_price:.2f}→${cur:.2f} ({sign}{pct:.1f}%) | 평가 ${cur*qty:,.2f}{stop_s}")
-
-        # 오늘 주문 (order_map.json 기준)
-        orders_today = today_orders.get(strat, [])
-        if orders_today:
-            line(bold(f"오늘 주문 {len(orders_today)}건"))
-            for o in orders_today:
-                arrow = "🔔" if o["side"] == "BUY" else "💸"
-                line(f"  {arrow} {o['side']} {o['symbol']} x{o['qty']} @${o['price']:.2f}")
-
-        # 오늘 청산 (trades_live_*.csv 가 있을 때만)
-        trades_today = _today_trades(strat, today_str)
-        if trades_today:
-            line(bold(f"오늘 청산 {len(trades_today)}건"))
-            for t in trades_today:
-                pnl    = float(t.get("pnl", 0) or 0)
-                icon   = "✅" if pnl >= 0 else "❌"
-                pct    = float(t.get("pnl_pct", 0) or 0)
-                line(f"  {icon} {t.get('symbol', '')} ${pnl:+,.2f} ({pct:+.1f}%)")
-
-        # 누적 손익
-        s_realized = _realized_pnl(strat)
-        line(f"누적: 확정 ${s_realized:+,.2f} / 미실현 ${s_unreal:+,.2f}")
-        total_unreal   += s_unreal
-        total_realized += s_realized
-
-    # 미할당 KIS 포지션 (전략에 등록되지 않은 보유)
-    # 코어 보유 (SPY) — 전략이 아니라 목표 비중까지 채워 두는 지수 보유
-    core_sym = cap.get("core_symbol", "SPY") if float(cap.get("core_pct", 0) or 0) > 0 else None
-    if core_sym and not err:
-        line()
-        line(bold(f"━━━ 🧱 코어 {core_sym} ━━━"))
-        info = cur_map.get(core_sym)
-        tot  = cash + sum_eval
-        if info:
-            ev  = float(info.get("eval_amt", 0))
-            avg = float(info.get("avg_price", 0))
-            cur = float(info.get("cur_price", 0))
-            pct = (cur / avg - 1) * 100 if avg > 0 else 0.0
-            line(f"  {int(info.get('qty', 0))}주 ${avg:.2f}→${cur:.2f} ({pct:+.1f}%) | 평가 ${ev:,.2f} "
-                 f"| 비중 {ev / tot * 100 if tot > 0 else 0:.0f}% (목표 {float(cap.get('core_pct')):.0f}%)")
-        else:
-            line(f"  보유 없음 (목표 {float(cap.get('core_pct')):.0f}%) — 수요일 매수 때 채운다")
-
-    untracked = [sym for sym in cur_map if sym not in all_tracked and sym != core_sym]
+                tail = " ⏳매도 중"
+            else:
+                period = (cfg.get("clenow_strategy", {}).get("ma100_period", 100) if s == "clenow"
+                          else cfg.get("weinstein_strategy", {}).get("ma30_period", 30))
+                stop = _ma_stop(sym, price_data, period, weekly=(s == "weinstein"))
+                tail = f" 손절 ${stop:,.0f} ({(stop / cur - 1) * 100:+.0f}%)" if stop else ""
+            rows_out.append(f"  {sym} {qty}주 {pct:+.1f}% ${cur * qty:,.0f}{tail}")
+    untracked = [x for x in cur_map if x not in held_syms and x != core_sym and not cur_map[x].get("_pending_sell")]
+    if rows_out:
+        L.append("")
+        L.extend(rows_out)
     if untracked:
-        line()
-        line(bold("━━━ ⚠️  미할당 KIS 보유 ━━━"))
-        for sym in sorted(untracked):
-            info = cur_map[sym]
-            cur  = float(info.get("cur_price", 0))
-            avg  = float(info.get("avg_price", 0))
-            qty  = int(info.get("qty", 0))
-            ev   = float(info.get("eval_amt", 0))
-            pct  = (cur / avg - 1) * 100 if avg > 0 else 0.0
-            sign = "+" if cur >= avg else ""
-            line(f"  {sym}: {qty}주 ${avg:.2f}→${cur:.2f} ({sign}{pct:.1f}%) | 평가 ${ev:,.2f}")
-        line("→ positions_live_*.json 에 수동 등록 필요 (전략 자동 청산 대상에서 누락 중)")
+        L.append("⚠️ 장부에 없는 보유: " + ", ".join(sorted(untracked)))
 
-    # 합계
-    line()
-    grand = total_realized + total_unreal
-    line(bold(f"━━━ 합계: ${grand:+,.2f} (확정 ${total_realized:+,.2f} / 미실현 ${total_unreal:+,.2f}) ━━━"))
-
+    realized = sum(_realized_pnl(s) for s in STRATEGIES)
+    L.append("")
+    L.append(f"전략 손익 누적 ${realized + total_unreal:+,.0f} (확정 ${realized:+,.0f})")
     return "\n".join(L)
 
 

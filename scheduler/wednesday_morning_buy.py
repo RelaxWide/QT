@@ -163,23 +163,21 @@ def _run(dry_run: bool, allow_stale: bool):
     if stale_notes and not total_orders:
         _notify("⚠️ <b>US 매수 후보 건너뜀</b> (지난 신호)\n" + "\n".join(stale_notes), cfg_live)
     if total_orders:
-        n_fail = sum(1 for r in total_orders if not r.ok)
-        head = f"🌅 <b>US 매수 주문 접수</b> (수 11:00 ET) {len(total_orders) - n_fail}건"
-        if n_fail:
-            head += f" · 🚨 실패 {n_fail}건"
-        lines = [head]
-        for r in total_orders:
-            status = "접수 불명" if getattr(r, "unknown", False) else "접수" if r.ok else "실패"
-            lines.append(f"  [{status}] {r.symbol} x{r.qty} @${r.price:.2f} (${r.qty * r.price:,.0f})")
-        for r in total_orders:
-            if not r.ok and r.error:
-                lines.append(f"  ↳ {r.symbol}: {r.error[:120]}")
-        if any(getattr(r, "unknown", False) for r in total_orders):
-            lines.append("🚨 접수 불명 = 응답 유실. 재전송하지 않음 — KIS 앱에서 접수 여부 확인")
+        ok = [r for r in total_orders if r.ok and not getattr(r, "unknown", False)]
+        unk = [r for r in total_orders if getattr(r, "unknown", False)]
+        bad = [r for r in total_orders if not r.ok]
+        spent = sum(r.qty * r.price for r in ok)
+        lines = [f"🛒 <b>US 매수 주문</b> {len(ok)}건 ${spent:,.0f}" + (f" · 🚨 실패 {len(bad)}" if bad else "")]
+        for r in ok:
+            lines.append(f"  {r.symbol} {r.qty}주 @${r.price:,.2f}")
+        for r in unk:
+            lines.append(f"  🚨 {r.symbol} {r.qty}주 접수 불명 (응답 유실) — KIS 앱 확인")
+        for r in bad:
+            lines.append(f"  🚨 {r.symbol} 실패: {(r.error or '사유 없음')[:70]}")
         for note in stale_notes:
             lines.append(f"⚠️ 지난 후보 건너뜀 — {note}")
-        if n_fail < len(total_orders):
-            lines.append("체결 여부는 다음 장마감 처리(06:30 KST)에서 확정")
+        if ok or unk:
+            lines.append("체결은 다음 06:30 장마감에서 확인")
         _notify("\n".join(lines), cfg_live)
 
     log.info("[wed_buy] 완료")
