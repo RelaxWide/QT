@@ -102,7 +102,13 @@ def reconcile_fills(kis: KISClient, strategies=STRATEGIES, fallback_session: str
                 except Exception:
                     age_h = FALLBACK_ORDER_AGE_HOURS
                 session_done = age_h >= FALLBACK_ORDER_AGE_HOURS
-        fully_filled = (held <= 0) if pos.status == "pending_sell" else (held >= pos.qty)
+        if pos.status == "pending_sell":
+            # 잔고에서 사라진 것만으로는 판단하지 않는다 — KIS 는 매도 주문이 걸린 수량을 잔고에서 뺀다.
+            # 세션이 끝나기 전에는 체결내역이 전량 체결을 보여 줄 때만 확정한다.
+            f0 = fills.get((pos.sell_order_no or "").lstrip("0"), {})
+            fully_filled = int(f0.get("filled_qty", 0) or 0) >= pos.qty
+        else:
+            fully_filled = held >= pos.qty
         if not session_done and not fully_filled:
             result["skipped"].append(f"{tag} (주문 세션 미종료 — 판정 보류)")
             continue
@@ -168,6 +174,42 @@ def reconcile_fills(kis: KISClient, strategies=STRATEGIES, fallback_session: str
     return result
 
 
+def with_pending_sells(balance: dict) -> dict:
+    """
+    KIS 해외 잔고는 **매도 주문이 걸린 수량을 잔고에서 빼고** 보여 준다 (2026-11-18 확인: 06:35 에 매도 주문을 낸
+    ACN·MRNA 가 몇 초 뒤 잔고 조회에서 사라지고, 07:00 엔 VEEV 까지 빠져 평가액이 $5,445 → $1,915).
+    그대로 쓰면 그 시간대의 총자산·예산·수량 확인이 틀어진다. 추적 중인 매도 접수(pending_sell) 종목 중 잔고에
+    덜 보이는 수량을 매도 지정가로 평가해 되돌려 넣는다. 체결됐든 아니든 그 가치는 계좌 몫이다 (주식 또는 미결제 대금)
+    — 체결이 확정되면 reconcile 이 포지션을 지우고 미결제 대금으로 옮기므로 이중 계산되지 않는다.
+    되돌려 넣은 항목은 "_pending_sell": True 로 표시한다.
+    """
+    if not balance or balance.get("_failed"):
+        return balance
+    shown = {}
+    for p in balance.get("positions", []):
+        shown[p["symbol"]] = shown.get(p["symbol"], 0) + int(p.get("qty", 0) or 0)
+    extra = []
+    for strategy in STRATEGIES:
+        try:
+            positions = load_live_positions(strategy)
+        except Exception:
+            continue
+        for sym, pos in positions.items():
+            if pos.status != "pending_sell":
+                continue
+            miss = pos.qty - shown.get(sym, 0)
+            if miss > 0:
+                px = pos.sell_price or pos.fill_price
+                extra.append({"symbol": sym, "qty": miss, "avg_price": pos.fill_price, "cur_price": px,
+                              "eval_amt": round(miss * px, 2), "_pending_sell": True})
+                shown[sym] = shown.get(sym, 0) + miss
+    if not extra:
+        return balance
+    out = dict(balance)
+    out["positions"] = list(balance.get("positions", [])) + extra
+    return out
+
+
 def _core_symbols() -> set[str]:
     """config_live capital.core_symbol (core_pct > 0 일 때). 읽기 실패 시 빈 집합."""
     try:
@@ -227,7 +269,7 @@ def sync_all(kis: KISClient) -> dict:
 
     # 수량 불일치: 계정 단위 합계 vs KIS 실제
     mismatch = []
-    for sym in kis_syms & tracked_syms:
+    for sym in (kis_syms & tracked_syms) - selling:     # 매도 접수 중엔 잔고 수량이 줄어 보이는 게 정상
         kis_qty     = int(kis_holdings[sym]["qty"])
         local_total = sum(tracked[sym].values())
         if local_total != kis_qty:

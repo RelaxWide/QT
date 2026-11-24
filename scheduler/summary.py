@@ -37,7 +37,8 @@ ORDER_MAP = Path("live_trading/order_map.json")
 
 def _safe_get_balance(kis):
     try:
-        bal = kis.get_balance()
+        from live_trading.account import with_pending_sells
+        bal = with_pending_sells(kis.get_balance())    # 매도 접수 수량은 KIS 잔고에서 빠져 보인다
         cur_map = {p["symbol"]: p for p in bal.get("positions", [])}
         return cur_map, bal, None
     except Exception as e:

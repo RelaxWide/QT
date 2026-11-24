@@ -101,7 +101,11 @@ class OrderManager:
     def _get_balance(self) -> dict:
         if self._balance_cache is None:
             try:
-                self._balance_cache = self.kis.get_balance()
+                bal = self.kis.get_balance()
+                if self.market == "us":
+                    from live_trading.account import with_pending_sells
+                    bal = with_pending_sells(bal)      # 매도 주문이 걸린 수량은 KIS 잔고에서 빠져 보인다
+                self._balance_cache = bal
             except Exception as e:
                 log.warning(f"[orders] KIS 잔고 조회 실패: {e} - auto_allocate 비활성화")
                 empty = {self._cash_key: 0, "positions": [], "_failed": True}
@@ -702,10 +706,18 @@ class OrderManager:
         # (예전엔 체결 확정 전까지 보유로 세서, 화요일에 3종목을 팔고도 수요일 매수 때 빈자리 1·예산 초과로
         #  아무것도 못 사고 한 주를 현금으로 보냈다 — 2026-11-19)
         _bal0 = self._get_balance() if self.market == "us" else {"_failed": True}
-        _in_kis0 = None if _bal0.get("_failed") else {p["symbol"] for p in _bal0.get("positions", [])
-                                                       if int(p.get("qty", 0) or 0) > 0}
-        sold_out = {s for s, p in tracked_all.items()
-                    if p.status == "pending_sell" and _in_kis0 is not None and s not in _in_kis0}
+        # 잔고만으로는 모른다 (매도 주문이 걸리면 체결 전에도 잔고에서 빠진다) — 체결내역으로 전량 체결을 확인한다
+        sold_out = set()
+        selling = {s: p for s, p in tracked_all.items() if p.status == "pending_sell" and p.sell_order_no}
+        if selling and self.market == "us":
+            try:
+                today = pd.Timestamp.now()
+                fills = self.kis.get_order_fills_us((today - pd.Timedelta(days=7)).strftime("%Y%m%d"),
+                                                    today.strftime("%Y%m%d"))
+                sold_out = {s for s, p in selling.items()
+                            if int(fills.get(p.sell_order_no.lstrip("0"), {}).get("filled_qty", 0) or 0) >= p.qty}
+            except Exception as e:
+                log.warning(f"[{strategy}] 체결내역 조회 실패 — 매도 접수 종목을 보유로 계속 센다: {e}")
         if sold_out:
             log.info(f"[{strategy}] 매도 접수 후 잔고에서 빠진 종목 (팔린 것으로 봄): {sorted(sold_out)}")
         held = set(tracked_all) - sold_out
@@ -760,6 +772,8 @@ class OrderManager:
             in_kis = None if bal.get("_failed") else {p["symbol"] for p in bal.get("positions", [])
                                                       if int(p.get("qty", 0) or 0) > 0}
             for s, p in tracked.items():
+                if s in sold_out:
+                    continue
                 still_held = in_kis is None or s in in_kis or p.status == "pending_buy"
                 sec = sectors.get(s)
                 if still_held and sec:

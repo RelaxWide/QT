@@ -80,7 +80,8 @@ def main(dry_run: bool = False, refresh: bool = False, force_wed: bool = False):
     nav_error, nav_row = "", None
     if not dry_run:
         try:
-            nav_row = record_nav("us", KISClient.from_config(allow_prod=True).get_balance(),
+            from live_trading.account import with_pending_sells
+            nav_row = record_nav("us", with_pending_sells(KISClient.from_config(allow_prod=True).get_balance()),
                                  session=session)
             if nav_row is None:
                 nav_error = "KIS 잔고 조회 실패"
