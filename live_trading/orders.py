@@ -1073,7 +1073,9 @@ def _is_ambiguous_send_error(e: Exception) -> bool:
     KIS 가 명시적으로 거부한 경우(rt_cd != 0, 4xx)는 여기 오지 않거나 False."""
     try:
         import requests
-        from live_trading.kis_client import OrderOutcomeUnknown
+        from live_trading.kis_client import OrderNotSent, OrderOutcomeUnknown
+        if isinstance(e, OrderNotSent):
+            return False
         if isinstance(e, OrderOutcomeUnknown):
             return True
         if isinstance(e, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)):

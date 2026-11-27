@@ -162,6 +162,15 @@ def _run(dry_run: bool, allow_stale: bool):
         return
     if stale_notes and not total_orders:
         _notify("⚠️ <b>US 매수 후보 건너뜀</b> (지난 신호)\n" + "\n".join(stale_notes), cfg_live)
+    try:
+        from live_trading.tracker_live import atomic_write_text
+        atomic_write_text(Path("live_trading/last_wed_buy.json"), json.dumps({
+            "date": datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d"),
+            "orders": [{"symbol": r.symbol, "qty": r.qty, "price": r.price,
+                        "result": "unknown" if getattr(r, "unknown", False) else "ok" if r.ok else "failed",
+                        "error": r.error} for r in total_orders]}, ensure_ascii=False, indent=1))
+    except Exception as e:
+        log.warning(f"[wed_buy] 결과 기록 실패: {e}")
     if total_orders:
         ok = [r for r in total_orders if r.ok and not getattr(r, "unknown", False)]
         unk = [r for r in total_orders if getattr(r, "unknown", False)]

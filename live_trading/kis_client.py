@@ -58,6 +58,10 @@ log = _build_logger()
 
 
 # ── 토큰 캐시 ──────────────────────────────────────────────────────────────
+class OrderNotSent(RuntimeError):
+    """주문 요청 자체를 보내지 못했다 (예: hashkey 발급 실패). 접수됐을 가능성이 없으므로 확정 실패 — 다시 시도해도 안전."""
+
+
 class OrderOutcomeUnknown(RuntimeError):
     """주문 요청은 보냈는데 결과(접수/거부)를 확인하지 못했다 — 타임아웃, 연결 끊김, 5xx, 응답 해석 실패,
     접수 성공인데 주문번호 없음. 접수됐을 수 있으므로 호출측은 실패로 처리해 재전송하면 안 된다."""
@@ -331,9 +335,22 @@ class KISClient:
             "appkey":       self.app_key,
             "appsecret":    self.app_secret,
         }
-        r = requests.post(url, headers=headers, data=json.dumps(body), timeout=10)
-        r.raise_for_status()
-        return r.json().get("HASH", "")
+        # 주문 전 단계 — 여기서 실패하면 주문은 나가지 않았다. 일시 오류(5xx)는 한 번 더 시도하고,
+        # 그래도 안 되면 OrderNotSent 로 올린다 (2026-11-26: hashkey 500 을 '접수 불명' 으로 처리해
+        # SPY 주문이 나가지도 않았는데 그 주 재시도가 막혔다)
+        last = None
+        for attempt in range(2):
+            try:
+                r = requests.post(url, headers=headers, data=json.dumps(body), timeout=10)
+                r.raise_for_status()
+                h = r.json().get("HASH", "")
+                if h:
+                    return h
+                last = RuntimeError("HASH 없음")
+            except Exception as e:
+                last = e
+            time.sleep(1.0)
+        raise OrderNotSent(f"hashkey 발급 실패 — 주문 안 보냄: {last}")
 
     # ── 시세 조회 ───────────────────────────────────────────────────────
     def get_price(self, symbol: str) -> dict:
